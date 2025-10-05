@@ -95,7 +95,7 @@ export default function Home() {
                 </Button>
               </Link>
               <Link href="/events">
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10 text-lg" data-testid="button-events">
+                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10 text-lg bg-[#ffffff00]" data-testid="button-events">
                   <Calendar className="h-5 w-5" />
                   {t('hero.cta.event')}
                 </Button>
