@@ -1,0 +1,194 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 97%);
+  --foreground: hsl(225, 20%, 20%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(225, 20%, 20%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(225, 20%, 20%);
+  --primary: hsl(225, 65%, 32%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(42, 45%, 55%);
+  --secondary-foreground: hsl(225, 20%, 20%);
+  --muted: hsl(225, 10%, 93%);
+  --muted-foreground: hsl(225, 10%, 45%);
+  --accent: hsl(4, 60%, 48%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 65%, 50%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(225, 15%, 88%);
+  --input: hsl(225, 15%, 88%);
+  --ring: hsl(225, 65%, 32%);
+  --chart-1: hsl(225, 65%, 32%);
+  --chart-2: hsl(159, 100%, 36%);
+  --chart-3: hsl(42, 92%, 56%);
+  --chart-4: hsl(147, 78%, 42%);
+  --chart-5: hsl(341, 75%, 51%);
+  --sidebar: hsl(225, 10%, 93%);
+  --sidebar-foreground: hsl(225, 20%, 20%);
+  --sidebar-primary: hsl(225, 65%, 32%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(225, 10%, 87%);
+  --sidebar-accent-foreground: hsl(225, 65%, 32%);
+  --sidebar-border: hsl(225, 15%, 88%);
+  --sidebar-ring: hsl(225, 65%, 32%);
+  --font-sans: 'Inter', 'Noto Sans KR', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-korean: 'Noto Sans KR', 'Inter', sans-serif;
+  --font-chinese: 'Noto Sans SC', 'Inter', sans-serif;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(225, 20%, 8%);
+  --foreground: hsl(0, 0%, 95%);
+  --card: hsl(225, 20%, 10%);
+  --card-foreground: hsl(0, 0%, 95%);
+  --popover: hsl(225, 20%, 8%);
+  --popover-foreground: hsl(0, 0%, 95%);
+  --primary: hsl(225, 65%, 45%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(42, 45%, 60%);
+  --secondary-foreground: hsl(225, 20%, 8%);
+  --muted: hsl(225, 20%, 12%);
+  --muted-foreground: hsl(225, 10%, 65%);
+  --accent: hsl(4, 60%, 55%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 65%, 60%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(225, 15%, 18%);
+  --input: hsl(225, 15%, 18%);
+  --ring: hsl(225, 65%, 45%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+
+  .lang-en {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .lang-ko {
+    font-family: var(--font-korean);
+  }
+
+  .lang-zh {
+    font-family: var(--font-chinese);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+    line-height: 1.3;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground shadow-sm hover:shadow-md;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground shadow-sm hover:shadow-md;
+  }
+
+  .btn-accent {
+    @apply bg-accent text-accent-foreground shadow-sm hover:shadow-md;
+  }
+
+  .btn-outline {
+    @apply border border-border bg-background hover:bg-muted hover:text-foreground;
+  }
+
+  .btn-ghost {
+    @apply hover:bg-muted hover:text-foreground;
+  }
+
+  .card {
+    @apply bg-card text-card-foreground border border-border rounded-lg shadow-sm;
+    transition: all 0.3s ease;
+  }
+
+  .card-hover {
+    @apply hover:shadow-lg hover:-translate-y-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary text-primary-foreground border border-primary;
+    opacity: 0.9;
+  }
+
+  .badge-secondary {
+    @apply bg-secondary text-secondary-foreground border border-secondary;
+    opacity: 0.9;
+  }
+
+  .badge-accent {
+    @apply bg-accent text-accent-foreground border border-accent;
+    opacity: 0.9;
+  }
+
+  .hero-overlay {
+    background: linear-gradient(135deg, hsla(225, 65%, 32%, 0.95) 0%, hsla(4, 60%, 48%, 0.85) 100%);
+  }
+
+  .nav-shadow {
+    @apply shadow-sm backdrop-blur-sm bg-background;
+  }
+
+  .form-input {
+    @apply w-full px-3 py-2 border border-input rounded-md text-sm bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent;
+  }
+
+  .form-label {
+    @apply text-sm font-medium text-foreground mb-1.5 block;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

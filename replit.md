@@ -1,0 +1,169 @@
+# Korea Sichuan-Chongqing Chamber of Commerce Website
+
+## Overview
+
+This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of Commerce (한국 사천-충칭 총상회), a business association facilitating economic, trade, and cultural exchanges between Korea and the Sichuan-Chongqing regions of China. The platform serves as a hub for member management, event coordination, news distribution, and business networking.
+
+The application is built with a modern TypeScript stack featuring React on the frontend, Express.js on the backend, and PostgreSQL for data persistence. It supports multilingual content (Korean, English, Chinese) and provides both public-facing pages and authenticated member areas.
+
+## User Preferences
+
+Preferred communication style: Simple, everyday language.
+
+## System Architecture
+
+### Frontend Architecture
+
+**Framework & Tooling:**
+- React 18 with TypeScript for type-safe component development
+- Vite as the build tool and development server
+- Wouter for lightweight client-side routing
+- TanStack Query (React Query) for server state management and data fetching
+- React Hook Form with Zod for form validation
+
+**UI Components:**
+- shadcn/ui component library built on Radix UI primitives
+- Tailwind CSS for styling with custom design tokens
+- Support for dark mode through CSS variables
+- Responsive design with mobile-first approach
+
+**State Management:**
+- Authentication state managed through React Context (`AuthProvider`)
+- Server state cached and synchronized via TanStack Query
+- Form state handled by React Hook Form
+- Toast notifications for user feedback
+
+**Internationalization:**
+- Custom i18n system supporting Korean (ko), English (en), and Chinese (zh)
+- Language switcher component for runtime language changes
+- Multilingual content stored in database with separate fields per language
+
+### Backend Architecture
+
+**Server Framework:**
+- Express.js with TypeScript for API endpoints
+- RESTful API design with JWT-based authentication
+- Middleware for request logging and error handling
+- Session management with JWT tokens
+
+**Authentication & Authorization:**
+- JWT (JSON Web Tokens) for stateless authentication
+- bcrypt for password hashing
+- Role-based access control (member vs admin)
+- Middleware functions for route protection (`authenticateToken`, `requireAdmin`)
+
+**API Structure:**
+The API follows RESTful conventions with the following main endpoint groups:
+- `/api/auth/*` - User authentication (register, login, session management)
+- `/api/users/*` - User profile management
+- `/api/members/*` - Chamber member directory and profiles
+- `/api/events/*` - Event listings and registrations
+- `/api/news/*` - News articles and announcements
+- `/api/resources/*` - Document downloads and resource library
+- `/api/inquiries/*` - Contact form submissions
+- `/api/partners/*` - Partner organization directory
+
+**Data Access Layer:**
+- Storage abstraction pattern (`IStorage` interface) for database operations
+- Type-safe database queries using Drizzle ORM
+- Connection pooling via Neon's serverless PostgreSQL driver
+- Transaction support for complex operations
+
+### Database Architecture
+
+**ORM & Migrations:**
+- Drizzle ORM for type-safe database access
+- Schema definitions in `shared/schema.ts` with TypeScript types
+- Drizzle Kit for schema migrations
+- Zod schemas generated from Drizzle schemas for validation
+
+**Schema Design:**
+
+The database uses PostgreSQL with the following main tables:
+
+1. **users** - Authentication and user accounts
+   - UUID primary key
+   - Email, password (hashed), name
+   - Role (member/admin) and account status
+
+2. **members** - Chamber member profiles
+   - Company information with multilingual fields (KR/EN/ZH)
+   - Industry, country, location details
+   - Membership level (regular/premium/sponsor)
+   - Contact information and visibility settings
+   - Foreign key to users table
+
+3. **events** - Event management
+   - Event details with multilingual content
+   - Date, location, category, capacity
+   - Registration settings and speaker information
+   - Published status for content control
+
+4. **eventRegistrations** - Event attendance tracking
+   - Links events to users
+   - Attendee information and registration status
+   - Payment tracking for paid events
+
+5. **news** - News and announcements
+   - Article content with multilingual support
+   - Category (notice/press/activity)
+   - Author, publishing date, view counter
+   - Featured content flag
+
+6. **resources** - Document library
+   - File information and download URLs
+   - Category (reports/forms/presentations/guides)
+   - Access control (public/member-only)
+   - Download tracking
+
+7. **inquiries** - Contact form submissions
+   - Inquiry categorization
+   - Contact information and message
+   - Status tracking (pending/replied)
+
+8. **partners** - Partner organizations
+   - Partner information with logos
+   - Partnership type and website links
+
+### External Dependencies
+
+**Database:**
+- Neon Serverless PostgreSQL - Cloud-hosted PostgreSQL database
+- Connection via `@neondatabase/serverless` package
+- WebSocket support for serverless environments
+- Environment variable: `DATABASE_URL`
+
+**Authentication:**
+- jsonwebtoken (JWT) - Token generation and verification
+- bcrypt - Password hashing and comparison
+- Environment variable: `SESSION_SECRET` for JWT signing
+
+**Build & Development:**
+- Vite - Frontend build tool and dev server
+- esbuild - Backend bundling for production
+- TypeScript compiler - Type checking across codebase
+- tsx - TypeScript execution for development
+
+**Replit Integration:**
+- `@replit/vite-plugin-runtime-error-modal` - Development error overlay
+- `@replit/vite-plugin-cartographer` - Development tooling
+- `@replit/vite-plugin-dev-banner` - Development environment indicator
+
+**UI & Styling:**
+- Tailwind CSS - Utility-first CSS framework
+- PostCSS with Autoprefixer - CSS processing
+- Multiple Radix UI primitives - Accessible UI components
+- Google Fonts - Typography (Inter, Noto Sans KR, Noto Sans SC)
+
+**Form Handling:**
+- react-hook-form - Form state management
+- @hookform/resolvers - Integration with validation libraries
+- Zod - Runtime type validation and schema validation
+
+**Date Handling:**
+- date-fns - Date formatting and manipulation
+
+**Session Management:**
+- connect-pg-simple - PostgreSQL session store (configured but JWT is primary auth method)
+
+The application is designed to run on Replit with environment-based configuration, requiring a provisioned PostgreSQL database and a session secret for production deployments.
