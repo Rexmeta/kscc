@@ -235,9 +235,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Event not found" });
       }
       
-      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
+      // Convert date strings to Date objects
+      const updateData = { ...req.body };
+      if (updateData.eventDate && typeof updateData.eventDate === 'string') {
+        updateData.eventDate = new Date(updateData.eventDate);
+      }
+      if (updateData.endDate && typeof updateData.endDate === 'string') {
+        updateData.endDate = new Date(updateData.endDate);
+      }
+      if (updateData.registrationDeadline && typeof updateData.registrationDeadline === 'string') {
+        updateData.registrationDeadline = new Date(updateData.registrationDeadline);
+      }
+      
+      const updatedEvent = await storage.updateEvent(req.params.id, updateData);
       res.json(updatedEvent);
     } catch (error) {
+      console.error('[UPDATE EVENT ERROR]:', error);
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });
@@ -252,7 +265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteEvent(req.params.id);
       res.json({ message: "Event deleted successfully" });
     } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
+      console.error('[DELETE EVENT ERROR]:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "Internal server error" });
     }
   });
 
@@ -348,7 +362,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Article not found" });
       }
       
-      const updatedArticle = await storage.updateNews(req.params.id, req.body);
+      // Convert date strings to Date objects
+      const updateData = { ...req.body };
+      if (updateData.publishedAt && typeof updateData.publishedAt === 'string') {
+        updateData.publishedAt = new Date(updateData.publishedAt);
+      }
+      
+      const updatedArticle = await storage.updateNews(req.params.id, updateData);
       res.json(updatedArticle);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
