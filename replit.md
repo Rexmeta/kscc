@@ -6,6 +6,29 @@ This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of 
 
 The application is built with a modern TypeScript stack featuring React on the frontend, Express.js on the backend, and PostgreSQL for data persistence. It supports multilingual content (Korean, English, Chinese) and provides both public-facing pages and authenticated member areas.
 
+## Recent Changes (October 2025)
+
+### Image Management Features
+- **News Articles**: Added featured image and multiple additional images support
+  - Admin form includes featured image URL input
+  - Dynamic image array management with add/remove functionality
+  - Images displayed in news detail page with gallery layout
+- **Events**: Added multiple images support
+  - Dynamic image URL array management in admin forms
+  - Images stored in database for future display implementation
+- **Implementation Details**:
+  - Client-side URL validation (must start with 'http')
+  - Images stored as JSONB arrays in database
+  - Null handling for empty image arrays
+  - Test IDs added for E2E testing
+
+### News Detail Page
+- Created dedicated news article detail page at `/news/:id`
+- Displays featured image at top (when available)
+- Shows additional images in 2-column grid gallery
+- Includes share functionality and back navigation
+- Fixed accessibility issues with nested interactive elements
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

@@ -24,7 +24,8 @@ import {
   Trash2,
   Eye,
   CheckCircle,
-  XCircle
+  XCircle,
+  X
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +39,8 @@ const newsSchema = z.object({
   excerpt: z.string().min(1, '요약을 입력해주세요'),
   content: z.string().min(1, '내용을 입력해주세요'),
   category: z.string().min(1, '카테고리를 선택해주세요'),
+  featuredImage: z.string().url('유효한 URL을 입력해주세요').optional().or(z.literal('')),
+  images: z.array(z.string().url()).optional(),
   isPublished: z.boolean().default(false),
 });
 
@@ -51,6 +54,7 @@ const eventSchema = z.object({
   eventType: z.string().default('offline'),
   capacity: z.number().optional(),
   fee: z.number().default(0),
+  images: z.array(z.string().url()).optional(),
   isPublic: z.boolean().default(true),
 });
 
@@ -901,7 +905,10 @@ export default function AdminPage() {
 
 // Edit Forms
 function EditEventForm({ event, onSuccess, updateMutation }: any) {
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const [imageUrls, setImageUrls] = useState<string[]>(event.images || []);
+  const [newImageUrl, setNewImageUrl] = useState('');
+
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(eventSchema),
     defaultValues: {
       title: event.title,
@@ -913,15 +920,32 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
       eventType: event.eventType || 'offline',
       capacity: event.capacity || undefined,
       fee: event.fee || 0,
+      images: event.images || [],
       isPublic: event.isPublic !== false,
     }
   });
+
+  const addImageUrl = () => {
+    if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
+      const updated = [...imageUrls, newImageUrl.trim()];
+      setImageUrls(updated);
+      setValue('images', updated);
+      setNewImageUrl('');
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const updated = imageUrls.filter((_, i) => i !== index);
+    setImageUrls(updated);
+    setValue('images', updated);
+  };
 
   const onSubmit = (data: any) => {
     updateMutation.mutate({
       id: event.id,
       ...data,
       eventDate: new Date(data.eventDate).toISOString(),
+      images: imageUrls.length > 0 ? imageUrls : null,
     });
   };
 
@@ -929,28 +953,28 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
         <label className="form-label">제목</label>
-        <Input {...register('title')} />
+        <Input {...register('title')} data-testid="input-event-title" />
         {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
       </div>
       <div>
         <label className="form-label">설명</label>
-        <Textarea {...register('description')} />
+        <Textarea {...register('description')} data-testid="input-event-description" />
         {errors.description && <p className="text-sm text-destructive mt-1">{String(errors.description.message)}</p>}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">날짜</label>
-          <Input type="datetime-local" {...register('eventDate')} />
+          <Input type="datetime-local" {...register('eventDate')} data-testid="input-event-date" />
         </div>
         <div>
           <label className="form-label">장소</label>
-          <Input {...register('location')} />
+          <Input {...register('location')} data-testid="input-event-location" />
         </div>
       </div>
       <div>
         <label className="form-label">카테고리</label>
         <Select defaultValue={event.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
-          <SelectTrigger>
+          <SelectTrigger data-testid="select-event-category">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -961,11 +985,43 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <label className="form-label">이미지</label>
+        <div className="flex gap-2 mb-2">
+          <Input 
+            value={newImageUrl}
+            onChange={(e) => setNewImageUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg" 
+            data-testid="input-event-new-image-url"
+          />
+          <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-event-image">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        {imageUrls.length > 0 && (
+          <div className="space-y-2">
+            {imageUrls.map((url, index) => (
+              <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
+                <span className="flex-1 text-sm truncate" data-testid={`text-event-image-url-${index}`}>{url}</span>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => removeImageUrl(index)}
+                  data-testid={`button-remove-event-image-${index}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex gap-2">
-        <Button type="submit" disabled={updateMutation.isPending}>
+        <Button type="submit" disabled={updateMutation.isPending} data-testid="button-submit-event">
           {updateMutation.isPending ? '수정 중...' : '수정'}
         </Button>
-        <Button type="button" variant="outline" onClick={onSuccess}>
+        <Button type="button" variant="outline" onClick={onSuccess} data-testid="button-cancel-event">
           취소
         </Button>
       </div>
@@ -974,42 +1030,67 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
 }
 
 function EditNewsForm({ article, onSuccess, updateMutation }: any) {
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const [imageUrls, setImageUrls] = useState<string[]>(article.images || []);
+  const [newImageUrl, setNewImageUrl] = useState('');
+
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(newsSchema),
     defaultValues: {
       title: article.title,
       excerpt: article.excerpt,
       content: article.content,
       category: article.category,
+      featuredImage: article.featuredImage || '',
+      images: article.images || [],
       isPublished: article.isPublished,
     }
   });
 
+  const addImageUrl = () => {
+    if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
+      const updated = [...imageUrls, newImageUrl.trim()];
+      setImageUrls(updated);
+      setValue('images', updated);
+      setNewImageUrl('');
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const updated = imageUrls.filter((_, i) => i !== index);
+    setImageUrls(updated);
+    setValue('images', updated);
+  };
+
   const onSubmit = (data: any) => {
-    updateMutation.mutate({ id: article.id, ...data });
+    updateMutation.mutate({ 
+      id: article.id, 
+      ...data,
+      images: imageUrls.length > 0 ? imageUrls : null,
+      featuredImage: data.featuredImage || null,
+    });
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
         <label className="form-label">제목</label>
-        <Input {...register('title')} />
+        <Input {...register('title')} data-testid="input-news-title" />
         {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
       </div>
       <div>
         <label className="form-label">요약</label>
-        <Textarea {...register('excerpt')} />
+        <Textarea {...register('excerpt')} data-testid="input-news-excerpt" />
         {errors.excerpt && <p className="text-sm text-destructive mt-1">{String(errors.excerpt.message)}</p>}
       </div>
       <div>
         <label className="form-label">내용</label>
-        <Textarea rows={8} {...register('content')} />
+        <Textarea rows={8} {...register('content')} data-testid="input-news-content" />
         {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
       </div>
       <div>
         <label className="form-label">카테고리</label>
         <Select defaultValue={article.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
-          <SelectTrigger>
+          <SelectTrigger data-testid="select-news-category">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1019,11 +1100,52 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <label className="form-label">대표 이미지 URL</label>
+        <Input 
+          {...register('featuredImage')} 
+          placeholder="https://example.com/image.jpg" 
+          data-testid="input-featured-image"
+        />
+        {errors.featuredImage && <p className="text-sm text-destructive mt-1">{String(errors.featuredImage.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">추가 이미지</label>
+        <div className="flex gap-2 mb-2">
+          <Input 
+            value={newImageUrl}
+            onChange={(e) => setNewImageUrl(e.target.value)}
+            placeholder="https://example.com/image.jpg" 
+            data-testid="input-new-image-url"
+          />
+          <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-image">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        {imageUrls.length > 0 && (
+          <div className="space-y-2">
+            {imageUrls.map((url, index) => (
+              <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
+                <span className="flex-1 text-sm truncate" data-testid={`text-image-url-${index}`}>{url}</span>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => removeImageUrl(index)}
+                  data-testid={`button-remove-image-${index}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex gap-2">
-        <Button type="submit" disabled={updateMutation.isPending}>
+        <Button type="submit" disabled={updateMutation.isPending} data-testid="button-submit-news">
           {updateMutation.isPending ? '수정 중...' : '수정'}
         </Button>
-        <Button type="button" variant="outline" onClick={onSuccess}>
+        <Button type="button" variant="outline" onClick={onSuccess} data-testid="button-cancel-news">
           취소
         </Button>
       </div>

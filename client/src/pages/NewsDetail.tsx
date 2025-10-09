@@ -172,6 +172,24 @@ export default function NewsDetail() {
                 {article.content}
               </div>
 
+              {/* Image Gallery */}
+              {article.images && Array.isArray(article.images) && article.images.length > 0 && (
+                <div className="mt-8 pt-8 border-t">
+                  <h3 className="text-lg font-semibold mb-4">이미지</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {article.images.map((imageUrl, index) => (
+                      <img
+                        key={index}
+                        src={imageUrl}
+                        alt={`${article.title} - 이미지 ${index + 1}`}
+                        className="w-full h-64 object-cover rounded-lg"
+                        data-testid={`news-image-${index}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Tags */}
               {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                 <div className="mt-8 pt-8 border-t">
