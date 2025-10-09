@@ -55,9 +55,9 @@ const eventSchema = z.object({
   location: z.string().min(1, '장소를 입력해주세요'),
   category: z.string().min(1, '카테고리를 선택해주세요'),
   eventType: z.string().default('offline'),
-  capacity: z.number().optional(),
-  fee: z.number().default(0),
-  images: z.array(z.string().url()).optional(),
+  capacity: z.number().optional().or(z.nan()).transform((val) => Number.isNaN(val) ? undefined : val),
+  fee: z.number().optional().or(z.nan()).transform((val) => Number.isNaN(val) ? 0 : val),
+  images: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
 });
 
@@ -1015,7 +1015,7 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
       </div>
       <div>
         <label className="form-label">카테고리</label>
-        <Select defaultValue={event.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+        <Select defaultValue={event.category} onValueChange={(value) => setValue('category', value)}>
           <SelectTrigger data-testid="select-event-category">
             <SelectValue />
           </SelectTrigger>
@@ -1026,6 +1026,7 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
             <SelectItem value="cultural">문화</SelectItem>
           </SelectContent>
         </Select>
+        {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
       </div>
       <div>
         <label className="form-label">이미지</label>
@@ -1775,7 +1776,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div>
               <label className="form-label">카테고리</label>
-              <Select onValueChange={(value) => register('category').onChange({ target: { value } })}>
+              <Select onValueChange={(value) => setValue('category', value)}>
                 <SelectTrigger data-testid="select-event-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
@@ -1786,6 +1787,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
                   <SelectItem value="cultural">문화</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
             </div>
           </div>
           

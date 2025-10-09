@@ -238,6 +238,16 @@ export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  eventDate: z.union([z.string(), z.date()]).transform((val) => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+  endDate: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
+    val && typeof val === 'string' ? new Date(val) : val
+  ),
+  registrationDeadline: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
+    val && typeof val === 'string' ? new Date(val) : val
+  ),
 });
 
 export const insertEventRegistrationSchema = createInsertSchema(eventRegistrations).omit({
