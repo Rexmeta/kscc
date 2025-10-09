@@ -77,6 +77,9 @@ const partnerSchema = z.object({
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -133,7 +136,7 @@ export default function AdminPage() {
     queryKey: ['/api/resources', { admin: true }],
     queryFn: async () => {
       const response = await fetch('/api/resources?limit=50', {
-        headers: { 'Authorization': `Bearer ${localStorage.getToken('token')}` }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       return response.json();
     },
@@ -215,6 +218,100 @@ export default function AdminPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
       toast({ title: "문의가 업데이트되었습니다" });
+    },
+  });
+
+  // Update mutations
+  const updateEventMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & any) => {
+      const response = await apiRequest('PUT', `/api/events/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      toast({ title: "행사가 수정되었습니다" });
+      setEditDialogOpen(false);
+    },
+  });
+
+  const updateNewsMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & any) => {
+      const response = await apiRequest('PUT', `/api/news/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+      toast({ title: "뉴스가 수정되었습니다" });
+      setEditDialogOpen(false);
+    },
+  });
+
+  const updateResourceMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & any) => {
+      const response = await apiRequest('PUT', `/api/resources/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      toast({ title: "자료가 수정되었습니다" });
+      setEditDialogOpen(false);
+    },
+  });
+
+  const updatePartnerMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & any) => {
+      const response = await apiRequest('PUT', `/api/partners/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/partners'] });
+      toast({ title: "파트너가 수정되었습니다" });
+      setEditDialogOpen(false);
+    },
+  });
+
+  // Delete mutations
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/events/${id}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      toast({ title: "행사가 삭제되었습니다" });
+    },
+  });
+
+  const deleteNewsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/news/${id}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+      toast({ title: "뉴스가 삭제되었습니다" });
+    },
+  });
+
+  const deleteResourceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/resources/${id}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      toast({ title: "자료가 삭제되었습니다" });
+    },
+  });
+
+  const deletePartnerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/partners/${id}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/partners'] });
+      toast({ title: "파트너가 삭제되었습니다" });
     },
   });
 
@@ -372,11 +469,39 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(event);
+                              setEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-event-${event.id}`}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(event);
+                              setViewDialogOpen(true);
+                            }}
+                            data-testid={`button-view-event-${event.id}`}
+                          >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm('정말 삭제하시겠습니까?')) {
+                                deleteEventMutation.mutate(event.id);
+                              }
+                            }}
+                            data-testid={`button-delete-event-${event.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -410,11 +535,39 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(article);
+                              setEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-news-${article.id}`}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(article);
+                              setViewDialogOpen(true);
+                            }}
+                            data-testid={`button-view-news-${article.id}`}
+                          >
                             <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm('정말 삭제하시겠습니까?')) {
+                                deleteNewsMutation.mutate(article.id);
+                              }
+                            }}
+                            data-testid={`button-delete-news-${article.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -446,10 +599,38 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div className="flex space-x-2">
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(resource);
+                              setEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-resource-${resource.id}`}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(resource);
+                              setViewDialogOpen(true);
+                            }}
+                            data-testid={`button-view-resource-${resource.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm('정말 삭제하시겠습니까?')) {
+                                deleteResourceMutation.mutate(resource.id);
+                              }
+                            }}
+                            data-testid={`button-delete-resource-${resource.id}`}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -533,10 +714,27 @@ export default function AdminPage() {
                         <h4 className="font-medium">{partner.name}</h4>
                         <Badge variant="outline">{partner.category}</Badge>
                         <div className="flex justify-center space-x-2">
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(partner);
+                              setEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-partner-${partner.id}`}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm('정말 삭제하시겠습니까?')) {
+                                deletePartnerMutation.mutate(partner.id);
+                              }
+                            }}
+                            data-testid={`button-delete-partner-${partner.id}`}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -549,7 +747,435 @@ export default function AdminPage() {
           </Tabs>
         </div>
       </section>
+
+      {/* View Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>상세 보기</DialogTitle>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="space-y-4">
+              {activeTab === 'events' && (
+                <>
+                  <div>
+                    <h3 className="font-semibold mb-1">제목</h3>
+                    <p>{selectedItem.title}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">설명</h3>
+                    <p>{selectedItem.description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="font-semibold mb-1">날짜</h3>
+                      <p>{new Date(selectedItem.eventDate).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-1">장소</h3>
+                      <p>{selectedItem.location}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">카테고리</h3>
+                    <Badge>{selectedItem.category}</Badge>
+                  </div>
+                  {selectedItem.content && (
+                    <div>
+                      <h3 className="font-semibold mb-1">상세 내용</h3>
+                      <p className="whitespace-pre-wrap">{selectedItem.content}</p>
+                    </div>
+                  )}
+                </>
+              )}
+              {activeTab === 'news' && (
+                <>
+                  <div>
+                    <h3 className="font-semibold mb-1">제목</h3>
+                    <p>{selectedItem.title}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">요약</h3>
+                    <p>{selectedItem.excerpt}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">내용</h3>
+                    <p className="whitespace-pre-wrap">{selectedItem.content}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge>{selectedItem.category}</Badge>
+                    <Badge variant={selectedItem.isPublished ? 'default' : 'secondary'}>
+                      {selectedItem.isPublished ? '발행됨' : '미발행'}
+                    </Badge>
+                  </div>
+                </>
+              )}
+              {activeTab === 'resources' && (
+                <>
+                  <div>
+                    <h3 className="font-semibold mb-1">제목</h3>
+                    <p>{selectedItem.title}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">설명</h3>
+                    <p>{selectedItem.description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="font-semibold mb-1">파일명</h3>
+                      <p>{selectedItem.fileName}</p>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-1">파일 형식</h3>
+                      <p>{selectedItem.fileType}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold mb-1">파일 URL</h3>
+                    <a href={selectedItem.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      {selectedItem.fileUrl}
+                    </a>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge>{selectedItem.category}</Badge>
+                    <Badge variant="outline">{selectedItem.accessLevel}</Badge>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>수정하기</DialogTitle>
+          </DialogHeader>
+          {selectedItem && activeTab === 'events' && (
+            <EditEventForm 
+              event={selectedItem} 
+              onSuccess={() => {
+                setEditDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+              }}
+              updateMutation={updateEventMutation}
+            />
+          )}
+          {selectedItem && activeTab === 'news' && (
+            <EditNewsForm 
+              article={selectedItem} 
+              onSuccess={() => {
+                setEditDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+              }}
+              updateMutation={updateNewsMutation}
+            />
+          )}
+          {selectedItem && activeTab === 'resources' && (
+            <EditResourceForm 
+              resource={selectedItem} 
+              onSuccess={() => {
+                setEditDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+              }}
+              updateMutation={updateResourceMutation}
+            />
+          )}
+          {selectedItem && activeTab === 'partners' && (
+            <EditPartnerForm 
+              partner={selectedItem} 
+              onSuccess={() => {
+                setEditDialogOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['/api/partners'] });
+              }}
+              updateMutation={updatePartnerMutation}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// Edit Forms
+function EditEventForm({ event, onSuccess, updateMutation }: any) {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      title: event.title,
+      description: event.description,
+      content: event.content || '',
+      eventDate: new Date(event.eventDate).toISOString().slice(0, 16),
+      location: event.location,
+      category: event.category,
+      eventType: event.eventType || 'offline',
+      capacity: event.capacity || undefined,
+      fee: event.fee || 0,
+      isPublic: event.isPublic !== false,
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    updateMutation.mutate({
+      id: event.id,
+      ...data,
+      eventDate: new Date(data.eventDate).toISOString(),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <label className="form-label">제목</label>
+        <Input {...register('title')} />
+        {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">설명</label>
+        <Textarea {...register('description')} />
+        {errors.description && <p className="text-sm text-destructive mt-1">{String(errors.description.message)}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="form-label">날짜</label>
+          <Input type="datetime-local" {...register('eventDate')} />
+        </div>
+        <div>
+          <label className="form-label">장소</label>
+          <Input {...register('location')} />
+        </div>
+      </div>
+      <div>
+        <label className="form-label">카테고리</label>
+        <Select defaultValue={event.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="networking">네트워킹</SelectItem>
+            <SelectItem value="seminar">세미나</SelectItem>
+            <SelectItem value="workshop">워크샵</SelectItem>
+            <SelectItem value="cultural">문화</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? '수정 중...' : '수정'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          취소
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditNewsForm({ article, onSuccess, updateMutation }: any) {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(newsSchema),
+    defaultValues: {
+      title: article.title,
+      excerpt: article.excerpt,
+      content: article.content,
+      category: article.category,
+      isPublished: article.isPublished,
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    updateMutation.mutate({ id: article.id, ...data });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <label className="form-label">제목</label>
+        <Input {...register('title')} />
+        {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">요약</label>
+        <Textarea {...register('excerpt')} />
+        {errors.excerpt && <p className="text-sm text-destructive mt-1">{String(errors.excerpt.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">내용</label>
+        <Textarea rows={8} {...register('content')} />
+        {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">카테고리</label>
+        <Select defaultValue={article.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="notice">공지사항</SelectItem>
+            <SelectItem value="press">보도자료</SelectItem>
+            <SelectItem value="activity">활동소식</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? '수정 중...' : '수정'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          취소
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditResourceForm({ resource, onSuccess, updateMutation }: any) {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(resourceSchema),
+    defaultValues: {
+      title: resource.title,
+      description: resource.description || '',
+      category: resource.category,
+      fileUrl: resource.fileUrl,
+      fileName: resource.fileName,
+      fileType: resource.fileType,
+      accessLevel: resource.accessLevel || 'public',
+      isActive: resource.isActive !== false,
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    updateMutation.mutate({ id: resource.id, ...data });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <label className="form-label">제목</label>
+        <Input {...register('title')} />
+        {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">설명</label>
+        <Textarea {...register('description')} />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="form-label">카테고리</label>
+          <Select defaultValue={resource.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="reports">보고서</SelectItem>
+              <SelectItem value="forms">양식</SelectItem>
+              <SelectItem value="presentations">발표자료</SelectItem>
+              <SelectItem value="guides">가이드북</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="form-label">접근 수준</label>
+          <Select defaultValue={resource.accessLevel} onValueChange={(value) => register('accessLevel').onChange({ target: { value } })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="public">공개</SelectItem>
+              <SelectItem value="members">회원전용</SelectItem>
+              <SelectItem value="premium">프리미엄</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="form-label">파일 URL</label>
+          <Input {...register('fileUrl')} />
+        </div>
+        <div>
+          <label className="form-label">파일명</label>
+          <Input {...register('fileName')} />
+        </div>
+        <div>
+          <label className="form-label">파일 형식</label>
+          <Input {...register('fileType')} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? '수정 중...' : '수정'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          취소
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function EditPartnerForm({ partner, onSuccess, updateMutation }: any) {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(partnerSchema),
+    defaultValues: {
+      name: partner.name,
+      logo: partner.logo,
+      website: partner.website || '',
+      description: partner.description || '',
+      category: partner.category,
+      isActive: partner.isActive !== false,
+      order: partner.order || 0,
+    }
+  });
+
+  const onSubmit = (data: any) => {
+    updateMutation.mutate({ id: partner.id, ...data });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <label className="form-label">이름</label>
+        <Input {...register('name')} />
+        {errors.name && <p className="text-sm text-destructive mt-1">{String(errors.name.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">로고 URL</label>
+        <Input {...register('logo')} />
+        {errors.logo && <p className="text-sm text-destructive mt-1">{String(errors.logo.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">웹사이트</label>
+        <Input {...register('website')} />
+      </div>
+      <div>
+        <label className="form-label">설명</label>
+        <Textarea {...register('description')} />
+      </div>
+      <div>
+        <label className="form-label">카테고리</label>
+        <Select defaultValue={partner.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sponsor">후원사</SelectItem>
+            <SelectItem value="partner">협력사</SelectItem>
+            <SelectItem value="government">정부기관</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? '수정 중...' : '수정'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          취소
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -790,7 +1416,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
           <div>
             <label className="form-label">제목</label>
             <Input {...register('title')} data-testid="input-resource-title" />
-            {errors.title && <p className="text-sm text-destructive mt-1">{errors.title.message}</p>}
+            {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
           </div>
           
           <div className="grid grid-cols-2 gap-4">
