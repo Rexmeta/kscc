@@ -205,6 +205,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/events/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      
+      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
+      res.json(updatedEvent);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.delete("/api/events/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      
+      await storage.deleteEvent(req.params.id);
+      res.json({ message: "Event deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Event registrations
   app.post("/api/events/:id/register", authenticateToken, async (req, res) => {
     try {
@@ -287,6 +315,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(article);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.put("/api/news/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const article = await storage.getNewsArticle(req.params.id);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      const updatedArticle = await storage.updateNews(req.params.id, req.body);
+      res.json(updatedArticle);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.delete("/api/news/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const article = await storage.getNewsArticle(req.params.id);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      await storage.deleteNews(req.params.id);
+      res.json({ message: "Article deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -378,6 +434,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/resources/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const resource = await storage.getResource(req.params.id);
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      const updatedResource = await storage.updateResource(req.params.id, req.body);
+      res.json(updatedResource);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.delete("/api/resources/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const resource = await storage.getResource(req.params.id);
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      await storage.deleteResource(req.params.id);
+      res.json({ message: "Resource deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // Inquiries routes
   app.post("/api/inquiries", async (req, res) => {
     try {
@@ -444,6 +528,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(partner);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.put("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const partner = await storage.getPartner(req.params.id);
+      if (!partner) {
+        return res.status(404).json({ message: "Partner not found" });
+      }
+      
+      const updatedPartner = await storage.updatePartner(req.params.id, req.body);
+      res.json(updatedPartner);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.delete("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const partner = await storage.getPartner(req.params.id);
+      if (!partner) {
+        return res.status(404).json({ message: "Partner not found" });
+      }
+      
+      await storage.deletePartner(req.params.id);
+      res.json({ message: "Partner deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 

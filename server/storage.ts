@@ -43,6 +43,7 @@ export interface IStorage {
   }): Promise<{ events: Event[]; total: number }>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined>;
+  deleteEvent(id: string): Promise<void>;
 
   // Event Registrations
   getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined>;
@@ -61,6 +62,7 @@ export interface IStorage {
   }): Promise<{ articles: News[]; total: number }>;
   createNews(article: InsertNews): Promise<News>;
   updateNews(id: string, updates: Partial<News>): Promise<News | undefined>;
+  deleteNews(id: string): Promise<void>;
   incrementNewsViews(id: string): Promise<void>;
 
   // Resources
@@ -74,6 +76,7 @@ export interface IStorage {
   }): Promise<{ resources: Resource[]; total: number }>;
   createResource(resource: InsertResource): Promise<Resource>;
   updateResource(id: string, updates: Partial<Resource>): Promise<Resource | undefined>;
+  deleteResource(id: string): Promise<void>;
   incrementResourceDownloads(id: string): Promise<void>;
 
   // Inquiries
@@ -88,9 +91,11 @@ export interface IStorage {
   updateInquiry(id: string, updates: Partial<Inquiry>): Promise<Inquiry | undefined>;
 
   // Partners
+  getPartner(id: string): Promise<Partner | undefined>;
   getPartners(active?: boolean): Promise<Partner[]>;
   createPartner(partner: InsertPartner): Promise<Partner>;
   updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
+  deletePartner(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -284,6 +289,10 @@ export class DatabaseStorage implements IStorage {
     return event || undefined;
   }
 
+  async deleteEvent(id: string): Promise<void> {
+    await db.delete(events).where(eq(events.id, id));
+  }
+
   // Event Registrations
   async getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined> {
     const [registration] = await db
@@ -390,6 +399,10 @@ export class DatabaseStorage implements IStorage {
     return article || undefined;
   }
 
+  async deleteNews(id: string): Promise<void> {
+    await db.delete(news).where(eq(news.id, id));
+  }
+
   async incrementNewsViews(id: string): Promise<void> {
     await db
       .update(news)
@@ -462,6 +475,10 @@ export class DatabaseStorage implements IStorage {
     return resource || undefined;
   }
 
+  async deleteResource(id: string): Promise<void> {
+    await db.delete(resources).where(eq(resources.id, id));
+  }
+
   async incrementResourceDownloads(id: string): Promise<void> {
     await db
       .update(resources)
@@ -531,6 +548,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Partners
+  async getPartner(id: string): Promise<Partner | undefined> {
+    const [partner] = await db.select().from(partners).where(eq(partners.id, id));
+    return partner || undefined;
+  }
+
   async getPartners(active?: boolean): Promise<Partner[]> {
     let query = db.select().from(partners);
 
@@ -556,6 +578,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(partners.id, id))
       .returning();
     return partner || undefined;
+  }
+
+  async deletePartner(id: string): Promise<void> {
+    await db.delete(partners).where(eq(partners.id, id));
   }
 }
 
