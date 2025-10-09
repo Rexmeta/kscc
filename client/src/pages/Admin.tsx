@@ -25,13 +25,16 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  X
+  X,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
 import { News, Event, Member, Resource, Inquiry, Partner } from '@shared/schema';
+import { ObjectUploader } from '@/components/ObjectUploader';
+import type { UploadResult } from '@uppy/core';
 
 // Form schemas
 const newsSchema = z.object({
@@ -907,6 +910,7 @@ export default function AdminPage() {
 function EditEventForm({ event, onSuccess, updateMutation }: any) {
   const [imageUrls, setImageUrls] = useState<string[]>(event.images || []);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const { toast } = useToast();
 
   const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(eventSchema),
@@ -924,6 +928,44 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
       isPublic: event.isPublic !== false,
     }
   });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleEventImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      const updated = [...imageUrls, data.objectPath];
+      setImageUrls(updated);
+      setValue('images', updated);
+      toast({ title: '이미지 업로드 완료!' });
+    }
+  };
 
   const addImageUrl = () => {
     if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
@@ -991,12 +1033,22 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
           <Input 
             value={newImageUrl}
             onChange={(e) => setNewImageUrl(e.target.value)}
-            placeholder="https://example.com/image.jpg" 
+            placeholder="https://example.com/image.jpg 또는 파일 업로드" 
             data-testid="input-event-new-image-url"
           />
           <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-event-image">
             <Plus className="h-4 w-4" />
           </Button>
+          <ObjectUploader
+            maxNumberOfFiles={1}
+            maxFileSize={10485760}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleEventImageUpload}
+            buttonClassName="whitespace-nowrap"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            파일 업로드
+          </ObjectUploader>
         </div>
         {imageUrls.length > 0 && (
           <div className="space-y-2">
@@ -1032,6 +1084,7 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
 function EditNewsForm({ article, onSuccess, updateMutation }: any) {
   const [imageUrls, setImageUrls] = useState<string[]>(article.images || []);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const { toast } = useToast();
 
   const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(newsSchema),
@@ -1045,6 +1098,64 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
       isPublished: article.isPublished,
     }
   });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleFeaturedImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      setValue('featuredImage', data.objectPath);
+      toast({ title: '대표 이미지 업로드 완료!' });
+    }
+  };
+
+  const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      const updated = [...imageUrls, data.objectPath];
+      setImageUrls(updated);
+      setValue('images', updated);
+      toast({ title: '이미지 업로드 완료!' });
+    }
+  };
 
   const addImageUrl = () => {
     if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
@@ -1101,12 +1212,24 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
         </Select>
       </div>
       <div>
-        <label className="form-label">대표 이미지 URL</label>
-        <Input 
-          {...register('featuredImage')} 
-          placeholder="https://example.com/image.jpg" 
-          data-testid="input-featured-image"
-        />
+        <label className="form-label">대표 이미지</label>
+        <div className="flex gap-2 mb-2">
+          <Input 
+            {...register('featuredImage')} 
+            placeholder="https://example.com/image.jpg 또는 파일 업로드" 
+            data-testid="input-featured-image"
+          />
+          <ObjectUploader
+            maxNumberOfFiles={1}
+            maxFileSize={10485760}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleFeaturedImageUpload}
+            buttonClassName="whitespace-nowrap"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            파일 업로드
+          </ObjectUploader>
+        </div>
         {errors.featuredImage && <p className="text-sm text-destructive mt-1">{String(errors.featuredImage.message)}</p>}
       </div>
       <div>
@@ -1115,12 +1238,22 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
           <Input 
             value={newImageUrl}
             onChange={(e) => setNewImageUrl(e.target.value)}
-            placeholder="https://example.com/image.jpg" 
+            placeholder="https://example.com/image.jpg 또는 파일 업로드" 
             data-testid="input-new-image-url"
           />
           <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-image">
             <Plus className="h-4 w-4" />
           </Button>
+          <ObjectUploader
+            maxNumberOfFiles={1}
+            maxFileSize={10485760}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleAdditionalImageUpload}
+            buttonClassName="whitespace-nowrap"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            파일 업로드
+          </ObjectUploader>
         </div>
         {imageUrls.length > 0 && (
           <div className="space-y-2">
@@ -1304,20 +1437,104 @@ function EditPartnerForm({ partner, onSuccess, updateMutation }: any) {
 // Create News Dialog Component
 function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
+  const [featuredImageUrl, setFeaturedImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(newsSchema),
   });
 
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleFeaturedImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      setFeaturedImageUrl(data.objectPath);
+      setValue('featuredImage', data.objectPath);
+      toast({ title: '대표 이미지 업로드 완료!' });
+    }
+  };
+
+  const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      const updated = [...imageUrls, data.objectPath];
+      setImageUrls(updated);
+      setValue('images', updated);
+      toast({ title: '이미지 업로드 완료!' });
+    }
+  };
+
+  const addImageUrl = () => {
+    if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
+      const updated = [...imageUrls, newImageUrl.trim()];
+      setImageUrls(updated);
+      setValue('images', updated);
+      setNewImageUrl('');
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const updated = imageUrls.filter((_, i) => i !== index);
+    setImageUrls(updated);
+    setValue('images', updated);
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/news', data);
+      const response = await apiRequest('POST', '/api/news', {
+        ...data,
+        featuredImage: featuredImageUrl || null,
+        images: imageUrls.length > 0 ? imageUrls : null,
+      });
       return response.json();
     },
     onSuccess: () => {
       toast({ title: "뉴스가 생성되었습니다" });
       reset();
+      setFeaturedImageUrl('');
+      setImageUrls([]);
+      setNewImageUrl('');
       setOpen(false);
       onSuccess();
     },
@@ -1371,6 +1588,68 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
             <Textarea rows={8} {...register('content')} data-testid="textarea-news-content" />
             {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
           </div>
+
+          <div>
+            <label className="form-label">대표 이미지</label>
+            <div className="flex gap-2">
+              <Input 
+                value={featuredImageUrl}
+                onChange={(e) => {
+                  setFeaturedImageUrl(e.target.value);
+                  setValue('featuredImage', e.target.value);
+                }}
+                placeholder="https://example.com/image.jpg 또는 파일 업로드" 
+                data-testid="input-news-featured-image"
+              />
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleFeaturedImageUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 업로드
+              </ObjectUploader>
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label">추가 이미지</label>
+            <div className="flex gap-2 mb-2">
+              <Input 
+                value={newImageUrl}
+                onChange={(e) => setNewImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg 또는 파일 업로드" 
+                data-testid="input-news-new-image-url"
+              />
+              <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-news-image">
+                <Plus className="h-4 w-4" />
+              </Button>
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleAdditionalImageUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 업로드
+              </ObjectUploader>
+            </div>
+            {imageUrls.length > 0 && (
+              <div className="space-y-2">
+                {imageUrls.map((url, index) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
+                    <span className="flex-1 text-sm truncate">{url}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeImageUrl(index)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           
           <div className="flex gap-2">
             <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-news">
@@ -1389,11 +1668,66 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
 // Create Event Dialog Component
 function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(eventSchema),
   });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleEventImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadURL = result.successful[0].uploadURL;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      const updated = [...imageUrls, data.objectPath];
+      setImageUrls(updated);
+      setValue('images', updated);
+      toast({ title: '이미지 업로드 완료!' });
+    }
+  };
+
+  const addImageUrl = () => {
+    if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
+      const updated = [...imageUrls, newImageUrl.trim()];
+      setImageUrls(updated);
+      setValue('images', updated);
+      setNewImageUrl('');
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const updated = imageUrls.filter((_, i) => i !== index);
+    setImageUrls(updated);
+    setValue('images', updated);
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1402,12 +1736,15 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
         eventDate: new Date(data.eventDate).toISOString(),
         capacity: data.capacity ? parseInt(data.capacity) : null,
         fee: parseInt(data.fee) || 0,
+        images: imageUrls.length > 0 ? imageUrls : null,
       });
       return response.json();
     },
     onSuccess: () => {
       toast({ title: "행사가 생성되었습니다" });
       reset();
+      setImageUrls([]);
+      setNewImageUrl('');
       setOpen(false);
       onSuccess();
     },
@@ -1480,6 +1817,43 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
               <label className="form-label">참가비</label>
               <Input type="number" {...register('fee', { valueAsNumber: true })} data-testid="input-event-fee" />
             </div>
+          </div>
+
+          <div>
+            <label className="form-label">이미지</label>
+            <div className="flex gap-2 mb-2">
+              <Input 
+                value={newImageUrl}
+                onChange={(e) => setNewImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg 또는 파일 업로드" 
+                data-testid="input-event-new-image-url"
+              />
+              <Button type="button" onClick={addImageUrl} variant="outline" data-testid="button-add-event-image">
+                <Plus className="h-4 w-4" />
+              </Button>
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleEventImageUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 업로드
+              </ObjectUploader>
+            </div>
+            {imageUrls.length > 0 && (
+              <div className="space-y-2">
+                {imageUrls.map((url, index) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
+                    <span className="flex-1 text-sm truncate">{url}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeImageUrl(index)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2">
