@@ -42,7 +42,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User already exists" });
       }
 
-      const user = await storage.createUser(userData);
+      // Check if this is the first user - make them admin automatically
+      const userCount = await storage.getUserCount();
+      const role = userCount === 0 ? 'admin' : 'member';
+
+      const user = await storage.createUser({
+        ...userData,
+        role
+      });
+      
       const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
       
       res.json({ user: { ...user, password: undefined }, token });

@@ -13,7 +13,8 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getUserCount(): Promise<number>;
+  createUser(user: InsertUser & { role?: string }): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   validateUser(email: string, password: string): Promise<User | undefined>;
 
@@ -104,7 +105,7 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(insertUser: InsertUser & { role?: string }): Promise<User> {
     const hashedPassword = await bcrypt.hash(insertUser.password, 10);
     const [user] = await db
       .insert(users)
@@ -131,6 +132,11 @@ export class DatabaseStorage implements IStorage {
     
     const isValid = await bcrypt.compare(password, user.password);
     return isValid ? user : undefined;
+  }
+
+  async getUserCount(): Promise<number> {
+    const [result] = await db.select({ count: count() }).from(users);
+    return result?.count || 0;
   }
 
   // Members

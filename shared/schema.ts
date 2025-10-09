@@ -226,7 +226,6 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
   name: true,
-  role: true,
 });
 
 export const insertMemberSchema = createInsertSchema(members).omit({
