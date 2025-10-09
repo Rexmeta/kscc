@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, Eye, Share2, ArrowRight } from 'lucide-react';
 import { News } from '@shared/schema';
 import { t } from '@/lib/i18n';
+import { Link } from 'wouter';
 
 interface NewsCardProps {
   article: News;
@@ -106,15 +107,14 @@ export default function NewsCard({ article }: NewsCardProps) {
         
         {/* Article Actions */}
         <div className="flex items-center justify-between">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="text-primary hover:text-primary/80 p-0 h-auto font-medium"
-            data-testid={`button-read-more-${article.id}`}
+          <Link 
+            href={`/news/${article.id}`}
+            className="inline-flex items-center text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            data-testid={`link-read-more-${article.id}`}
           >
             {t('news.readMore')}
             <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
+          </Link>
           
           {/* Social Share Buttons */}
           <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import News from "@/pages/News";
+import NewsDetail from "@/pages/NewsDetail";
 import Events from "@/pages/Events";
 import Members from "@/pages/Members";
 import Resources from "@/pages/Resources";
@@ -27,6 +28,7 @@ function Router() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/about" component={About} />
+          <Route path="/news/:id" component={NewsDetail} />
           <Route path="/news" component={News} />
           <Route path="/events" component={Events} />
           <Route path="/members" component={Members} />
