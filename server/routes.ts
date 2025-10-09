@@ -17,9 +17,32 @@ function authenticateToken(req: Request, res: Response, next: NextFunction) {
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
+  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
+    if (err) {
+      console.log('[AUTH] Token verification failed:', err.message);
+      return res.sendStatus(403);
+    }
+    
+    // If token doesn't have role (old token), fetch from database
+    if (!user.role) {
+      console.log('[AUTH] Token missing role, fetching from DB for user:', user.id);
+      try {
+        const dbUser = await storage.getUser(user.id);
+        if (!dbUser) {
+          console.log('[AUTH] User not found in DB:', user.id);
+          return res.sendStatus(403);
+        }
+        console.log('[AUTH] Fetched role from DB:', dbUser.role);
+        req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
+      } catch (error) {
+        console.log('[AUTH] DB fetch error:', error);
+        return res.sendStatus(403);
+      }
+    } else {
+      console.log('[AUTH] Token has role:', user.role);
+      req.user = user;
+    }
+    
     next();
   });
 }
