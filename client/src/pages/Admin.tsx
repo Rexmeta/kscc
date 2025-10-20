@@ -87,6 +87,7 @@ export default function AdminPage() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -462,10 +463,18 @@ export default function AdminPage() {
               </div>
               
               <div className="grid gap-4">
-                {eventsData?.events?.map((event: Event) => (
+                {eventsData?.events?.map((event: any) => (
                   <Card key={event.id}>
                     <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start gap-4">
+                        {event.images && event.images.length > 0 && (
+                          <img 
+                            src={event.images[0]} 
+                            alt={event.title}
+                            className="w-20 h-20 object-cover rounded"
+                            data-testid={`img-event-${event.id}`}
+                          />
+                        )}
                         <div className="flex-1">
                           <h4 className="font-medium mb-2">{event.title}</h4>
                           <p className="text-sm text-muted-foreground mb-2">{event.description}</p>
@@ -473,9 +482,24 @@ export default function AdminPage() {
                             <span>{new Date(event.eventDate).toLocaleDateString()}</span>
                             <span>{event.location}</span>
                             <Badge variant="outline">{event.category}</Badge>
+                            <Badge variant="secondary" data-testid={`badge-registration-count-${event.id}`}>
+                              신청자: {event.registrationCount || 0}명
+                              {event.capacity && ` / ${event.capacity}명`}
+                            </Badge>
                           </div>
                         </div>
                         <div className="flex space-x-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(event);
+                              setRegistrationsDialogOpen(true);
+                            }}
+                            data-testid={`button-registrations-event-${event.id}`}
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -902,6 +926,13 @@ export default function AdminPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Event Registrations Dialog */}
+      <EventRegistrationsDialog
+        open={registrationsDialogOpen}
+        onOpenChange={setRegistrationsDialogOpen}
+        event={selectedItem}
+      />
     </div>
   );
 }
@@ -2077,6 +2108,89 @@ function CreatePartnerDialog({ onSuccess }: { onSuccess: () => void }) {
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Event Registrations Dialog Component
+function EventRegistrationsDialog({ 
+  open, 
+  onOpenChange, 
+  event 
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  event: any;
+}) {
+  const { data: registrations, isLoading } = useQuery({
+    queryKey: ['/api/events', event?.id, 'registrations'],
+    enabled: !!event?.id && open,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>행사 신청자 목록 - {event?.title}</DialogTitle>
+        </DialogHeader>
+        
+        {isLoading ? (
+          <div className="text-center py-8">로딩 중...</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center text-sm">
+              <span className="font-medium">총 신청자: {registrations?.length || 0}명</span>
+              {event?.capacity && (
+                <span className="text-muted-foreground">
+                  정원: {event.capacity}명 (잔여: {event.capacity - (registrations?.length || 0)}명)
+                </span>
+              )}
+            </div>
+            
+            <div className="border rounded-lg divide-y">
+              {registrations && registrations.length > 0 ? (
+                registrations.map((registration: any, index: number) => (
+                  <div 
+                    key={registration.id} 
+                    className="p-4 flex justify-between items-center"
+                    data-testid={`registration-item-${index}`}
+                  >
+                    <div>
+                      <div className="font-medium" data-testid={`registration-name-${index}`}>
+                        {registration.user?.name || registration.attendeeName || '이름 없음'}
+                      </div>
+                      <div className="text-sm text-muted-foreground" data-testid={`registration-email-${index}`}>
+                        {registration.user?.email || registration.attendeeEmail || '이메일 없음'}
+                      </div>
+                      {registration.attendeePhone && (
+                        <div className="text-sm text-muted-foreground">
+                          {registration.attendeePhone}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <Badge variant={
+                        registration.status === 'confirmed' ? 'default' :
+                        registration.status === 'pending' ? 'secondary' : 'outline'
+                      }>
+                        {registration.status === 'confirmed' ? '확정' :
+                         registration.status === 'pending' ? '대기' : '취소'}
+                      </Badge>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {new Date(registration.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-muted-foreground">
+                  아직 신청자가 없습니다.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
