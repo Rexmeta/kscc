@@ -297,6 +297,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/events/:id/registrations", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const registrations = await storage.getEventRegistrations(req.params.id);
+      res.json(registrations);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/user/registrations", authenticateToken, async (req, res) => {
     try {
       const registrations = await storage.getUserRegistrations(req.user.id);

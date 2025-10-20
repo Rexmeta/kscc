@@ -237,9 +237,6 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   }): Promise<{ events: Event[]; total: number }> {
-    let query = db.select().from(events);
-    let countQuery = db.select({ count: count() }).from(events);
-
     const conditions = [];
 
     if (filters?.category) {
@@ -252,22 +249,37 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(events.isPublic, true));
     }
 
-    if (conditions.length > 0) {
-      const whereCondition = and(...conditions);
-      if (whereCondition) {
-        query = query.where(whereCondition);
-        countQuery = countQuery.where(whereCondition);
-      }
-    }
+    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [totalResult] = await countQuery;
-    const eventsResult = await query
+    // Get events with registration count
+    const eventsWithCount = await db
+      .select({
+        event: events,
+        registrationCount: count(eventRegistrations.id),
+      })
+      .from(events)
+      .leftJoin(eventRegistrations, eq(events.id, eventRegistrations.eventId))
+      .where(whereCondition)
+      .groupBy(events.id)
       .orderBy(desc(events.eventDate))
       .limit(filters?.limit || 50)
       .offset(filters?.offset || 0);
 
+    // Get total count
+    let countQuery = db.select({ count: count() }).from(events);
+    if (whereCondition) {
+      countQuery = countQuery.where(whereCondition);
+    }
+    const [totalResult] = await countQuery;
+
+    // Map results to include registrationCount
+    const eventsResult = eventsWithCount.map(({ event, registrationCount }) => ({
+      ...event,
+      registrationCount: Number(registrationCount),
+    }));
+
     return {
-      events: eventsResult,
+      events: eventsResult as any,
       total: totalResult.count,
     };
   }
@@ -306,11 +318,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEventRegistrations(eventId: string): Promise<EventRegistration[]> {
-    return db
-      .select()
+    const registrations = await db
+      .select({
+        registration: eventRegistrations,
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        },
+      })
       .from(eventRegistrations)
+      .leftJoin(users, eq(eventRegistrations.userId, users.id))
       .where(eq(eventRegistrations.eventId, eventId))
       .orderBy(desc(eventRegistrations.createdAt));
+
+    return registrations.map(({ registration, user }) => ({
+      ...registration,
+      user,
+    })) as any;
   }
 
   async getUserRegistrations(userId: string): Promise<EventRegistration[]> {
