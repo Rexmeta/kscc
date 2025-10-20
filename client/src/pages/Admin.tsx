@@ -82,6 +82,134 @@ const partnerSchema = z.object({
   order: z.number().default(0),
 });
 
+// Location Picker Component
+function LocationPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+
+  const searchLocation = async (query: string) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+        `q=${encodeURIComponent(query)}&` +
+        `format=json&` +
+        `addressdetails=1&` +
+        `limit=5&` +
+        `countrycodes=kr`
+      );
+      const data = await response.json();
+      setSearchResults(data);
+      setShowResults(true);
+    } catch (error) {
+      console.error('Location search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    const timeoutId = setTimeout(() => searchLocation(query), 500);
+    return () => clearTimeout(timeoutId);
+  };
+
+  const selectLocation = (location: any) => {
+    const displayName = location.display_name || location.name;
+    onChange(displayName);
+    setSearchQuery('');
+    setShowResults(false);
+    setSearchResults([]);
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="직접 입력 또는 검색"
+          data-testid="input-event-location"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setShowResults(!showResults);
+            if (!showResults && !searchQuery) {
+              setSearchQuery(value);
+              searchLocation(value);
+            }
+          }}
+          data-testid="button-search-location"
+        >
+          🗺️ 검색
+        </Button>
+      </div>
+      
+      {showResults && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border rounded-lg shadow-lg">
+          <div className="p-2 border-b">
+            <Input
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="장소 검색... (예: 서울시청, 강남역)"
+              autoFocus
+              data-testid="input-location-search"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {isSearching ? (
+              <div className="p-4 text-center text-muted-foreground">검색 중...</div>
+            ) : searchResults.length > 0 ? (
+              searchResults.map((result, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className="w-full text-left px-4 py-2 hover:bg-secondary transition-colors"
+                  onClick={() => selectLocation(result)}
+                  data-testid={`location-result-${index}`}
+                >
+                  <div className="font-medium">{result.name}</div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {result.display_name}
+                  </div>
+                </button>
+              ))
+            ) : searchQuery.length >= 2 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                검색 결과가 없습니다
+              </div>
+            ) : (
+              <div className="p-4 text-center text-muted-foreground">
+                장소명을 입력해주세요 (최소 2자)
+              </div>
+            )}
+          </div>
+          <div className="p-2 border-t">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowResults(false)}
+              className="w-full"
+            >
+              닫기
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -471,8 +599,11 @@ export default function AdminPage() {
                           <img 
                             src={event.images[0]} 
                             alt={event.title}
-                            className="w-20 h-20 object-cover rounded"
+                            className="w-20 h-20 object-cover rounded border"
                             data-testid={`img-event-${event.id}`}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                         )}
                         <div className="flex-1">
@@ -1057,7 +1188,10 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
         </div>
         <div>
           <label className="form-label">장소</label>
-          <Input {...register('location')} data-testid="input-event-location" />
+          <LocationPicker
+            value={watch('location') || ''}
+            onChange={(value) => setValue('location', value)}
+          />
         </div>
       </div>
       <div>
@@ -1864,7 +1998,10 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div>
               <label className="form-label">장소</label>
-              <Input {...register('location')} data-testid="input-event-location" />
+              <LocationPicker
+                value={watch('location') || ''}
+                onChange={(value) => setValue('location', value)}
+              />
               {errors.location && <p className="text-sm text-destructive mt-1">{String(errors.location.message)}</p>}
             </div>
           </div>
