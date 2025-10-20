@@ -1099,19 +1099,31 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
           </ObjectUploader>
         </div>
         {imageUrls.length > 0 && (
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
             {imageUrls.map((url, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
-                <span className="flex-1 text-sm truncate" data-testid={`text-event-image-url-${index}`}>{url}</span>
+              <div key={index} className="relative group">
+                <img
+                  src={url}
+                  alt={`이미지 ${index + 1}`}
+                  className="w-full h-32 object-cover rounded border"
+                  data-testid={`img-event-edit-preview-${index}`}
+                  onError={(e) => {
+                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%23999">이미지 오류</text></svg>';
+                  }}
+                />
                 <Button 
                   type="button" 
                   size="sm" 
-                  variant="ghost" 
+                  variant="destructive" 
+                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={() => removeImageUrl(index)}
                   data-testid={`button-remove-event-image-${index}`}
                 >
                   <X className="h-4 w-4" />
                 </Button>
+                <div className="text-xs text-muted-foreground mt-1 truncate" title={url}>
+                  {url}
+                </div>
               </div>
             ))}
           </div>
@@ -2141,6 +2153,15 @@ function EventRegistrationsDialog({
 }) {
   const { data: registrations, isLoading } = useQuery({
     queryKey: ['/api/events', event?.id, 'registrations'],
+    queryFn: async () => {
+      const response = await fetch(`/api/events/${event.id}/registrations`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch registrations');
+      return response.json();
+    },
     enabled: !!event?.id && open,
   });
 
