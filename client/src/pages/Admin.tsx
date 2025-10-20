@@ -817,6 +817,22 @@ export default function AdminPage() {
                       <p className="whitespace-pre-wrap">{selectedItem.content}</p>
                     </div>
                   )}
+                  {selectedItem.images && selectedItem.images.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2">이미지</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        {selectedItem.images.map((image: string, index: number) => (
+                          <img
+                            key={index}
+                            src={image}
+                            alt={`${selectedItem.title} 이미지 ${index + 1}`}
+                            className="w-full h-48 object-cover rounded-lg"
+                            data-testid={`img-event-view-${index}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {activeTab === 'news' && (
