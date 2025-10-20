@@ -1090,7 +1090,7 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
 
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
     defaultValues: {
       title: event.title,
@@ -1866,7 +1866,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
   });
 
