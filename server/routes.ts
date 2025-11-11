@@ -666,8 +666,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       );
 
-      // Add /objects/ prefix to the path for serving
-      const fullPath = objectPath.startsWith('/') ? objectPath : `/objects/${objectPath}`;
+      // Extract just the file ID from the object path
+      // objectPath format: /replit-objstore-xxx/.private/uploads/file-id
+      // We want: /objects/uploads/file-id
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      let filePath = objectPath;
+      
+      if (objectPath.startsWith(privateDir)) {
+        filePath = objectPath.substring(privateDir.length);
+        if (filePath.startsWith('/')) {
+          filePath = filePath.substring(1);
+        }
+      }
+      
+      const fullPath = `/objects/${filePath}`;
 
       res.status(200).json({
         objectPath: fullPath,
