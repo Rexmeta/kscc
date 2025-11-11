@@ -666,8 +666,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       );
 
+      // Add /objects/ prefix to the path for serving
+      const fullPath = objectPath.startsWith('/') ? objectPath : `/objects/${objectPath}`;
+
       res.status(200).json({
-        objectPath: objectPath,
+        objectPath: fullPath,
       });
     } catch (error) {
       console.error("Error setting image ACL:", error);
