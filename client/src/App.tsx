@@ -11,6 +11,7 @@ import About from "@/pages/About";
 import News from "@/pages/News";
 import NewsDetail from "@/pages/NewsDetail";
 import Events from "@/pages/Events";
+import EventDetail from "@/pages/EventDetail";
 import Members from "@/pages/Members";
 import Resources from "@/pages/Resources";
 import Contact from "@/pages/Contact";
@@ -30,6 +31,7 @@ function Router() {
           <Route path="/about" component={About} />
           <Route path="/news/:id" component={NewsDetail} />
           <Route path="/news" component={News} />
+          <Route path="/events/:id" component={EventDetail} />
           <Route path="/events" component={Events} />
           <Route path="/members" component={Members} />
           <Route path="/resources" component={Resources} />

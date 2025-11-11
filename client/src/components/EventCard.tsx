@@ -1,12 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, ArrowRight } from 'lucide-react';
 import { Event } from '@shared/schema';
-import { useAuth } from '@/hooks/useAuth';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import { t } from '@/lib/i18n';
 
 interface EventCardProps {
@@ -14,45 +11,7 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event }: EventCardProps) {
-  const { isAuthenticated, user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const registerMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/events/${event.id}/register`, {
-        attendeeName: user?.name || '',
-        attendeeEmail: user?.email || '',
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "행사 신청 완료",
-        description: "행사 신청이 성공적으로 완료되었습니다.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/user/registrations'] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "신청 실패",
-        description: error.message || "행사 신청 중 오류가 발생했습니다.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleRegister = () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "로그인 필요",
-        description: "행사 신청을 위해 로그인해주세요.",
-        variant: "destructive",
-      });
-      return;
-    }
-    registerMutation.mutate();
-  };
+  const [, navigate] = useLocation();
 
   const getCategoryBadge = (category: string) => {
     const badgeMap = {
@@ -191,15 +150,11 @@ export default function EventCard({ event }: EventCardProps) {
         {/* Action Button */}
         <Button
           className="w-full btn-primary"
-          onClick={handleRegister}
-          disabled={!isUpcoming || registerMutation.isPending || (event.registrationDeadline !== null && new Date(event.registrationDeadline) < new Date())}
-          data-testid={`button-register-${event.id}`}
+          onClick={() => navigate(`/events/${event.id}`)}
+          data-testid={`button-view-event-${event.id}`}
         >
-          <Users className="h-4 w-4" />
-          {registerMutation.isPending ? '신청 중...' : 
-           isPast ? '종료된 행사' :
-           (event.registrationDeadline !== null && new Date(event.registrationDeadline) < new Date()) ? '신청 마감' :
-           t('events.register')}
+          자세히 보기
+          <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardContent>
     </Card>
