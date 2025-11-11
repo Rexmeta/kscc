@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,7 +82,7 @@ const partnerSchema = z.object({
   order: z.number().default(0),
 });
 
-// Location Picker Component
+// Location Picker Component  
 function LocationPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -115,11 +115,15 @@ function LocationPicker({ value, onChange }: { value: string; onChange: (value: 
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    const timeoutId = setTimeout(() => searchLocation(query), 500);
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery) {
+        searchLocation(searchQuery);
+      }
+    }, 500);
+
     return () => clearTimeout(timeoutId);
-  };
+  }, [searchQuery]);
 
   const selectLocation = (location: any) => {
     const displayName = location.display_name || location.name;
@@ -159,7 +163,7 @@ function LocationPicker({ value, onChange }: { value: string; onChange: (value: 
           <div className="p-2 border-b">
             <Input
               value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="장소 검색... (예: 서울시청, 강남역)"
               autoFocus
               data-testid="input-location-search"
@@ -1239,10 +1243,11 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
                 <img
                   src={url}
                   alt={`이미지 ${index + 1}`}
-                  className="w-full h-32 object-cover rounded border"
+                  className="w-full h-32 object-cover rounded border bg-gray-100 dark:bg-gray-800"
                   data-testid={`img-event-edit-preview-${index}`}
                   onError={(e) => {
-                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23ddd" width="100" height="100"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%23999">이미지 오류</text></svg>';
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
                   }}
                 />
                 <Button 
