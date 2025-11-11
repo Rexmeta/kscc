@@ -1185,6 +1185,11 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
         <Textarea {...register('description')} data-testid="input-event-description" />
         {errors.description && <p className="text-sm text-destructive mt-1">{String(errors.description.message)}</p>}
       </div>
+      <div>
+        <label className="form-label">상세 내용</label>
+        <Textarea rows={8} {...register('content')} data-testid="textarea-event-content" placeholder="행사의 상세 내용을 입력하세요 (줄바꿈 가능)" />
+        {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">날짜</label>
@@ -1993,6 +1998,12 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             <label className="form-label">설명</label>
             <Textarea {...register('description')} data-testid="textarea-event-description" />
             {errors.description && <p className="text-sm text-destructive mt-1">{String(errors.description.message)}</p>}
+          </div>
+          
+          <div>
+            <label className="form-label">상세 내용</label>
+            <Textarea rows={8} {...register('content')} data-testid="textarea-event-create-content" placeholder="행사의 상세 내용을 입력하세요 (줄바꿈 가능)" />
+            {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
           </div>
           
           <div className="grid grid-cols-2 gap-4">
