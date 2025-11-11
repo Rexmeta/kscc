@@ -6,23 +6,40 @@ This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of 
 
 The application is built with a modern TypeScript stack featuring React on the frontend, Express.js on the backend, and PostgreSQL for data persistence. It supports multilingual content (Korean, English, Chinese) and provides both public-facing pages and authenticated member areas.
 
-## Recent Changes (October 2025)
+## Recent Changes (November 2025)
 
-### Image Management Features
+### Image Storage Path Normalization (November 11, 2025)
+- **Fixed Image Path Storage**: Resolved issue where uploaded images were stored with full bucket paths
+  - `/api/images` PUT endpoint now extracts relative path from `PRIVATE_OBJECT_DIR`
+  - Images stored as `/objects/uploads/{file-id}` instead of full bucket path
+  - Fixed `ObjectNotFoundError` when serving uploaded images
+- **Data Migration**: Updated existing database records
+  - Event images: Normalized to `/objects/uploads/{id}` format
+  - News images: Removed incorrect `/objects/` prefix from external URLs
+  - Mixed content support: Internal uploads use `/objects/` prefix, external URLs remain unchanged
+
+### Event Content Field (November 11, 2025)
+- **Added Multiline Content Support**: Event forms now include detailed content field
+  - `CreateEventDialog` and `EditEventForm` include content textarea
+  - Line breaks preserved through `whitespace-pre-wrap` in `EventDetail` page
+  - Content stored in `events.content` column
+
+### Image Management Features (October 2025)
 - **News Articles**: Added featured image and multiple additional images support
   - Admin form includes featured image URL input
   - Dynamic image array management with add/remove functionality
   - Images displayed in news detail page with gallery layout
 - **Events**: Added multiple images support
   - Dynamic image URL array management in admin forms
-  - Images stored in database for future display implementation
+  - Images stored in database and displayed in EventDetail page
 - **Implementation Details**:
-  - Client-side URL validation (must start with 'http')
+  - Dual-method support: URL input and file upload via Replit Object Storage
+  - Object storage integration with Uppy interface for file uploads
   - Images stored as JSONB arrays in database
   - Null handling for empty image arrays
   - Test IDs added for E2E testing
 
-### News Detail Page
+### News Detail Page (October 2025)
 - Created dedicated news article detail page at `/news/:id`
 - Displays featured image at top (when available)
 - Shows additional images in 2-column grid gallery
