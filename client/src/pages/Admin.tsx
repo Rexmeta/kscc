@@ -239,6 +239,11 @@ export default function AdminPage() {
   });
 
   // Data queries
+  const { data: usersData } = useQuery({
+    queryKey: ['/api/users'],
+    enabled: isAdmin && activeTab === 'users',
+  });
+
   const { data: membersData } = useQuery({
     queryKey: ['/api/members', { admin: true }],
     queryFn: async () => {
@@ -483,8 +488,9 @@ export default function AdminPage() {
       <section className="py-8">
         <div className="container">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-7 w-full">
+            <TabsList className="grid grid-cols-8 w-full">
               <TabsTrigger value="dashboard" data-testid="tab-dashboard">{t('admin.dashboard')}</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
               <TabsTrigger value="members" data-testid="tab-members">{t('admin.members')}</TabsTrigger>
               <TabsTrigger value="events" data-testid="tab-events">{t('admin.events')}</TabsTrigger>
               <TabsTrigger value="news" data-testid="tab-news">{t('admin.news')}</TabsTrigger>
@@ -544,6 +550,59 @@ export default function AdminPage() {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            {/* Users Management */}
+            <TabsContent value="users" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">사용자 관리</h2>
+              </div>
+              
+              <Card>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {usersData?.map((user: any) => (
+                      <div key={user.id} className="p-4 flex items-center justify-between" data-testid={`row-user-${user.id}`}>
+                        <div className="flex items-center space-x-4">
+                          <Users className="h-8 w-8 text-muted-foreground" />
+                          <div>
+                            <h4 className="font-medium" data-testid={`text-user-name-${user.id}`}>{user.name}</h4>
+                            <p className="text-sm text-muted-foreground" data-testid={`text-user-email-${user.id}`}>
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="outline" data-testid={`badge-tier-${user.id}`}>
+                            {user.membership ? user.membership.tierName : '없음'}
+                          </Badge>
+                          <Badge variant="secondary" data-testid={`badge-role-${user.id}`}>
+                            {user.membership ? user.membership.roleName : '없음'}
+                          </Badge>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              toast({ 
+                                title: "권한 편집 기능은 곧 추가될 예정입니다.",
+                                description: `사용자: ${user.name}`
+                              });
+                            }}
+                            data-testid={`button-edit-user-${user.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {(!usersData || usersData.length === 0) && (
+                      <div className="p-8 text-center text-muted-foreground">
+                        사용자가 없습니다
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             {/* Members Management */}

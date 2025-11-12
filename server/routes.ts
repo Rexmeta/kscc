@@ -1,11 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertMemberSchema, insertEventSchema, insertEventRegistrationSchema, insertNewsSchema, insertResourceSchema, insertInquirySchema, insertPartnerSchema } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventSchema, insertEventRegistrationSchema, insertNewsSchema, insertResourceSchema, insertInquirySchema, insertPartnerSchema, userMemberships } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import { sql, eq, and } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache } from "./permissions";
+import { db } from "./db";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key";
 
@@ -109,8 +112,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json({ ...user, password: undefined });
+      
+      // Get user's membership information
+      const membership = await getUserMembershipInfo(req.user.id);
+      const permissions = await getUserPermissions(req.user.id);
+      
+      res.json({ 
+        ...user, 
+        password: undefined,
+        membership: membership || null,
+        permissions: Array.from(permissions)
+      });
     } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // User management routes (Admin only)
+  app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getUsers();
+      
+      // Get membership info for each user
+      const usersWithMembership = await Promise.all(
+        allUsers.map(async (user) => {
+          const membership = await getUserMembershipInfo(user.id);
+          return {
+            ...user,
+            password: undefined,
+            membership: membership || null,
+          };
+        })
+      );
+      
+      res.json(usersWithMembership);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/users/:id/membership", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      // Validate request body with Zod
+      const membershipUpdateSchema = z.object({
+        tierId: z.string().uuid(),
+        roleId: z.string().uuid(),
+      });
+
+      const { tierId, roleId } = membershipUpdateSchema.parse(req.body);
+      const userId = req.params.id;
+      
+      // Validate userId is UUID
+      const userIdSchema = z.string().uuid();
+      userIdSchema.parse(userId);
+      
+      // Check if user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Deactivate old memberships using Drizzle query builder
+      await db.update(userMemberships)
+        .set({ isActive: false })
+        .where(and(
+          eq(userMemberships.userId, userId),
+          eq(userMemberships.isActive, true)
+        ));
+
+      // Create new membership using Drizzle query builder
+      await db.insert(userMemberships).values({
+        userId,
+        tierId,
+        roleId,
+        isActive: true,
+        startedAt: new Date(),
+      });
+
+      // Clear cache
+      clearUserPermissionCache(userId);
+
+      // Get updated membership info
+      const membership = await getUserMembershipInfo(userId);
+      
+      res.json({
+        success: true,
+        membership,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid request data", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });

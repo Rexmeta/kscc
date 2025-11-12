@@ -1,16 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
 import { eq, and, sql } from 'drizzle-orm';
-import { userMemberships, roles, rolePermissions, permissions } from '../shared/schema';
-
-const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
-const sqlClient = neon(dbUrl);
-const db = drizzle(sqlClient);
+import { userMemberships, roles, rolePermissions, permissions, tiers } from '../shared/schema';
+import { db } from './db';
 
 // Cache for user permissions (simple in-memory cache)
 const permissionCache = new Map<string, Set<string>>();
@@ -166,17 +157,17 @@ export async function getUserMembershipInfo(userId: string) {
   const result = await db
     .select({
       membershipId: userMemberships.id,
-      tierCode: sql<string>`tiers.code`,
-      tierName: sql<string>`tiers.name`,
-      roleCode: sql<string>`roles.code`,
-      roleName: sql<string>`roles.name`,
+      tierCode: tiers.code,
+      tierName: tiers.name,
+      roleCode: roles.code,
+      roleName: roles.name,
       isActive: userMemberships.isActive,
       startedAt: userMemberships.startedAt,
       expiresAt: userMemberships.expiresAt,
     })
     .from(userMemberships)
-    .innerJoin(sql`tiers`, eq(userMemberships.tierId, sql`tiers.id`))
-    .innerJoin(sql`roles`, eq(userMemberships.roleId, sql`roles.id`))
+    .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+    .innerJoin(roles, eq(userMemberships.roleId, roles.id))
     .where(and(
       eq(userMemberships.userId, userId),
       eq(userMemberships.isActive, true)
