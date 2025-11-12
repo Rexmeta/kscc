@@ -438,3 +438,8 @@ export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 
 export type UserMembership = typeof userMemberships.$inferSelect;
 export type InsertUserMembership = z.infer<typeof insertUserMembershipSchema>;
+
+// Combined types for joined queries
+export type UserRegistrationWithEvent = EventRegistration & {
+  event: Event | null;
+};

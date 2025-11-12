@@ -3,7 +3,7 @@ import {
   type User, type InsertUser, type Member, type InsertMember, type Event, type InsertEvent,
   type EventRegistration, type InsertEventRegistration, type News, type InsertNews,
   type Resource, type InsertResource, type Inquiry, type InsertInquiry,
-  type Partner, type InsertPartner
+  type Partner, type InsertPartner, type UserRegistrationWithEvent
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, gte, lte, count, sql } from "drizzle-orm";
@@ -49,7 +49,7 @@ export interface IStorage {
   // Event Registrations
   getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined>;
   getEventRegistrations(eventId: string): Promise<EventRegistration[]>;
-  getUserRegistrations(userId: string): Promise<EventRegistration[]>;
+  getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]>;
   createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration>;
   updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined>;
 
@@ -343,12 +343,21 @@ export class DatabaseStorage implements IStorage {
     })) as any;
   }
 
-  async getUserRegistrations(userId: string): Promise<EventRegistration[]> {
-    return db
-      .select()
+  async getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]> {
+    const results = await db
+      .select({
+        registration: eventRegistrations,
+        event: events,
+      })
       .from(eventRegistrations)
+      .leftJoin(events, eq(eventRegistrations.eventId, events.id))
       .where(eq(eventRegistrations.userId, userId))
       .orderBy(desc(eventRegistrations.createdAt));
+
+    return results.map(({ registration, event }) => ({
+      ...registration,
+      event,
+    }));
   }
 
   async createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration> {

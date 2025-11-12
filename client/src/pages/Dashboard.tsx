@@ -2,10 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, Calendar, FileText, Settings, Edit } from 'lucide-react';
+import { User, Building, Calendar, FileText, Settings, Edit, MapPin } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
-import { EventRegistration, Member } from '@shared/schema';
+import { UserRegistrationWithEvent, Member } from '@shared/schema';
 import { Link } from 'wouter';
 
 export default function Dashboard() {
@@ -217,35 +217,64 @@ export default function Dashboard() {
                 <CardContent>
                   {registrations && registrations.length > 0 ? (
                     <div className="space-y-4">
-                      {registrations.map((registration: EventRegistration) => (
-                        <div
+                      {registrations.map((registration: UserRegistrationWithEvent) => (
+                        <Link 
                           key={registration.id}
-                          className="flex items-center justify-between rounded-lg border p-4"
+                          href={registration.event ? `/events/${registration.eventId}` : '#'}
                         >
-                          <div>
-                            <h4 className="font-medium">{registration.attendeeName}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {registration.attendeeEmail}
-                            </p>
+                          <div
+                            className="flex items-start justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                            data-testid={`registration-${registration.id}`}
+                          >
+                            <div className="flex-1">
+                              <h4 className="font-medium text-foreground mb-1" data-testid={`event-title-${registration.id}`}>
+                                {registration.event?.title || '행사 정보 없음'}
+                              </h4>
+                              {registration.event && (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Calendar className="h-3 w-3" />
+                                    <span data-testid={`event-date-${registration.id}`}>
+                                      {new Date(registration.event.eventDate).toLocaleDateString('ko-KR', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </span>
+                                  </div>
+                                  {registration.event.location && (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <MapPin className="h-3 w-3" />
+                                      <span data-testid={`event-location-${registration.id}`}>
+                                        {registration.event.location}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <Badge
+                                variant={
+                                  registration.status === 'approved' ? 'default' :
+                                  registration.status === 'registered' ? 'secondary' :
+                                  'destructive'
+                                }
+                                data-testid={`registration-status-${registration.id}`}
+                              >
+                                {registration.status === 'approved' ? '승인됨' :
+                                 registration.status === 'registered' ? '등록됨' :
+                                 registration.status === 'cancelled' ? '취소됨' :
+                                 registration.status === 'attended' ? '참석함' : registration.status}
+                              </Badge>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                등록일: {new Date(registration.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <Badge
-                              variant={
-                                registration.status === 'approved' ? 'default' :
-                                registration.status === 'registered' ? 'secondary' :
-                                'destructive'
-                              }
-                            >
-                              {registration.status === 'approved' ? '승인됨' :
-                               registration.status === 'registered' ? '등록됨' :
-                               registration.status === 'cancelled' ? '취소됨' :
-                               registration.status === 'attended' ? '참석함' : registration.status}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(registration.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : (
