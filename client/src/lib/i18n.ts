@@ -184,7 +184,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.contact': '연락처',
     'nav.login': '로그인',
     'nav.register': '회원가입',
-    'nav.dashboard': '대시보드',
+    'nav.dashboard': 'My Page',
     'nav.admin': '관리자',
     'nav.logout': '로그아웃',
 
@@ -328,7 +328,7 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.logout': '로그아웃',
 
     // Dashboard
-    'dashboard.title': '대시보드',
+    'dashboard.title': 'My Page',
     'dashboard.profile': '프로필',
     'dashboard.membership': '멤버십',
     'dashboard.events': '내 행사',
@@ -355,7 +355,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.contact': 'Contact',
     'nav.login': 'Login',
     'nav.register': 'Register',
-    'nav.dashboard': 'Dashboard',
+    'nav.dashboard': 'My Page',
     'nav.admin': 'Admin',
     'nav.logout': 'Logout',
 
@@ -499,7 +499,7 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.logout': 'Logout',
 
     // Dashboard
-    'dashboard.title': 'Dashboard',
+    'dashboard.title': 'My Page',
     'dashboard.profile': 'Profile',
     'dashboard.membership': 'Membership',
     'dashboard.events': 'My Events',
@@ -526,7 +526,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.contact': '联系我们',
     'nav.login': '登录',
     'nav.register': '注册',
-    'nav.dashboard': '控制面板',
+    'nav.dashboard': 'My Page',
     'nav.admin': '管理员',
     'nav.logout': '登出',
 
@@ -670,7 +670,7 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.logout': '登出',
 
     // Dashboard
-    'dashboard.title': '控制面板',
+    'dashboard.title': 'My Page',
     'dashboard.profile': '个人资料',
     'dashboard.membership': '会员资格',
     'dashboard.events': '我的活动',
