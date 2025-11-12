@@ -85,7 +85,23 @@ The application is built with a modern TypeScript stack featuring React on the f
 - **Known Issues**:
   - Minor UI sync anomaly where name input may empty upon reopening dialog (does not affect functionality)
 
-### Recent Changes (November 2025)
+### About Page Content Update (November 12, 2025)
+- **Complete Page Redesign**: Updated About page with official chamber information
+  - Hero section with chamber name and introduction in Chinese
+  - Mission (使命) and Vision (愿景) sections with detailed objectives
+  - Core Functions (核心功能) section with 4 main service areas:
+    - 贸易与投资促进平台 (Trade and Investment Platform)
+    - 产业对接与专业咨询 (Industry Matching & Consulting)
+    - 创新与综合服务 (Innovation & Comprehensive Services)
+    - 文化交流与社会发展 (Cultural Exchange & Social Development)
+  - Organization Structure (组织架构) section explaining governance
+  - Future Vision (携手同行 共创未来) with partnership goals
+  - Three Pillars section: 企业对接, 文化交流, 法律服务
+- **Design Elements**:
+  - Gradient blue backgrounds for hero and vision sections
+  - Icon-based cards using Lucide React icons
+  - Responsive grid layouts
+  - Professional Chinese business content
 
 ### Image Storage Path Normalization (November 11, 2025)
 - **Fixed Image Path Storage**: Resolved issue where uploaded images were stored with full bucket paths
