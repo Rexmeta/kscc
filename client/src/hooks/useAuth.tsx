@@ -11,6 +11,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   loading: boolean;
+  permissions: Set<string>;
+  hasPermission: (permission: string) => boolean;
+  hasAnyPermission: (permissions: string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,6 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (token) {
@@ -39,17 +43,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        setPermissions(new Set(userData.permissions || []));
       } else {
         // Token is invalid
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
+        setPermissions(new Set());
       }
     } catch (error) {
       console.error('Error fetching user:', error);
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
+      setPermissions(new Set());
     }
     setLoading(false);
   };
@@ -75,7 +82,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setPermissions(new Set());
     localStorage.removeItem('token');
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    // Admin has all permissions
+    if (permissions.has('*')) return true;
+    
+    // Check exact permission
+    if (permissions.has(permission)) return true;
+    
+    // Check wildcard permissions (e.g., "event.*" for "event.create")
+    const parts = permission.split('.');
+    for (let i = parts.length - 1; i > 0; i--) {
+      const wildcard = parts.slice(0, i).join('.') + '.*';
+      if (permissions.has(wildcard)) return true;
+    }
+    
+    return false;
+  };
+
+  const hasAnyPermission = (perms: string[]): boolean => {
+    return perms.some(p => hasPermission(p));
   };
 
   const value: AuthContextType = {
@@ -87,6 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     loading,
+    permissions,
+    hasPermission,
+    hasAnyPermission,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
