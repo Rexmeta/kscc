@@ -1,20 +1,67 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, Calendar, FileText, Settings, Edit, MapPin } from 'lucide-react';
+import { User, Building, Calendar, FileText, Settings, Edit, MapPin, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
 import { UserRegistrationWithEvent, Member } from '@shared/schema';
 import { Link } from 'wouter';
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+
+const profileUpdateSchema = z.object({
+  name: z.string().optional().refine(val => !val || val.length >= 1, '이름을 입력해주세요'),
+  email: z.string().optional().refine(
+    val => !val || z.string().email().safeParse(val).success,
+    '유효한 이메일을 입력해주세요'
+  ),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().optional().refine(
+    val => !val || val.length >= 6,
+    '비밀번호는 최소 6자 이상이어야 합니다'
+  ),
+}).refine(
+  (data) => {
+    if (data.newPassword && data.newPassword.length > 0 && !data.currentPassword) {
+      return false;
+    }
+    return true;
+  },
+  { message: '비밀번호 변경 시 현재 비밀번호를 입력해주세요', path: ['currentPassword'] }
+);
+
+type ProfileUpdateFormData = z.infer<typeof profileUpdateSchema>;
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
 
   const { data: registrations } = useQuery({
-    queryKey: ['/api/user/registrations'],
+    queryKey: ['/api/auth/registrations'],
     queryFn: async () => {
-      const response = await fetch('/api/user/registrations', {
+      const response = await fetch('/api/auth/registrations', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -33,9 +80,73 @@ export default function Dashboard() {
         }
       });
       const data = await response.json();
-      return data.members.find((m: Member) => m.userId === user?.id);
+      return data.members.find((m: Member) => m.userId === user?.id) || null;
     },
     enabled: isAuthenticated && !!user,
+  });
+
+  const profileForm = useForm<ProfileUpdateFormData>({
+    resolver: zodResolver(profileUpdateSchema),
+    defaultValues: {
+      name: user?.name || '',
+      email: user?.email || '',
+      currentPassword: '',
+      newPassword: '',
+    },
+  });
+
+  const profileUpdateMutation = useMutation({
+    mutationFn: async (data: ProfileUpdateFormData) => {
+      // Filter out empty fields
+      const updates: any = {};
+      if (data.name && data.name !== user?.name) updates.name = data.name;
+      if (data.email && data.email !== user?.email) updates.email = data.email;
+      if (data.currentPassword) updates.currentPassword = data.currentPassword;
+      if (data.newPassword) updates.newPassword = data.newPassword;
+
+      return apiRequest('/api/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: '프로필 업데이트 완료',
+        description: '프로필이 성공적으로 업데이트되었습니다.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setIsProfileDialogOpen(false);
+      profileForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: '프로필 업데이트 실패',
+        description: error.message || '프로필 업데이트에 실패했습니다.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const cancelRegistrationMutation = useMutation({
+    mutationFn: async (registrationId: string) => {
+      return apiRequest(`/api/auth/registrations/${registrationId}`, {
+        method: 'PATCH',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: '행사 등록 취소 완료',
+        description: '행사 등록이 성공적으로 취소되었습니다.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/registrations'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: '행사 등록 취소 실패',
+        description: error.message || '행사 등록 취소에 실패했습니다.',
+        variant: 'destructive',
+      });
+    },
   });
 
   if (!isAuthenticated) {
@@ -63,7 +174,11 @@ export default function Dashboard() {
               <h1 className="mb-2 text-4xl font-bold text-foreground">{t('dashboard.title')}</h1>
               <p className="text-lg text-muted-foreground">안녕하세요, {user?.name}님!</p>
             </div>
-            <Button variant="outline" data-testid="button-edit-profile">
+            <Button 
+              variant="outline" 
+              data-testid="button-edit-profile"
+              onClick={() => setIsProfileDialogOpen(true)}
+            >
               <Edit className="h-4 w-4" />
               프로필 수정
             </Button>
@@ -218,13 +333,14 @@ export default function Dashboard() {
                   {registrations && registrations.length > 0 ? (
                     <div className="space-y-4">
                       {registrations.map((registration: UserRegistrationWithEvent) => (
-                        <Link 
+                        <div
                           key={registration.id}
-                          href={registration.event ? `/events/${registration.eventId}` : '#'}
+                          className="flex items-start justify-between rounded-lg border p-4"
+                          data-testid={`registration-${registration.id}`}
                         >
-                          <div
-                            className="flex items-start justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                            data-testid={`registration-${registration.id}`}
+                          <Link 
+                            href={registration.event ? `/events/${registration.eventId}` : '#'}
+                            className="flex-1 hover:opacity-70 transition-opacity"
                           >
                             <div className="flex-1">
                               <h4 className="font-medium text-foreground mb-1" data-testid={`event-title-${registration.id}`}>
@@ -255,26 +371,43 @@ export default function Dashboard() {
                                 </div>
                               )}
                             </div>
-                            <div className="text-right ml-4">
-                              <Badge
-                                variant={
-                                  registration.status === 'approved' ? 'default' :
-                                  registration.status === 'registered' ? 'secondary' :
-                                  'destructive'
-                                }
-                                data-testid={`registration-status-${registration.id}`}
+                          </Link>
+                          <div className="text-right ml-4 flex flex-col gap-2">
+                            <Badge
+                              variant={
+                                registration.status === 'approved' ? 'default' :
+                                registration.status === 'registered' ? 'secondary' :
+                                'destructive'
+                              }
+                              data-testid={`registration-status-${registration.id}`}
+                            >
+                              {registration.status === 'approved' ? '승인됨' :
+                               registration.status === 'registered' ? '등록됨' :
+                               registration.status === 'cancelled' ? '취소됨' :
+                               registration.status === 'attended' ? '참석함' : registration.status}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground">
+                              등록일: {new Date(registration.createdAt).toLocaleDateString()}
+                            </p>
+                            {registration.status !== 'cancelled' && registration.status !== 'attended' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm('정말 이 행사 등록을 취소하시겠습니까?')) {
+                                    cancelRegistrationMutation.mutate(registration.id);
+                                  }
+                                }}
+                                disabled={cancelRegistrationMutation.isPending}
+                                data-testid={`button-cancel-${registration.id}`}
+                                className="text-destructive hover:text-destructive/90"
                               >
-                                {registration.status === 'approved' ? '승인됨' :
-                                 registration.status === 'registered' ? '등록됨' :
-                                 registration.status === 'cancelled' ? '취소됨' :
-                                 registration.status === 'attended' ? '참석함' : registration.status}
-                              </Badge>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                등록일: {new Date(registration.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
+                                <X className="h-4 w-4 mr-1" />
+                                취소
+                              </Button>
+                            )}
                           </div>
-                        </Link>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -333,6 +466,115 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* Profile Edit Dialog */}
+      <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>프로필 수정</DialogTitle>
+            <DialogDescription>
+              회원 정보를 수정할 수 있습니다. 변경하고 싶은 항목만 입력하세요.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...profileForm}>
+            <form onSubmit={profileForm.handleSubmit((data) => profileUpdateMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={profileForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>이름</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder={user?.name || '이름'} 
+                        {...field} 
+                        data-testid="input-profile-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={profileForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>이메일</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email" 
+                        placeholder={user?.email || '이메일'} 
+                        {...field} 
+                        data-testid="input-profile-email"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="border-t pt-4">
+                <p className="text-sm font-medium mb-3">비밀번호 변경 (선택사항)</p>
+                <div className="space-y-4">
+                  <FormField
+                    control={profileForm.control}
+                    name="currentPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>현재 비밀번호</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="password" 
+                            placeholder="현재 비밀번호" 
+                            {...field} 
+                            data-testid="input-current-password"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={profileForm.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>새 비밀번호</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="password" 
+                            placeholder="새 비밀번호 (최소 6자)" 
+                            {...field} 
+                            data-testid="input-new-password"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsProfileDialogOpen(false)}
+                  data-testid="button-cancel-profile"
+                >
+                  취소
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={profileUpdateMutation.isPending}
+                  data-testid="button-save-profile"
+                >
+                  {profileUpdateMutation.isPending ? '저장 중...' : '저장'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -128,6 +128,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Profile update schema
+  const profileUpdateSchema = z.object({
+    name: z.string().min(1).optional(),
+    email: z.string().email().optional(),
+    currentPassword: z.string().optional(),
+    newPassword: z.string().min(6).optional(),
+  }).refine(
+    (data) => {
+      // If changing password, currentPassword is required
+      if (data.newPassword && !data.currentPassword) {
+        return false;
+      }
+      return true;
+    },
+    { message: "Current password is required to change password" }
+  );
+
+  app.patch("/api/auth/profile", authenticateToken, async (req, res) => {
+    try {
+      const updates = profileUpdateSchema.parse(req.body);
+      const user = await storage.getUser(req.user.id);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Verify current password if changing password
+      if (updates.newPassword && updates.currentPassword) {
+        const validUser = await storage.validateUser(user.email, updates.currentPassword);
+        if (!validUser) {
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+
+      // Check email uniqueness if changing email
+      if (updates.email && updates.email !== user.email) {
+        const existingUser = await storage.getUserByEmail(updates.email);
+        if (existingUser) {
+          return res.status(409).json({ message: "Email already in use" });
+        }
+      }
+
+      // Prepare update object
+      const updateData: Partial<typeof user> = {};
+      if (updates.name) updateData.name = updates.name;
+      if (updates.email) updateData.email = updates.email;
+      if (updates.newPassword) {
+        const bcrypt = await import('bcrypt');
+        updateData.password = await bcrypt.hash(updates.newPassword, 10);
+      }
+
+      const updatedUser = await storage.updateUser(req.user.id, updateData);
+      
+      if (!updatedUser) {
+        return res.status(500).json({ message: "Failed to update profile" });
+      }
+
+      res.json({ ...updatedUser, password: undefined });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/auth/registrations", authenticateToken, async (req, res) => {
+    try {
+      const registrations = await storage.getUserRegistrations(req.user.id);
+      res.json(registrations);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/auth/registrations/:id", authenticateToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate UUID format
+      const uuidSchema = z.string().uuid();
+      const validatedId = uuidSchema.parse(id);
+
+      const registration = await storage.getEventRegistrationById(validatedId);
+      
+      if (!registration) {
+        return res.status(404).json({ message: "Registration not found" });
+      }
+
+      // Verify ownership
+      if (registration.userId !== req.user.id) {
+        return res.status(403).json({ message: "You can only cancel your own registrations" });
+      }
+
+      // Check if already cancelled or attended
+      if (registration.status === 'cancelled') {
+        return res.status(409).json({ message: "Registration is already cancelled" });
+      }
+      if (registration.status === 'attended') {
+        return res.status(409).json({ message: "Cannot cancel attended event" });
+      }
+
+      const updatedRegistration = await storage.updateEventRegistration(validatedId, {
+        status: 'cancelled'
+      });
+
+      res.json(updatedRegistration);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid registration ID" });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // User management routes (Admin only)
   app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
