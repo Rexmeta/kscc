@@ -39,7 +39,38 @@ The application is built with a modern TypeScript stack featuring React on the f
 - **Known Issues**:
   - Admin page authorization check needs review (useAuth hook related)
 
-## Recent Changes (November 2025)
+### Dashboard User Features (November 12, 2025)
+- **Profile Management**: Implemented comprehensive user profile update functionality
+  - Backend: PATCH /api/auth/profile endpoint with selective field updates
+  - Supports updating name, email, and password independently
+  - Password change requires current password confirmation
+  - Email uniqueness validation (409 Conflict on duplicates)
+  - Ownership verification ensures users can only update their own profiles
+  
+- **Event Registration Management**: Full event cancellation workflow
+  - Backend: GET /api/auth/registrations endpoint returns user's registrations with event details
+  - Backend: PATCH /api/auth/registrations/:id endpoint for cancellation
+  - Cancellation business rules: only registered/approved events can be cancelled
+  - Status validation prevents duplicate cancellations
+  - UUID validation and ownership checks for security
+  
+- **Frontend Dashboard (Dashboard.tsx)**:
+  - Profile edit dialog with React Hook Form + Zod validation
+  - Conditional validation: empty fields allowed, non-empty fields validated
+  - Event registration list with status badges and action buttons
+  - Cancel button visibility controlled by registration status
+  - Confirmation dialog for cancellation actions
+  - Toast notifications for success/error feedback
+  - Real-time cache invalidation via React Query
+  
+- **Data Types**:
+  - `UserRegistrationWithEvent`: Backend join type combining registration + event data
+  - `ProfileUpdateFormData`: Zod schema with optional fields and conditional validation
+  
+- **Known Issues**:
+  - Minor UI sync anomaly where name input may empty upon reopening dialog (does not affect functionality)
+
+### Recent Changes (November 2025)
 
 ### Image Storage Path Normalization (November 11, 2025)
 - **Fixed Image Path Storage**: Resolved issue where uploaded images were stored with full bucket paths
