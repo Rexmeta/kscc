@@ -8,6 +8,39 @@ The application is built with a modern TypeScript stack featuring React on the f
 
 ## Recent Changes (November 2025)
 
+### ACL (Access Control List) System (November 12, 2025)
+- **Hierarchical Permission System**: Implemented comprehensive 5-tier, 5-role, 27-permission ACL
+  - **Tiers**: MEMBER (₩0), PRO (₩100,000), CORP (₩500,000), PARTNER (₩0), ADMIN
+  - **Roles**: guest, member, editor, operator, admin
+  - **Permissions**: 27 fine-grained permissions across events, news, resources, members, settings, and admin functions
+  - Wildcard support: "event.*" grants all event permissions, "*" grants all permissions
+  
+- **Backend Implementation**:
+  - `server/permissions.ts`: Permission check middleware with caching (5min TTL)
+  - `server/seedAcl.ts`: ACL seed script for initial data
+  - `server/migrateUsers.ts`: Migration script for existing users to new membership system
+  - `/api/users`: List all users with membership info (admin only)
+  - `/api/users/:id/membership`: Update user tier/role (admin only)
+  - `/api/auth/me`: Enhanced with membership and permissions data
+  - Security: SQL injection prevention via Drizzle query builder + Zod UUID validation
+
+- **Frontend Implementation**:
+  - Admin.tsx: New "사용자" (Users) tab for user management
+  - Displays user email, name, tier badge, and role badge
+  - React Query integration with proper Authorization headers
+
+- **Database Schema**:
+  - `tiers` table: Membership tiers with pricing
+  - `roles` table: User roles with hierarchy
+  - `permissions` table: Fine-grained permissions
+  - `rolePermissions` table: Role-to-permission mappings
+  - `userMemberships` table: User tier/role assignments
+
+- **Known Issues**:
+  - Admin page authorization check needs review (useAuth hook related)
+
+## Recent Changes (November 2025)
+
 ### Image Storage Path Normalization (November 11, 2025)
 - **Fixed Image Path Storage**: Resolved issue where uploaded images were stored with full bucket paths
   - `/api/images` PUT endpoint now extracts relative path from `PRIVATE_OBJECT_DIR`
