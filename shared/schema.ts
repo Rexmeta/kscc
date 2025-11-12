@@ -161,6 +161,63 @@ export const partners = pgTable("partners", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Membership tier system
+export const tiers = pgTable("tiers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(), // MEMBER, PRO, CORP, PARTNER, ADMIN
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  nameZh: text("name_zh"),
+  annualFee: integer("annual_fee").default(0),
+  benefits: jsonb("benefits"), // array of benefit descriptions
+  isActive: boolean("is_active").notNull().default(true),
+  order: integer("order").default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Role system
+export const roles = pgTable("roles", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(), // admin, operator, editor, member, guest
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Permission system
+export const permissions = pgTable("permissions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // event.read, event.create, event.publish, etc.
+  resource: text("resource").notNull(), // event, news, resource, member, etc.
+  action: text("action").notNull(), // read, create, update, delete, publish, etc.
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Role-Permission mapping
+export const rolePermissions = pgTable("role_permissions", {
+  roleId: uuid("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: uuid("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  pk: { name: "role_permissions_pkey", columns: [table.roleId, table.permissionId] },
+}));
+
+// User memberships (connects user to tier and role)
+export const userMemberships = pgTable("user_memberships", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tierId: uuid("tier_id").references(() => tiers.id),
+  roleId: uuid("role_id").references(() => roles.id),
+  isActive: boolean("is_active").notNull().default(true),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   member: one(members, {
@@ -172,6 +229,46 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   newsArticles: many(news),
   resourcesCreated: many(resources),
   inquiriesResponded: many(inquiries),
+  memberships: many(userMemberships),
+}));
+
+export const tiersRelations = relations(tiers, ({ many }) => ({
+  memberships: many(userMemberships),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  memberships: many(userMemberships),
+  rolePermissions: many(rolePermissions),
+}));
+
+export const permissionsRelations = relations(permissions, ({ many }) => ({
+  rolePermissions: many(rolePermissions),
+}));
+
+export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
+  role: one(roles, {
+    fields: [rolePermissions.roleId],
+    references: [roles.id],
+  }),
+  permission: one(permissions, {
+    fields: [rolePermissions.permissionId],
+    references: [permissions.id],
+  }),
+}));
+
+export const userMembershipsRelations = relations(userMemberships, ({ one }) => ({
+  user: one(users, {
+    fields: [userMemberships.userId],
+    references: [users.id],
+  }),
+  tier: one(tiers, {
+    fields: [userMemberships.tierId],
+    references: [tiers.id],
+  }),
+  role: one(roles, {
+    fields: [userMemberships.roleId],
+    references: [roles.id],
+  }),
 }));
 
 export const membersRelations = relations(members, ({ one }) => ({
@@ -277,6 +374,31 @@ export const insertPartnerSchema = createInsertSchema(partners).omit({
   createdAt: true,
 });
 
+export const insertTierSchema = createInsertSchema(tiers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRolePermissionSchema = createInsertSchema(rolePermissions).omit({
+  createdAt: true,
+});
+
+export const insertUserMembershipSchema = createInsertSchema(userMemberships).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -301,3 +423,18 @@ export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+
+export type Tier = typeof tiers.$inferSelect;
+export type InsertTier = z.infer<typeof insertTierSchema>;
+
+export type Role = typeof roles.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+
+export type Permission = typeof permissions.$inferSelect;
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+
+export type UserMembership = typeof userMemberships.$inferSelect;
+export type InsertUserMembership = z.infer<typeof insertUserMembershipSchema>;

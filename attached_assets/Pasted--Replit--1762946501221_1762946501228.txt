@@ -1,0 +1,433 @@
+좋아! **“리플릿에서 곧바로 퍼블리싱”** 하면서 **회원관리(가입/로그인/권한/등급)**까지 포함해, 네가 Replit 안에서 바로 수정·배포할 수 있게 **실전 세팅+최소 코드 뼈대**로 정리했어.
+(백엔드는 Express + Postgres 권장 / 프런트는 현재 kscc의 Vite 클라이언트를 그대로 두고 API만 붙이는 구성)
+
+---
+
+# 0) 개요 (한눈에)
+
+* **Replit 프로젝트 1개**: 서버(API) + 정적 파일 서빙(초기엔 간단히)
+* **DB**: 외부 관리형 Postgres(예: Neon/Supabase/Railway-Postgres) → `DATABASE_URL`
+* **인증**: 이메일+비번(BCrypt) / JWT 세션(쿠키 가능)
+* **권한/등급**: Role/Permission + Tier(회원등급)
+* **배포 방식**: Replit **Deployments → Autoscale**(요청 시만 과금) 또는 **Reserved VM**(상시)
+
+---
+
+# 1) Replit 프로젝트 준비
+
+1. Replit에서 **Create Repl → Node.js** 선택
+2. **Secrets(환경변수)** 추가:
+
+   * `DATABASE_URL` (Postgres 연결 문자열)
+   * `JWT_SECRET` (랜덤 32+자)
+   * `NODE_ENV=production`
+3. 패키지 설치
+
+```bash
+npm i express pg drizzle-orm bcrypt jsonwebtoken cookie-parser cors zod
+npm i -D drizzle-kit tsx typescript @types/express @types/jsonwebtoken @types/cookie-parser @types/cors
+npx tsc --init
+```
+
+---
+
+# 2) Drizzle 설정 & 스키마
+
+### `drizzle.config.ts`
+
+```ts
+import type { Config } from "drizzle-kit";
+export default {
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
+  dialect: "postgresql",
+  dbCredentials: { url: process.env.DATABASE_URL! }
+} satisfies Config;
+```
+
+### `src/db/schema.ts`
+
+```ts
+import { pgTable, serial, text, timestamp, boolean, integer, primaryKey } from "drizzle-orm/pg-core";
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  status: text("status").notNull().default("active"), // active|suspended|deleted
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+// 등급(Tier)
+export const tiers = pgTable("tiers", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),   // MEMBER|PRO|CORP|PARTNER|ADMIN
+  name: text("name").notNull(),
+  annualFee: integer("annual_fee").default(0)
+});
+
+// 역할(Role) & 권한(Permission)
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(), // admin|operator|editor|member|guest
+  name: text("name").notNull()
+});
+
+export const permissions = pgTable("permissions", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(), // 'event.publish' 등
+  description: text("description").notNull()
+});
+
+export const rolePermissions = pgTable("role_permissions", {
+  roleId: integer("role_id").references(() => roles.id, { onDelete: "cascade" }).notNull(),
+  permissionId: integer("permission_id").references(() => permissions.id, { onDelete: "cascade" }).notNull(),
+}, t => ({ pk: primaryKey({ columns: [t.roleId, t.permissionId] }) }));
+
+// 회원-등급/역할 연결(조직 확장 필요 시 orgId 추가)
+export const memberships = pgTable("memberships", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  tierId: integer("tier_id").references(() => tiers.id),
+  roleId: integer("role_id").references(() => roles.id),
+  startedAt: timestamp("started_at").defaultNow(),
+  expiresAt: timestamp("expires_at")
+});
+
+// 이벤트/자료실/게시판(최소)
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body"),
+  startsAt: timestamp("starts_at").notNull(),
+  endsAt: timestamp("ends_at").notNull(),
+  status: text("status").notNull().default("draft"), // draft|published|archived
+  createdBy: integer("created_by").notNull()
+});
+export const files = pgTable("files", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  url: text("url").notNull(),
+  status: text("status").notNull().default("draft"),
+  createdBy: integer("created_by").notNull()
+});
+export const posts = pgTable("posts", {
+  id: serial("id").primaryKey(),
+  board: text("board").notNull(),        // 'notice'|'free' 등
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("draft"), // draft|published|locked
+  pinned: boolean("pinned").default(false),
+  authorId: integer("author_id").notNull()
+});
+```
+
+---
+
+# 3) 초기 시드(등급/역할/권한)
+
+### `src/db/seedAcl.ts`
+
+```ts
+import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Client } from 'pg';
+import { roles, permissions, rolePermissions, tiers } from './schema';
+
+const PERMS = [
+  // 이벤트
+  ['event.read','이벤트 열람'], ['event.create','이벤트 생성'], ['event.update','이벤트 수정'],
+  ['event.publish','이벤트 발행'], ['event.delete','이벤트 삭제'], ['event.attendee.manage','참석자 관리'],
+  // 자료실
+  ['file.read','자료 열람'], ['file.upload','자료 업로드'], ['file.update','자료 수정'],
+  ['file.publish','자료 발행'], ['file.delete','자료 삭제'],
+  // 게시판
+  ['post.read','게시글 열람'], ['post.create','게시글 작성'], ['post.update','게시글 수정'],
+  ['post.publish','게시글 발행'], ['post.delete','게시글 삭제'],
+  ['comment.create','댓글 작성'], ['comment.delete','댓글 삭제'],
+  ['board.lock','게시판 잠금'], ['board.pin','게시글 고정'], ['board.manage','게시판 설정'],
+] as const;
+
+const ROLES: Record<string,string[]> = {
+  admin: ['*'],
+  operator: [
+    'event.*','file.*','post.*','comment.delete','board.lock','board.pin','board.manage'
+  ],
+  editor: [
+    'event.read','event.create','event.update','event.publish',
+    'file.read','file.upload','file.update','file.publish',
+    'post.read','post.create','post.update','post.publish','comment.create'
+  ],
+  member: [
+    'event.read','file.read','post.read','post.create','post.update','comment.create'
+  ],
+  guest: ['event.read','file.read','post.read']
+};
+
+const TIERS = [
+  ['MEMBER','일반 회원',0],
+  ['PRO','전문 회원',100000],
+  ['CORP','기업 회원',500000],
+  ['PARTNER','파트너',0],
+  ['ADMIN','운영'],
+] as const;
+
+async function main(){
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  const db = drizzle(client);
+
+  // tiers
+  for (const [code, name, fee] of TIERS) {
+    await client.query(
+      `INSERT INTO tiers(code,name,annual_fee) VALUES ($1,$2,$3)
+       ON CONFLICT (code) DO UPDATE SET name=$2, annual_fee=$3`,
+      [code, name, fee]
+    );
+  }
+
+  // permissions
+  const permMap: Record<string, number> = {};
+  for (const [key, desc] of PERMS) {
+    const { rows } = await client.query(
+      `INSERT INTO permissions(key,description) VALUES ($1,$2)
+       ON CONFLICT (key) DO UPDATE SET description=$2
+       RETURNING id`, [key, desc]
+    );
+    permMap[key] = rows[0].id;
+  }
+
+  // roles
+  const roleMap: Record<string, number> = {};
+  for (const code of Object.keys(ROLES)) {
+    const { rows } = await client.query(
+      `INSERT INTO roles(code,name) VALUES ($1,$2)
+       ON CONFLICT (code) DO UPDATE SET name=$2
+       RETURNING id`, [code, code.toUpperCase()]
+    );
+    roleMap[code] = rows[0].id;
+  }
+
+  // role_permissions
+  const expand = (k: string) => {
+    if (k === '*') return Object.keys(permMap);
+    if (k.endsWith('.*')) {
+      const pfx = k.replace('.*','.');
+      return Object.keys(permMap).filter(x => x.startsWith(pfx));
+    }
+    return [k];
+  };
+
+  for (const [roleCode, keys] of Object.entries(ROLES)) {
+    const list = keys.flatMap(expand);
+    for (const key of list) {
+      await client.query(
+        `INSERT INTO role_permissions(role_id,permission_id)
+         VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        [roleMap[roleCode], permMap[key]]
+      );
+    }
+  }
+
+  console.log('ACL seeded.');
+  await client.end();
+}
+
+main().catch(e => { console.error(e); process.exit(1); });
+```
+
+---
+
+# 4) 인증/권한 미들웨어 & API 최소 라우트
+
+### `src/server.ts`
+
+```ts
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { Client } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { users, memberships, roles, rolePermissions, permissions } from './db/schema';
+
+const app = express();
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json());
+app.use(cookieParser());
+
+const client = new Client({ connectionString: process.env.DATABASE_URL });
+await client.connect();
+const db = drizzle(client);
+
+type JWTPayload = { uid: number };
+
+function sign(userId: number) {
+  return jwt.sign({ uid: userId } as JWTPayload, process.env.JWT_SECRET!, { expiresIn: '7d' });
+}
+function auth(req: any, res: any, next: any) {
+  const token = req.cookies?.token || (req.headers.authorization?.split(' ')[1]);
+  if (!token) return res.status(401).json({ error: 'Unauthenticated' });
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+    req.userId = payload.uid;
+    return next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+async function hasPermission(userId: number, key: string) {
+  const { rows } = await client.query(`
+    SELECT 1
+    FROM memberships m
+    JOIN roles r ON r.id = m.role_id
+    JOIN role_permissions rp ON rp.role_id = r.id
+    JOIN permissions p ON p.id = rp.permission_id
+    WHERE m.user_id = $1 AND p.key = $2
+    LIMIT 1
+  `,[userId, key]);
+  return rows.length > 0;
+}
+function requirePermission(key: string) {
+  return async (req: any, res: any, next: any) => {
+    if (!req.userId) return res.status(401).json({ error: 'Unauthenticated' });
+    const ok = await hasPermission(req.userId, key);
+    if (!ok) return res.status(403).json({ error: 'Forbidden' });
+    next();
+  };
+}
+
+// ===== Auth =====
+app.post('/auth/register', async (req, res) => {
+  const { email, name, password } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await client.query(
+    `INSERT INTO users(email,name,password_hash) VALUES ($1,$2,$3)
+     ON CONFLICT (email) DO NOTHING RETURNING id`, [email, name, hash]);
+  if (!rows[0]) return res.status(409).json({ error: 'Email exists' });
+
+  const userId = rows[0].id as number;
+  // 기본 membership: MEMBER + member role
+  await client.query(`
+    INSERT INTO memberships(user_id, tier_id, role_id)
+    VALUES (
+      $1,
+      (SELECT id FROM tiers WHERE code='MEMBER' LIMIT 1),
+      (SELECT id FROM roles WHERE code='member' LIMIT 1)
+    )`, [userId]);
+  const token = sign(userId);
+  res.cookie('token', token, { httpOnly: true, sameSite: 'lax' });
+  res.json({ ok: true });
+});
+
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  const q = await client.query(`SELECT id, password_hash FROM users WHERE email=$1`, [email]);
+  if (!q.rows[0]) return res.status(401).json({ error: 'Invalid' });
+  const ok = await bcrypt.compare(password, q.rows[0].password_hash);
+  if (!ok) return res.status(401).json({ error: 'Invalid' });
+  const token = sign(q.rows[0].id);
+  res.cookie('token', token, { httpOnly: true, sameSite: 'lax' });
+  res.json({ ok: true });
+});
+
+// ===== Example domain: Events =====
+app.get('/events', async (_req, res) => {
+  const { rows } = await client.query(`SELECT * FROM events WHERE status='published' ORDER BY starts_at DESC`);
+  res.json(rows);
+});
+
+app.post('/events', auth, requirePermission('event.create'), async (req, res) => {
+  const { title, body, startsAt, endsAt } = req.body;
+  await client.query(
+    `INSERT INTO events(title, body, starts_at, ends_at, created_by) VALUES ($1,$2,$3,$4,$5)`,
+    [title, body, startsAt, endsAt, req.userId]
+  );
+  res.json({ ok: true });
+});
+
+app.post('/events/:id/publish', auth, requirePermission('event.publish'), async (req, res) => {
+  await client.query(`UPDATE events SET status='published' WHERE id=$1`, [req.params.id]);
+  res.json({ ok: true });
+});
+
+app.get('/healthz', async (_req, res) => {
+  try {
+    await client.query('select 1');
+    res.json({ ok: true });
+  } catch (e:any) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`KSCC API on ${PORT}`));
+```
+
+---
+
+# 5) 스크립트(패키지.json) & 빌드/시드
+
+### `package.json` (루트, Replit 용)
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "echo 'TypeScript optional: if using TS compile, add tsc build here'",
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx src/db/seedAcl.ts",
+    "start": "node src/server.ts",
+    "start:prod": "npm run db:push && npm run db:seed && node src/server.ts"
+  }
+}
+```
+
+> **처음 1회 실행 순서(콘솔)**
+> `npm run db:push` → `npm run db:seed` → `npm run dev` 로 로컬 확인 → Deploy
+
+---
+
+# 6) Replit 배포(Deployments)
+
+* Replit 에디터 우상단 **Deploy → Create**
+
+  * **Autoscale**(권장: 유휴시 0원 느낌) 또는 **Reserved VM**(상시) 선택
+  * **Build Command**: `npm run build` *(지금은 no-op 가능)*
+  * **Run Command**: `npm run start:prod` *(배포 시 자동 마이그레이션+시드 후 시작)*
+  * 환경변수 탭에서 `DATABASE_URL`, `JWT_SECRET`, `NODE_ENV=production` 재확인
+* 배포 완료 후 제공된 URL로 `/healthz`, `/events` 확인
+* **Custom Domain**도 Deployments 화면에서 바로 연결 가능(CNAME 안내 따라 설정)
+
+---
+
+# 7) 프런트(Vite)에서 붙이기
+
+* `.env`에 `VITE_API_BASE=https://YOUR-REPL-URL`
+* 로그인/가입 폼 → `/auth/register`, `/auth/login` 호출
+* 이벤트 목록 → `/events` GET, 운영진은 `/events` POST 및 `/events/:id/publish` 노출
+* **권한기반 UI 표시**: 로그인 후 `/me`(선택 구현)에서 내 role/tier 받아 버튼 표시 분기
+
+---
+
+# 8) 운영 팁
+
+* **초기 운영진 계정**: 회원가입 후 DB에서 해당 사용자 `memberships.role_id`를 `admin` 또는 `operator`로 업데이트(초기 1회).
+* **파일/자료실**: Replit는 영구 스토리지가 아니므로 **R2/S3**에 업로드하고 DB엔 메타만 저장.
+* **요금**: Autoscale은 **첫 요청 콜드스타트**가 있을 수 있음(속도가 중요하면 Reserved).
+* **보안**: `JWT_SECRET` 교체 주기, 비밀번호 최소 강도, CORS 도메인 화이트리스트.
+
+---
+
+## 바로 적용 체크리스트
+
+* [ ] Replit 생성 + Secrets 설정
+* [ ] 위 **schema / seed / server** 파일 추가
+* [ ] `npm run db:push && npm run db:seed`
+* [ ] `npm run dev`로 로컬 테스트 → Deploy
+* [ ] 도메인 연결(선택)
+
+원하면, 네 `kscc` 리포의 `client/`와 이 API를 같은 Replit에 두고 **프록시 설정**(프런트 개발서버 → API)까지 묶는 방식도 적어 줄게. 지금 뼈대만 올려도 “회원관리+운영 권한+이벤트 발행”이 바로 돌아가고, Replit 에디터에서 수정→재배포가 매우 간단해질 거야.
