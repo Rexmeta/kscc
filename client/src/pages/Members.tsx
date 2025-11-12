@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, RefreshCw, Users } from 'lucide-react';
+import { Search, Filter, RefreshCw, Users, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { Member } from '@shared/schema';
 import MemberCard from '@/components/MemberCard';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function MembersPage() {
+  const { hasPermission } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('');
@@ -64,6 +67,17 @@ export default function MembersPage() {
       {/* Search & Filter */}
       <section className="py-8 border-b">
         <div className="container">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">회원 목록</h2>
+            {hasPermission('member.manage') && (
+              <Button asChild data-testid="button-manage-members">
+                <Link href="/admin?tab=members">
+                  <Plus className="h-4 w-4 mr-2" />
+                  회원 관리
+                </Link>
+              </Button>
+            )}
+          </div>
           <Card className="p-6">
             <div className="grid gap-4 md:grid-cols-4">
               <div className="md:col-span-2">

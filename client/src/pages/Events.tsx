@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Filter, RefreshCw } from 'lucide-react';
+import { Calendar, Filter, RefreshCw, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { Event } from '@shared/schema';
 import EventCard from '@/components/EventCard';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function EventsPage() {
+  const { hasPermission } = useAuth();
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [upcoming, setUpcoming] = useState('true');
@@ -57,6 +60,17 @@ export default function EventsPage() {
       {/* Filter */}
       <section className="py-8 border-b">
         <div className="container">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">행사 목록</h2>
+            {hasPermission('event.create') && (
+              <Button asChild data-testid="button-create-event">
+                <Link href="/admin?tab=events">
+                  <Plus className="h-4 w-4 mr-2" />
+                  행사 등록
+                </Link>
+              </Button>
+            )}
+          </div>
           <Card className="p-6">
             <div className="grid gap-4 md:grid-cols-4">
               <Select value={upcoming || "all"} onValueChange={(value) => setUpcoming(value === "all" ? "" : value)}>

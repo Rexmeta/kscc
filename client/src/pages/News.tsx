@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, RefreshCw, Newspaper } from 'lucide-react';
+import { Search, Filter, RefreshCw, Newspaper, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { News } from '@shared/schema';
 import NewsCard from '@/components/NewsCard';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function NewsPage() {
+  const { hasPermission } = useAuth();
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
@@ -58,6 +61,17 @@ export default function NewsPage() {
       {/* Search & Filter */}
       <section className="py-8 border-b">
         <div className="container">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">뉴스 목록</h2>
+            {hasPermission('news.create') && (
+              <Button asChild data-testid="button-create-news">
+                <Link href="/admin?tab=news">
+                  <Plus className="h-4 w-4 mr-2" />
+                  뉴스 작성
+                </Link>
+              </Button>
+            )}
+          </div>
           <Card className="p-6">
             <div className="grid gap-4 md:grid-cols-4">
               <div className="md:col-span-2">

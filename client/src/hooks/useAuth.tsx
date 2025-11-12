@@ -87,13 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = (permission: string): boolean => {
-    // Admin has all permissions
+    // Check for admin wildcard
     if (permissions.has('*')) return true;
     
-    // Check exact permission
+    // Check for exact permission
     if (permissions.has(permission)) return true;
     
-    // Check wildcard permissions (e.g., "event.*" for "event.create")
+    // Check for wildcard permissions (e.g., "event.*" covers "event.create")
     const parts = permission.split('.');
     for (let i = parts.length - 1; i > 0; i--) {
       const wildcard = parts.slice(0, i).join('.') + '.*';

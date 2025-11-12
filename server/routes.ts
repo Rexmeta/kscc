@@ -7,7 +7,7 @@ import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache } from "./permissions";
+import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission } from "./permissions";
 import { db } from "./db";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key";
@@ -426,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", authenticateToken, requireAdmin, async (req, res) => {
+  app.post("/api/events", authenticateToken, requirePermission('event.create'), async (req, res) => {
     try {
       const eventData = insertEventSchema.parse({ ...req.body, createdBy: req.user.id });
       const event = await storage.createEvent(eventData);
@@ -436,7 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/events/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/events/:id", authenticateToken, requirePermission('event.update'), async (req, res) => {
     try {
       const event = await storage.getEvent(req.params.id);
       if (!event) {
@@ -463,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/events/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.delete("/api/events/:id", authenticateToken, requirePermission('event.delete'), async (req, res) => {
     try {
       const event = await storage.getEvent(req.params.id);
       if (!event) {
@@ -562,7 +562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/news", authenticateToken, requireAdmin, async (req, res) => {
+  app.post("/api/news", authenticateToken, requirePermission('news.create'), async (req, res) => {
     try {
       const articleData = insertNewsSchema.parse({ ...req.body, authorId: req.user.id });
       const article = await storage.createNews(articleData);
@@ -572,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/news/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/news/:id", authenticateToken, requirePermission('news.update'), async (req, res) => {
     try {
       const article = await storage.getNewsArticle(req.params.id);
       if (!article) {
@@ -592,7 +592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/news/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.delete("/api/news/:id", authenticateToken, requirePermission('news.delete'), async (req, res) => {
     try {
       const article = await storage.getNewsArticle(req.params.id);
       if (!article) {
@@ -684,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/resources", authenticateToken, requireAdmin, async (req, res) => {
+  app.post("/api/resources", authenticateToken, requirePermission('resource.upload'), async (req, res) => {
     try {
       const resourceData = insertResourceSchema.parse({ ...req.body, createdBy: req.user.id });
       const resource = await storage.createResource(resourceData);
@@ -694,7 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/resources/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/resources/:id", authenticateToken, requirePermission('resource.update'), async (req, res) => {
     try {
       const resource = await storage.getResource(req.params.id);
       if (!resource) {
@@ -708,7 +708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/resources/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.delete("/api/resources/:id", authenticateToken, requirePermission('resource.delete'), async (req, res) => {
     try {
       const resource = await storage.getResource(req.params.id);
       if (!resource) {

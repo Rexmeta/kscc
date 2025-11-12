@@ -51,26 +51,47 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
 
 /**
  * Check if user has a specific permission
+ * Supports wildcard permissions: '*' for all, 'event.*' for all event permissions
  */
 export async function hasPermission(userId: string, permissionKey: string): Promise<boolean> {
   const permissions = await getUserPermissions(userId);
-  return permissions.has(permissionKey);
+  
+  // Check for admin wildcard
+  if (permissions.has('*')) return true;
+  
+  // Check for exact permission
+  if (permissions.has(permissionKey)) return true;
+  
+  // Check for wildcard permissions (e.g., "event.*" covers "event.create")
+  const parts = permissionKey.split('.');
+  for (let i = parts.length - 1; i > 0; i--) {
+    const wildcard = parts.slice(0, i).join('.') + '.*';
+    if (permissions.has(wildcard)) return true;
+  }
+  
+  return false;
 }
 
 /**
  * Check if user has any of the specified permissions
+ * Supports wildcard permissions
  */
 export async function hasAnyPermission(userId: string, permissionKeys: string[]): Promise<boolean> {
-  const permissions = await getUserPermissions(userId);
-  return permissionKeys.some(key => permissions.has(key));
+  for (const key of permissionKeys) {
+    if (await hasPermission(userId, key)) return true;
+  }
+  return false;
 }
 
 /**
  * Check if user has all of the specified permissions
+ * Supports wildcard permissions
  */
 export async function hasAllPermissions(userId: string, permissionKeys: string[]): Promise<boolean> {
-  const permissions = await getUserPermissions(userId);
-  return permissionKeys.every(key => permissions.has(key));
+  for (const key of permissionKeys) {
+    if (!(await hasPermission(userId, key))) return false;
+  }
+  return true;
 }
 
 /**

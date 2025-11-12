@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw } from 'lucide-react';
+import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
@@ -24,7 +25,7 @@ const getCategoryIcon = (category: string) => {
 export default function ResourcesPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, hasPermission } = useAuth();
   const { toast } = useToast();
 
   const { data, isLoading, refetch } = useQuery({
@@ -179,6 +180,17 @@ export default function ResourcesPage() {
           </div>
 
           {/* Filter */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">자료 목록</h2>
+            {hasPermission('resource.upload') && (
+              <Button asChild data-testid="button-upload-resource">
+                <Link href="/admin?tab=resources">
+                  <Plus className="h-4 w-4 mr-2" />
+                  자료 업로드
+                </Link>
+              </Button>
+            )}
+          </div>
           <Card className="p-6 mb-8">
             <div className="flex gap-4 items-end">
               <div>
