@@ -104,10 +104,7 @@ export default function Dashboard() {
       if (data.currentPassword) updates.currentPassword = data.currentPassword;
       if (data.newPassword) updates.newPassword = data.newPassword;
 
-      return apiRequest('/api/auth/profile', {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-      });
+      return apiRequest('PATCH', '/api/auth/profile', updates);
     },
     onSuccess: () => {
       toast({
@@ -129,9 +126,7 @@ export default function Dashboard() {
 
   const cancelRegistrationMutation = useMutation({
     mutationFn: async (registrationId: string) => {
-      return apiRequest(`/api/auth/registrations/${registrationId}`, {
-        method: 'PATCH',
-      });
+      return apiRequest('PATCH', `/api/auth/registrations/${registrationId}`);
     },
     onSuccess: () => {
       toast({
