@@ -6,6 +6,7 @@ import { User, Building, Calendar, FileText, Settings, Edit } from 'lucide-react
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
 import { EventRegistration, Member } from '@shared/schema';
+import { Link } from 'wouter';
 
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
@@ -156,9 +157,11 @@ export default function Dashboard() {
                   <div className="text-center py-8">
                     <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground mb-4">회원사 정보가 없습니다.</p>
-                    <Button variant="outline" data-testid="button-register-company">
-                      회사 등록하기
-                    </Button>
+                    <Link href="/members">
+                      <Button variant="outline" data-testid="button-register-company">
+                        회사 등록하기
+                      </Button>
+                    </Link>
                   </div>
                 )}
               </CardContent>
@@ -174,22 +177,30 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Button variant="outline" className="w-full justify-start" data-testid="button-view-events">
-                    <Calendar className="h-4 w-4" />
-                    행사 둘러보기
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" data-testid="button-view-resources">
-                    <FileText className="h-4 w-4" />
-                    자료센터 이용
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" data-testid="button-view-members">
-                    <Building className="h-4 w-4" />
-                    회원사 디렉토리
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start" data-testid="button-contact">
-                    <User className="h-4 w-4" />
-                    문의하기
-                  </Button>
+                  <Link href="/events">
+                    <Button variant="outline" className="w-full justify-start" data-testid="button-view-events">
+                      <Calendar className="h-4 w-4" />
+                      행사 둘러보기
+                    </Button>
+                  </Link>
+                  <Link href="/resources">
+                    <Button variant="outline" className="w-full justify-start" data-testid="button-view-resources">
+                      <FileText className="h-4 w-4" />
+                      자료센터 이용
+                    </Button>
+                  </Link>
+                  <Link href="/members">
+                    <Button variant="outline" className="w-full justify-start" data-testid="button-view-members">
+                      <Building className="h-4 w-4" />
+                      회원사 디렉토리
+                    </Button>
+                  </Link>
+                  <Link href="/contact">
+                    <Button variant="outline" className="w-full justify-start" data-testid="button-contact">
+                      <User className="h-4 w-4" />
+                      문의하기
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -241,9 +252,11 @@ export default function Dashboard() {
                     <div className="text-center py-8">
                       <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground mb-4">등록한 행사가 없습니다.</p>
-                      <Button variant="outline" data-testid="button-browse-events">
-                        행사 둘러보기
-                      </Button>
+                      <Link href="/events">
+                        <Button variant="outline" data-testid="button-browse-events">
+                          행사 둘러보기
+                        </Button>
+                      </Link>
                     </div>
                   )}
                 </CardContent>
@@ -265,9 +278,11 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground mb-3">
                       회원만 접근 가능한 리포트와 분석 자료를 이용하실 수 있습니다.
                     </p>
-                    <Button size="sm" variant="outline" data-testid="button-member-resources">
-                      자료 보기
-                    </Button>
+                    <Link href="/resources">
+                      <Button size="sm" variant="outline" data-testid="button-member-resources">
+                        자료 보기
+                      </Button>
+                    </Link>
                   </div>
                   
                   {user?.role === 'admin' && (
@@ -276,9 +291,11 @@ export default function Dashboard() {
                       <p className="text-sm text-muted-foreground mb-3">
                         관리자 전용 고급 분석 및 정책 브리핑을 이용하실 수 있습니다.
                       </p>
-                      <Button size="sm" variant="outline" data-testid="button-premium-resources">
-                        프리미엄 자료
-                      </Button>
+                      <Link href="/resources">
+                        <Button size="sm" variant="outline" data-testid="button-premium-resources">
+                          프리미엄 자료
+                        </Button>
+                      </Link>
                     </div>
                   )}
                 </div>
