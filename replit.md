@@ -16,7 +16,11 @@ The application is built with a modern TypeScript stack featuring React on the f
   - Wildcard support: "event.*" grants all event permissions, "*" grants all permissions
   
 - **Backend Implementation**:
-  - `server/permissions.ts`: Permission check middleware with caching (5min TTL)
+  - `server/permissions.ts`: Permission check middleware with caching (5min TTL) and wildcard matching
+  - `server/routes.ts`: Protected routes with requirePermission middleware
+    - Events: event.create, event.update, event.delete
+    - News: news.create, news.update, news.delete
+    - Resources: resource.upload, resource.update, resource.delete
   - `server/seedAcl.ts`: ACL seed script for initial data
   - `server/migrateUsers.ts`: Migration script for existing users to new membership system
   - `/api/users`: List all users with membership info (admin only)
@@ -25,6 +29,15 @@ The application is built with a modern TypeScript stack featuring React on the f
   - Security: SQL injection prevention via Drizzle query builder + Zod UUID validation
 
 - **Frontend Implementation**:
+  - `useAuth` hook: Extended with permissions array and permission checking functions
+    - hasPermission: Supports exact match and wildcard matching (*, event.*, etc.)
+    - hasAnyPermission, hasAllPermissions: Built on hasPermission with wildcard support
+  - Permission-based UI buttons across all major pages:
+    - Events: "행사 등록" button (event.create)
+    - News: "뉴스 작성" button (news.create)
+    - Resources: "자료 업로드" button (resource.upload)
+    - Members: "회원 관리" button (member.manage)
+  - All buttons link to /admin page with appropriate tabs
   - Admin.tsx: New "사용자" (Users) tab for user management
   - Displays user email, name, tier badge, and role badge
   - React Query integration with proper Authorization headers
@@ -36,8 +49,10 @@ The application is built with a modern TypeScript stack featuring React on the f
   - `rolePermissions` table: Role-to-permission mappings
   - `userMemberships` table: User tier/role assignments
 
-- **Known Issues**:
-  - Admin page authorization check needs review (useAuth hook related)
+- **Testing**:
+  - E2E test verified all admin buttons appear correctly for admin user
+  - Wildcard permissions work on both frontend and backend
+  - Buttons conditionally render based on user permissions
 
 ### Dashboard User Features (November 12, 2025)
 - **Profile Management**: Implemented comprehensive user profile update functionality
