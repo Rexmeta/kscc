@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
 import { UserRegistrationWithEvent, Member } from '@shared/schema';
 import { Link } from 'wouter';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -95,25 +95,44 @@ export default function Dashboard() {
     },
   });
 
+  // Reset form when user data changes or dialog opens
+  useEffect(() => {
+    if (isProfileDialogOpen && user) {
+      profileForm.reset({
+        name: user.name || '',
+        email: user.email || '',
+        currentPassword: '',
+        newPassword: '',
+      });
+    }
+  }, [isProfileDialogOpen, user, profileForm]);
+
   const profileUpdateMutation = useMutation({
     mutationFn: async (data: ProfileUpdateFormData) => {
       // Filter out empty fields
       const updates: any = {};
-      if (data.name && data.name !== user?.name) updates.name = data.name;
-      if (data.email && data.email !== user?.email) updates.email = data.email;
-      if (data.currentPassword) updates.currentPassword = data.currentPassword;
-      if (data.newPassword) updates.newPassword = data.newPassword;
+      if (data.name && data.name.trim() !== '' && data.name !== user?.name) updates.name = data.name;
+      if (data.email && data.email.trim() !== '' && data.email !== user?.email) updates.email = data.email;
+      
+      // Only include password fields if they are not empty
+      if (data.currentPassword && data.currentPassword.trim() !== '') {
+        updates.currentPassword = data.currentPassword;
+      }
+      if (data.newPassword && data.newPassword.trim() !== '') {
+        updates.newPassword = data.newPassword;
+      }
 
       return apiRequest('PATCH', '/api/auth/profile', updates);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: '프로필 업데이트 완료',
         description: '프로필이 성공적으로 업데이트되었습니다.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      // Wait for user data to refresh before resetting form
+      await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setIsProfileDialogOpen(false);
-      profileForm.reset();
+      // Password fields will be cleared when dialog reopens via defaultValues
     },
     onError: (error: any) => {
       toast({
