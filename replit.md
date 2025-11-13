@@ -38,6 +38,7 @@ Preferred communication style: Simple, everyday language.
 
 ### System Design Choices
 
+*   **User Type System**: Two distinct user types: 'staff' (운영진) for internal chamber staff and 'company' (회원사) for member organizations. Company users are atomically created with associated member profiles using database transactions. Server-side enforcement prevents client-side privilege escalation. Registration flow supports both user types with dynamic form validation.
 *   **Language System**: Global language state managed via React Context (`LanguageContext.tsx`) with `localStorage` persistence and Router key-based remounting, enabling instant, no-reload language switching. Uses `useLanguage()` hook for accessing/updating language state. Router remounts on language change via `key={language}` prop, ensuring all components re-render with new translations. Supports Korean, English, and Simplified Chinese (简体中文 - using 总 not 總, 国 not 國).
 *   **Access Control List (ACL)**: Comprehensive 5-tier, 5-role, 27-permission hierarchical system implemented on both frontend and backend, securing routes and conditionally rendering UI elements.
 *   **Dashboard Features**: Full user profile management (name, email, password) and event registration management (view, cancel registrations) with robust validation and ownership checks.
