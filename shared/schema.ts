@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   name: text("name").notNull(),
   role: text("role").notNull().default("member"), // member, admin
+  userType: text("user_type").notNull().default("staff"), // staff, company
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -17,7 +18,7 @@ export const users = pgTable("users", {
 
 export const members = pgTable("members", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: uuid("user_id").references(() => users.id),
+  userId: uuid("user_id").unique().references(() => users.id), // one-to-one with users
   companyName: text("company_name").notNull(),
   companyNameEn: text("company_name_en"),
   companyNameZh: text("company_name_zh"),

@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertMemberSchema, insertEventSchema, insertEventRegistrationSchema, insertNewsSchema, insertResourceSchema, insertInquirySchema, insertPartnerSchema, userMemberships } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventSchema, insertEventRegistrationSchema, insertNewsSchema, insertResourceSchema, insertInquirySchema, insertPartnerSchema, userMemberships, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
@@ -62,7 +62,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      const { userType: requestedUserType, companyData, ...baseUserData } = req.body;
+      
+      // Validate userType from request
+      const userTypeSchema = z.enum(['staff', 'company']);
+      const userType = userTypeSchema.parse(requestedUserType || 'staff');
+      
+      // Validate user data
+      const userData = insertUserSchema.parse(baseUserData);
       const existingUser = await storage.getUserByEmail(userData.email);
       
       if (existingUser) {
@@ -73,15 +80,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userCount = await storage.getUserCount();
       const role = userCount === 0 ? 'admin' : 'member';
 
-      const user = await storage.createUser({
-        ...userData,
-        role
-      });
+      let user: User;
+
+      // If company user, create user with member profile atomically
+      if (userType === 'company') {
+        if (!companyData) {
+          return res.status(400).json({ message: "Company information is required for company registration" });
+        }
+        
+        // Validate company data
+        const memberPayload = insertMemberSchema.parse({
+          companyName: companyData.companyName,
+          industry: companyData.industry,
+          country: companyData.country,
+          city: companyData.city,
+          address: companyData.address,
+          phone: companyData.phone,
+          website: companyData.website,
+          description: companyData.description,
+          contactPerson: companyData.contactPerson,
+          contactEmail: companyData.contactEmail,
+          contactPhone: companyData.contactPhone,
+          membershipStatus: 'pending', // Awaiting admin approval
+          membershipLevel: 'regular',
+          isPublic: companyData.isPublic !== undefined ? companyData.isPublic : true,
+        });
+
+        // Create user and member atomically
+        const result = await storage.createUserWithMember(
+          { ...userData, role, userType: 'company' },
+          memberPayload
+        );
+        user = result.user;
+      } else {
+        // Staff user - just create user
+        user = await storage.createUser({
+          ...userData,
+          role,
+          userType: 'staff'
+        });
+      }
       
       const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
       
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });

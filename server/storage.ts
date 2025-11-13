@@ -15,7 +15,8 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserCount(): Promise<number>;
   getUsers(): Promise<User[]>;
-  createUser(user: InsertUser & { role?: string }): Promise<User>;
+  createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
+  createUserWithMember(userData: InsertUser & { role?: string; userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   validateUser(email: string, password: string): Promise<User | undefined>;
 
@@ -112,7 +113,7 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async createUser(insertUser: InsertUser & { role?: string }): Promise<User> {
+  async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {
     const hashedPassword = await bcrypt.hash(insertUser.password, 10);
     const [user] = await db
       .insert(users)
@@ -122,6 +123,35 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  async createUserWithMember(
+    userData: InsertUser & { role?: string; userType?: string },
+    memberData: Omit<InsertMember, 'userId'>
+  ): Promise<{ user: User; member: Member }> {
+    return await db.transaction(async (tx) => {
+      // Create user
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const [user] = await tx
+        .insert(users)
+        .values({
+          ...userData,
+          password: hashedPassword,
+          userType: 'company', // Force company type
+        })
+        .returning();
+
+      // Create member profile
+      const [member] = await tx
+        .insert(members)
+        .values({
+          ...memberData,
+          userId: user.id,
+        })
+        .returning();
+
+      return { user, member };
+    });
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
