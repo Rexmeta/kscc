@@ -2,11 +2,18 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User } from '@shared/schema';
 import { apiRequest } from '@/lib/queryClient';
 
+interface CompanyData {
+  companyName: string;
+  business: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -70,8 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', data.token);
   };
 
-  const register = async (name: string, email: string, password: string) => {
-    const response = await apiRequest('POST', '/api/auth/register', { name, email, password });
+  const register = async (name: string, email: string, password: string, userType: 'staff' | 'company' = 'staff', companyData?: CompanyData) => {
+    const payload: any = { name, email, password, userType };
+    if (userType === 'company' && companyData) {
+      payload.companyData = companyData;
+    }
+    
+    const response = await apiRequest('POST', '/api/auth/register', payload);
     const data = await response.json();
     
     setUser(data.user);
