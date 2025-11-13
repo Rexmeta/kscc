@@ -13,24 +13,28 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
 
-const baseSchema = z.object({
+const baseFields = {
   name: z.string().min(2, '이름은 2자 이상이어야 합니다'),
   email: z.string().email('올바른 이메일을 입력해주세요'),
   password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
   confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
+};
+
+const staffSchema = z.object(baseFields).refine((data) => data.password === data.confirmPassword, {
   message: "비밀번호가 일치하지 않습니다",
   path: ["confirmPassword"],
 });
 
-const companySchema = baseSchema.extend({
+const companySchema = z.object({
+  ...baseFields,
   companyName: z.string().min(2, '회사명은 2자 이상이어야 합니다'),
   business: z.string().min(2, '사업 내용을 입력해주세요'),
   contactEmail: z.string().email('올바른 이메일을 입력해주세요').optional().or(z.literal('')),
   contactPhone: z.string().optional(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "비밀번호가 일치하지 않습니다",
+  path: ["confirmPassword"],
 });
-
-const staffSchema = baseSchema;
 
 type StaffForm = z.infer<typeof staffSchema>;
 type CompanyForm = z.infer<typeof companySchema>;

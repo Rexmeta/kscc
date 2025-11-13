@@ -85,26 +85,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If company user, create user with member profile atomically
       if (userType === 'company') {
         if (!companyData) {
+          console.log('[REGISTER] Missing companyData');
           return res.status(400).json({ message: "Company information is required for company registration" });
         }
+        
+        console.log('[REGISTER] userData:', JSON.stringify(userData, null, 2));
+        console.log('[REGISTER] companyData:', JSON.stringify(companyData, null, 2));
         
         // Validate company data
         const memberPayload = insertMemberSchema.parse({
           companyName: companyData.companyName,
-          industry: companyData.industry,
-          country: companyData.country,
-          city: companyData.city,
-          address: companyData.address,
-          phone: companyData.phone,
-          website: companyData.website,
-          description: companyData.description,
-          contactPerson: companyData.contactPerson,
-          contactEmail: companyData.contactEmail,
+          business: companyData.business,
+          contactPerson: userData.name, // Use user's name as contact person
+          contactEmail: companyData.contactEmail || userData.email, // Fallback to user email
           contactPhone: companyData.contactPhone,
           membershipStatus: 'pending', // Awaiting admin approval
           membershipLevel: 'regular',
-          isPublic: companyData.isPublic !== undefined ? companyData.isPublic : true,
+          isPublic: true,
         });
+        
+        console.log('[REGISTER] memberPayload:', JSON.stringify(memberPayload, null, 2));
 
         // Create user and member atomically
         const result = await storage.createUserWithMember(
@@ -125,7 +125,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
+      console.log('[REGISTER] Error:', error);
       if (error instanceof z.ZodError) {
+        console.log('[REGISTER] Zod errors:', JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: error.errors[0].message });
       }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
