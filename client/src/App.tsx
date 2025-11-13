@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
@@ -48,15 +49,25 @@ function Router() {
   );
 }
 
+function AppContent() {
+  const { language } = useLanguage();
+  
+  return (
+    <TooltipProvider>
+      <AuthProvider>
+        <Toaster />
+        <Router key={language} />
+      </AuthProvider>
+    </TooltipProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <Toaster />
-          <Router />
-        </AuthProvider>
-      </TooltipProvider>
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

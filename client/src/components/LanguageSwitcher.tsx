@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,7 +6,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Globe } from 'lucide-react';
-import { Language, getCurrentLanguage, setLanguage } from '@/lib/i18n';
+import { Language } from '@/lib/i18n';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const languages: { code: Language; name: string; flag: string }[] = [
   { code: 'ko', name: '한국어', flag: '🇰🇷' },
@@ -16,16 +16,9 @@ const languages: { code: Language; name: string; flag: string }[] = [
 ];
 
 export default function LanguageSwitcher() {
-  const [currentLang, setCurrentLang] = useState<Language>(getCurrentLanguage());
+  const { language, setLanguage } = useLanguage();
 
-  const handleLanguageChange = (lang: Language) => {
-    setLanguage(lang);
-    setCurrentLang(lang);
-    // Force re-render by reloading the page
-    window.location.reload();
-  };
-
-  const current = languages.find(lang => lang.code === currentLang) || languages[0];
+  const current = languages.find(lang => lang.code === language) || languages[0];
 
   return (
     <DropdownMenu>
@@ -40,8 +33,8 @@ export default function LanguageSwitcher() {
         {languages.map((lang) => (
           <DropdownMenuItem
             key={lang.code}
-            onClick={() => handleLanguageChange(lang.code)}
-            className={`gap-2 ${currentLang === lang.code ? 'bg-muted' : ''}`}
+            onSelect={() => setLanguage(lang.code)}
+            className={`gap-2 ${language === lang.code ? 'bg-muted' : ''}`}
           >
             <span>{lang.flag}</span>
             <span>{lang.name}</span>
