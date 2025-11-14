@@ -2146,9 +2146,10 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
 // Create Resource Dialog Component
 function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const { toast } = useToast();
   
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(resourceSchema),
   });
 
@@ -2160,10 +2161,56 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
     onSuccess: () => {
       toast({ title: "자료가 생성되었습니다" });
       reset();
+      setUploadedFileName('');
       setOpen(false);
       onSuccess();
     },
   });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleResourceFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const file = result.successful[0];
+      const uploadURL = file.uploadURL;
+      const originalFileName = file.name || 'file';
+      const fileExtension = originalFileName.split('.').pop() || '';
+      const fileSize = file.size || 0;
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: uploadURL }),
+      });
+      
+      const data = await response.json();
+      
+      setValue('fileUrl', data.objectPath);
+      setValue('fileName', originalFileName);
+      setValue('fileType', fileExtension.toUpperCase());
+      setUploadedFileName(originalFileName);
+      
+      toast({ title: '파일 업로드 완료!', description: `${originalFileName} (${(fileSize / 1024).toFixed(2)} KB)` });
+    }
+  };
 
   const onSubmit = (data: any) => {
     createMutation.mutate(data);
@@ -2223,20 +2270,43 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
             <Textarea {...register('description')} data-testid="textarea-resource-description" />
           </div>
           
+          <div>
+            <label className="form-label">파일 업로드</label>
+            <div className="flex gap-2 mb-4">
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={52428800}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleResourceFileUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 선택
+              </ObjectUploader>
+              {uploadedFileName && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm" data-testid="text-uploaded-filename">{uploadedFileName}</span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">최대 50MB까지 업로드 가능합니다</p>
+          </div>
+          
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="form-label">파일 URL</label>
-              <Input {...register('fileUrl')} data-testid="input-resource-url" />
+              <Input {...register('fileUrl')} placeholder="자동 입력됨" readOnly className="bg-muted" data-testid="input-resource-url" />
               {errors.fileUrl && <p className="text-sm text-destructive mt-1">{String(errors.fileUrl.message)}</p>}
             </div>
             <div>
               <label className="form-label">파일명</label>
-              <Input {...register('fileName')} data-testid="input-resource-filename" />
+              <Input {...register('fileName')} placeholder="자동 입력됨" readOnly className="bg-muted" data-testid="input-resource-filename" />
               {errors.fileName && <p className="text-sm text-destructive mt-1">{String(errors.fileName.message)}</p>}
             </div>
             <div>
               <label className="form-label">파일 형식</label>
-              <Input {...register('fileType')} placeholder="PDF, DOCX 등" data-testid="input-resource-filetype" />
+              <Input {...register('fileType')} placeholder="자동 입력됨" readOnly className="bg-muted" data-testid="input-resource-filetype" />
               {errors.fileType && <p className="text-sm text-destructive mt-1">{String(errors.fileType.message)}</p>}
             </div>
           </div>
