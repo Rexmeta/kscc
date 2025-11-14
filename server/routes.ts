@@ -9,11 +9,12 @@ import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission } from "./permissions";
 import { db } from "./db";
+import postsRouter from "./routes/posts";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key";
 
 // Auth middleware
-function authenticateToken(req: Request, res: Response, next: NextFunction) {
+export function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -59,6 +60,9 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Mount Posts API router
+  app.use("/api/posts", postsRouter);
+  
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
