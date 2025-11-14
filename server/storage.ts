@@ -1,9 +1,12 @@
 import { 
   users, members, events, eventRegistrations, news, resources, inquiries, partners,
+  posts, postTranslations, postMeta,
   type User, type InsertUser, type Member, type InsertMember, type Event, type InsertEvent,
   type EventRegistration, type InsertEventRegistration, type News, type InsertNews,
   type Resource, type InsertResource, type Inquiry, type InsertInquiry,
-  type Partner, type InsertPartner, type UserRegistrationWithEvent
+  type Partner, type InsertPartner, type UserRegistrationWithEvent,
+  type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
+  type PostMeta, type InsertPostMeta, type PostWithTranslations
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, gte, lte, count, sql } from "drizzle-orm";
@@ -99,6 +102,41 @@ export interface IStorage {
   createPartner(partner: InsertPartner): Promise<Partner>;
   updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
   deletePartner(id: string): Promise<void>;
+
+  // Unified Posts System
+  // Posts
+  getPost(id: string): Promise<Post | undefined>;
+  getPostBySlug(slug: string): Promise<Post | undefined>;
+  getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined>;
+  getPosts(filters?: {
+    postType?: string;
+    status?: string;
+    visibility?: string;
+    authorId?: string;
+    isFeatured?: boolean;
+    tags?: string[];
+    publishedAfter?: Date;
+    publishedBefore?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ posts: Post[]; total: number }>;
+  createPost(post: InsertPost): Promise<Post>;
+  updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
+  deletePost(id: string): Promise<void>;
+
+  // Post Translations
+  getPostTranslation(postId: string, locale: string): Promise<PostTranslation | undefined>;
+  getPostTranslations(postId: string): Promise<PostTranslation[]>;
+  createPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation>;
+  updatePostTranslation(id: string, updates: Partial<PostTranslation>): Promise<PostTranslation | undefined>;
+  upsertPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation>;
+
+  // Post Meta
+  getPostMeta(postId: string, key: string): Promise<PostMeta | undefined>;
+  getPostMetaAll(postId: string): Promise<PostMeta[]>;
+  setPostMeta(postId: string, key: string, value: any): Promise<PostMeta>;
+  deletePostMeta(postId: string, key: string): Promise<void>;
+  incrementPostMetaNumber(postId: string, key: string, amount?: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -660,6 +698,258 @@ export class DatabaseStorage implements IStorage {
 
   async deletePartner(id: string): Promise<void> {
     await db.delete(partners).where(eq(partners.id, id));
+  }
+
+  // Unified Posts System
+  // Posts
+  async getPost(id: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post || undefined;
+  }
+
+  async getPostBySlug(slug: string): Promise<Post | undefined> {
+    const [post] = await db.select().from(posts).where(eq(posts.slug, slug));
+    return post || undefined;
+  }
+
+  async getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined> {
+    const post = await this.getPost(id);
+    if (!post) return undefined;
+
+    let translations;
+    if (locale) {
+      translations = await db
+        .select()
+        .from(postTranslations)
+        .where(and(
+          eq(postTranslations.postId, id),
+          eq(postTranslations.locale, locale as any)
+        ));
+    } else {
+      translations = await db
+        .select()
+        .from(postTranslations)
+        .where(eq(postTranslations.postId, id));
+    }
+
+    const meta = await this.getPostMetaAll(id);
+
+    return {
+      ...post,
+      translations,
+      meta,
+    };
+  }
+
+  async getPosts(filters?: {
+    postType?: string;
+    status?: string;
+    visibility?: string;
+    authorId?: string;
+    isFeatured?: boolean;
+    tags?: string[];
+    publishedAfter?: Date;
+    publishedBefore?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ posts: Post[]; total: number }> {
+    let query = db.select().from(posts);
+    let countQuery = db.select({ count: count() }).from(posts);
+
+    const conditions = [];
+
+    if (filters?.postType) {
+      conditions.push(eq(posts.postType, filters.postType as any));
+    }
+
+    if (filters?.status) {
+      conditions.push(eq(posts.status, filters.status as any));
+    }
+
+    if (filters?.visibility) {
+      conditions.push(eq(posts.visibility, filters.visibility as any));
+    }
+
+    if (filters?.authorId) {
+      conditions.push(eq(posts.authorId, filters.authorId));
+    }
+
+    if (filters?.isFeatured !== undefined) {
+      conditions.push(eq(posts.isFeatured, filters.isFeatured));
+    }
+
+    if (filters?.publishedAfter) {
+      conditions.push(gte(posts.publishedAt, filters.publishedAfter));
+    }
+
+    if (filters?.publishedBefore) {
+      conditions.push(lte(posts.publishedAt, filters.publishedBefore));
+    }
+
+    // Tags filtering using JSONB ? operator (checks if any filter tag exists in post tags)
+    if (filters?.tags && filters.tags.length > 0) {
+      const tagConditions = filters.tags.map(tag => 
+        sql`${posts.tags}::jsonb ? ${tag}`
+      );
+      if (tagConditions.length > 0) {
+        conditions.push(or(...tagConditions)!);
+      }
+    }
+
+    if (conditions.length > 0) {
+      const whereCondition = and(...conditions);
+      if (whereCondition) {
+        query = query.where(whereCondition);
+        countQuery = countQuery.where(whereCondition);
+      }
+    }
+
+    const [totalResult] = await countQuery;
+    const postsResult = await query
+      .orderBy(desc(posts.publishedAt))
+      .limit(filters?.limit || 50)
+      .offset(filters?.offset || 0);
+
+    return {
+      posts: postsResult,
+      total: totalResult.count,
+    };
+  }
+
+  async createPost(post: InsertPost): Promise<Post> {
+    const [newPost] = await db
+      .insert(posts)
+      .values(post)
+      .returning();
+    return newPost;
+  }
+
+  async updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined> {
+    const [post] = await db
+      .update(posts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(posts.id, id))
+      .returning();
+    return post || undefined;
+  }
+
+  async deletePost(id: string): Promise<void> {
+    await db.delete(posts).where(eq(posts.id, id));
+  }
+
+  // Post Translations
+  async getPostTranslation(postId: string, locale: string): Promise<PostTranslation | undefined> {
+    const [translation] = await db
+      .select()
+      .from(postTranslations)
+      .where(and(
+        eq(postTranslations.postId, postId),
+        eq(postTranslations.locale, locale as any)
+      ));
+    return translation || undefined;
+  }
+
+  async getPostTranslations(postId: string): Promise<PostTranslation[]> {
+    return db.select().from(postTranslations).where(eq(postTranslations.postId, postId));
+  }
+
+  async createPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation> {
+    const [newTranslation] = await db
+      .insert(postTranslations)
+      .values(translation)
+      .returning();
+    return newTranslation;
+  }
+
+  async updatePostTranslation(id: string, updates: Partial<PostTranslation>): Promise<PostTranslation | undefined> {
+    const [translation] = await db
+      .update(postTranslations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(postTranslations.id, id))
+      .returning();
+    return translation || undefined;
+  }
+
+  async upsertPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation> {
+    const existing = await this.getPostTranslation(translation.postId, translation.locale as string);
+    
+    if (existing) {
+      return (await this.updatePostTranslation(existing.id, translation))!;
+    }
+    
+    return this.createPostTranslation(translation);
+  }
+
+  // Post Meta
+  async getPostMeta(postId: string, key: string): Promise<PostMeta | undefined> {
+    const [meta] = await db
+      .select()
+      .from(postMeta)
+      .where(and(
+        eq(postMeta.postId, postId),
+        eq(postMeta.key, key)
+      ));
+    return meta || undefined;
+  }
+
+  async getPostMetaAll(postId: string): Promise<PostMeta[]> {
+    return db.select().from(postMeta).where(eq(postMeta.postId, postId));
+  }
+
+  async setPostMeta(postId: string, key: string, value: any): Promise<PostMeta> {
+    const existing = await this.getPostMeta(postId, key);
+    
+    // Determine the appropriate column based on value type
+    const metaValue: Partial<PostMeta> = {
+      value: typeof value === 'object' ? value : undefined,
+      valueText: typeof value === 'string' ? value : undefined,
+      valueNumber: typeof value === 'number' ? value : undefined,
+      valueBoolean: typeof value === 'boolean' ? value : undefined,
+      valueTimestamp: value instanceof Date ? value : undefined,
+      updatedAt: new Date(),
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(postMeta)
+        .set(metaValue)
+        .where(eq(postMeta.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(postMeta)
+      .values({
+        postId,
+        key,
+        ...metaValue,
+      } as any)
+      .returning();
+    return created;
+  }
+
+  async deletePostMeta(postId: string, key: string): Promise<void> {
+    await db.delete(postMeta).where(and(
+      eq(postMeta.postId, postId),
+      eq(postMeta.key, key)
+    ));
+  }
+
+  async incrementPostMetaNumber(postId: string, key: string, amount: number = 1): Promise<void> {
+    const existing = await this.getPostMeta(postId, key);
+    
+    if (existing && existing.valueNumber !== null) {
+      await db
+        .update(postMeta)
+        .set({ 
+          valueNumber: (existing.valueNumber || 0) + amount,
+          updatedAt: new Date(),
+        })
+        .where(eq(postMeta.id, existing.id));
+    } else {
+      await this.setPostMeta(postId, key, amount);
+    }
   }
 }
 
