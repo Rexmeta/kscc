@@ -8,6 +8,16 @@ This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### Backend Hydration Implementation (November 14, 2025)
+- **storage.getPosts()** now returns `PostWithTranslations[]` instead of `Post[]`, with all translations hydrated using batch fetching (3 queries total) to prevent N+1 queries
+- **Search functionality** added to Posts API: EXISTS subquery matches title/content/excerpt in post_translations table, plus slug in posts table (case-insensitive ILIKE)
+- **Removed meta/locale filtering** from getPosts due to type incompatibility; all translations now returned for multi-locale support
+- **Frontend integration**: News.tsx updated to pass search via URLSearchParams and queryKey, JSON.parse removed (JSONB auto-parses)
+- **E2E testing**: Search functionality verified via run_test (input, filtering, reset all working)
+- **Known issue**: NewsCard still uses legacy News type via convertToNews adapter (scheduled for separate refactoring task)
+
 ## System Architecture
 
 ### Frontend Architecture
