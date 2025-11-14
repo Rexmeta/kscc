@@ -25,6 +25,7 @@ export const EVENT_META_KEYS = {
   // Event timing
   eventDate: 'event.eventDate',
   endDate: 'event.endDate',
+  registrationDeadline: 'event.registrationDeadline',
   
   // Location (multilingual - use valueText for primary, post_translations for localized)
   location: 'event.location',
@@ -35,7 +36,6 @@ export const EVENT_META_KEYS = {
   
   // Capacity & Registration
   capacity: 'event.capacity',
-  registrationDeadline: 'event.registrationDeadline',
   fee: 'event.fee',
   
   // Visibility & Approval
@@ -92,11 +92,11 @@ export interface MetaKeyTypeMap {
   // Event
   'event.eventDate': 'timestamp';
   'event.endDate': 'timestamp';
+  'event.registrationDeadline': 'timestamp';
   'event.location': 'text';
   'event.category': 'text';
   'event.eventType': 'text';
   'event.capacity': 'number';
-  'event.registrationDeadline': 'timestamp';
   'event.fee': 'number';
   'event.isPublic': 'boolean';
   'event.requiresApproval': 'boolean';
@@ -121,19 +121,23 @@ export type MetaValueType = 'text' | 'number' | 'boolean' | 'timestamp' | 'json'
  */
 export function getMetaValueType(key: string): MetaValueType {
   const typeMap = {
+    // Numbers
     viewCount: 'number',
     downloadCount: 'number',
     capacity: 'number',
     fee: 'number',
     fileSize: 'number',
     
+    // Timestamps
     eventDate: 'timestamp',
     endDate: 'timestamp',
     registrationDeadline: 'timestamp',
     
+    // Booleans
     isPublic: 'boolean',
     requiresApproval: 'boolean',
     
+    // JSON
     images: 'json',
     speakers: 'json',
     program: 'json',
