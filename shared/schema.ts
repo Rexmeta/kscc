@@ -1,8 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uuid, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Enums for unified post system
+export const postTypeEnum = pgEnum("post_type", ["news", "event", "resource"]);
+export const postStatusEnum = pgEnum("post_status", ["draft", "published", "archived"]);
+export const postVisibilityEnum = pgEnum("post_visibility", ["public", "members", "premium", "internal"]);
+export const localeEnum = pgEnum("locale", ["ko", "en", "zh"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -162,6 +168,66 @@ export const partners = pgTable("partners", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Unified Posts System (WordPress-like)
+export const posts = pgTable("posts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postType: postTypeEnum("post_type").notNull(),
+  status: postStatusEnum("status").notNull().default("draft"),
+  visibility: postVisibilityEnum("visibility").notNull().default("public"),
+  slug: text("slug").notNull(),
+  primaryLocale: localeEnum("primary_locale").notNull().default("ko"),
+  authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+  coverImage: text("cover_image"),
+  listImage: text("list_image"),
+  isFeatured: boolean("is_featured").notNull().default(false),
+  tags: jsonb("tags"),
+  publishedAt: timestamp("published_at"),
+  scheduledAt: timestamp("scheduled_at"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  slugUnique: uniqueIndex("posts_slug_unique").on(table.slug),
+  typeStatusIdx: index("posts_type_status_idx").on(table.postType, table.status),
+  visibilityIdx: index("posts_visibility_idx").on(table.visibility),
+  publishIdx: index("posts_publish_idx").on(table.postType, table.publishedAt.desc()),
+}));
+
+export const postTranslations = pgTable("post_translations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  locale: localeEnum("locale").notNull(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  excerpt: text("excerpt"),
+  content: text("content"),
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  seoKeywords: jsonb("seo_keywords"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  postLocaleUnique: uniqueIndex("post_translations_post_locale_unique").on(table.postId, table.locale),
+  localeIdx: index("post_translations_locale_idx").on(table.locale),
+}));
+
+export const postMeta = pgTable("post_meta", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  key: text("meta_key").notNull(),
+  value: jsonb("meta_value"),
+  valueText: text("value_text"),
+  valueNumber: integer("value_number"),
+  valueBoolean: boolean("value_boolean"),
+  valueTimestamp: timestamp("value_timestamp"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  postKeyUnique: uniqueIndex("post_meta_post_key_unique").on(table.postId, table.key),
+  keyIdx: index("post_meta_key_idx").on(table.key),
+  timestampIdx: index("post_meta_timestamp_idx").on(table.key, table.valueTimestamp),
+}));
+
 // Membership tier system
 export const tiers = pgTable("tiers", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -319,6 +385,29 @@ export const inquiriesRelations = relations(inquiries, ({ one }) => ({
   }),
 }));
 
+export const postsRelations = relations(posts, ({ one, many }) => ({
+  author: one(users, {
+    fields: [posts.authorId],
+    references: [users.id],
+  }),
+  translations: many(postTranslations),
+  meta: many(postMeta),
+}));
+
+export const postTranslationsRelations = relations(postTranslations, ({ one }) => ({
+  post: one(posts, {
+    fields: [postTranslations.postId],
+    references: [posts.id],
+  }),
+}));
+
+export const postMetaRelations = relations(postMeta, ({ one }) => ({
+  post: one(posts, {
+    fields: [postMeta.postId],
+    references: [posts.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -400,6 +489,25 @@ export const insertUserMembershipSchema = createInsertSchema(userMemberships).om
   updatedAt: true,
 });
 
+// Unified Posts System Insert Schemas
+export const insertPostSchema = createInsertSchema(posts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPostTranslationSchema = createInsertSchema(postTranslations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPostMetaSchema = createInsertSchema(postMeta).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -440,7 +548,23 @@ export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 export type UserMembership = typeof userMemberships.$inferSelect;
 export type InsertUserMembership = z.infer<typeof insertUserMembershipSchema>;
 
+// Unified Posts System Types
+export type Post = typeof posts.$inferSelect;
+export type InsertPost = z.infer<typeof insertPostSchema>;
+
+export type PostTranslation = typeof postTranslations.$inferSelect;
+export type InsertPostTranslation = z.infer<typeof insertPostTranslationSchema>;
+
+export type PostMeta = typeof postMeta.$inferSelect;
+export type InsertPostMeta = z.infer<typeof insertPostMetaSchema>;
+
 // Combined types for joined queries
 export type UserRegistrationWithEvent = EventRegistration & {
   event: Event | null;
+};
+
+// Post with translations and meta
+export type PostWithTranslations = Post & {
+  translations: PostTranslation[];
+  meta: PostMeta[];
 };
