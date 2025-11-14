@@ -9,7 +9,7 @@ import {
   type PostMeta, type InsertPostMeta, type PostWithTranslations
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, gte, lte, count, sql } from "drizzle-orm";
+import { eq, desc, and, or, like, gte, lte, count, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export interface IStorage {
@@ -115,11 +115,12 @@ export interface IStorage {
     authorId?: string;
     isFeatured?: boolean;
     tags?: string[];
+    search?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
     limit?: number;
     offset?: number;
-  }): Promise<{ posts: Post[]; total: number }>;
+  }): Promise<{ posts: PostWithTranslations[]; total: number }>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
   deletePost(id: string): Promise<void>;
@@ -748,11 +749,12 @@ export class DatabaseStorage implements IStorage {
     authorId?: string;
     isFeatured?: boolean;
     tags?: string[];
+    search?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
     limit?: number;
     offset?: number;
-  }): Promise<{ posts: Post[]; total: number }> {
+  }): Promise<{ posts: PostWithTranslations[]; total: number }> {
     let query = db.select().from(posts);
     let countQuery = db.select({ count: count() }).from(posts);
 
@@ -796,6 +798,20 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Search filtering (slug + translations)
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(sql`EXISTS (
+        SELECT 1 FROM ${postTranslations}
+        WHERE ${postTranslations.postId} = ${posts.id}
+          AND (
+            ${postTranslations.title} ILIKE ${searchTerm}
+            OR ${postTranslations.content} ILIKE ${searchTerm}
+            OR ${postTranslations.excerpt} ILIKE ${searchTerm}
+          )
+      ) OR ${posts.slug} ILIKE ${searchTerm}`);
+    }
+
     if (conditions.length > 0) {
       const whereCondition = and(...conditions);
       if (whereCondition) {
@@ -810,8 +826,49 @@ export class DatabaseStorage implements IStorage {
       .limit(filters?.limit || 50)
       .offset(filters?.offset || 0);
 
+    // Early return if no posts
+    if (postsResult.length === 0) {
+      return { posts: [], total: 0 };
+    }
+
+    // Batch fetch translations and meta for all posts
+    const postIds = postsResult.map(p => p.id);
+    
+    // Fetch all translations (all locales)
+    const allTranslations = await db
+      .select()
+      .from(postTranslations)
+      .where(inArray(postTranslations.postId, postIds));
+    
+    // Fetch all meta
+    const allMeta = await db
+      .select()
+      .from(postMeta)
+      .where(inArray(postMeta.postId, postIds));
+    
+    // Group translations and meta by postId
+    const translationsByPost = new Map<string, typeof allTranslations>();
+    const metaByPost = new Map<string, typeof allMeta>();
+    
+    allTranslations.forEach(t => {
+      const existing = translationsByPost.get(t.postId) || [];
+      translationsByPost.set(t.postId, [...existing, t]);
+    });
+    
+    allMeta.forEach(m => {
+      const existing = metaByPost.get(m.postId) || [];
+      metaByPost.set(m.postId, [...existing, m]);
+    });
+    
+    // Combine posts with their translations and meta
+    const hydratedPosts: PostWithTranslations[] = postsResult.map(post => ({
+      ...post,
+      translations: translationsByPost.get(post.id) || [],
+      meta: metaByPost.get(post.id) || [],
+    }));
+
     return {
-      posts: postsResult,
+      posts: hydratedPosts,
       total: totalResult.count,
     };
   }

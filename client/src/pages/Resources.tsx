@@ -62,7 +62,6 @@ export default function ResourcesPage() {
         status: 'published',
         limit: '20',
         offset: ((page - 1) * 20).toString(),
-        locale: language,
         ...(category && { tags: category }), // Use tags for category filtering
       });
       

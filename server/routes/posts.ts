@@ -16,6 +16,7 @@ const postQuerySchema = z.object({
   tags: z.string().optional(), // Comma-separated tags
   authorId: z.string().uuid().optional(),
   locale: z.enum(['ko', 'en', 'zh']).optional(),
+  search: z.string().optional(), // Search term for title/content/excerpt/slug
   limit: z.coerce.number().positive().max(100).optional().default(20),
   offset: z.coerce.number().nonnegative().optional().default(0),
 });
@@ -38,6 +39,7 @@ router.get("/", async (req: Request, res: Response) => {
       visibility: query.visibility,
       tags,
       authorId: query.authorId,
+      search: query.search,
       limit: query.limit,
       offset: query.offset,
     });

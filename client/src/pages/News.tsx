@@ -8,31 +8,74 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Filter, RefreshCw, Newspaper, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { News } from '@shared/schema';
-import NewsCard from '@/components/NewsCard';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import type { PostWithTranslations, PostMeta, News } from '@shared/schema';
+import NewsCard from '@/components/NewsCard';
+
+// Helper to get meta value by key
+const getMetaValue = (meta: PostMeta[], key: string): any => {
+  const metaItem = meta.find(m => m.key === key);
+  if (!metaItem) return null;
+  
+  // Return the appropriate value based on what's set
+  if (metaItem.valueText !== null) return metaItem.valueText;
+  if (metaItem.valueNumber !== null) return metaItem.valueNumber;
+  if (metaItem.valueBoolean !== null) return metaItem.valueBoolean;
+  if (metaItem.valueTimestamp !== null) return metaItem.valueTimestamp;
+  if (metaItem.value !== null) return metaItem.value;
+  return null;
+};
+
+// Helper to get translation for current locale with fallback
+const getTranslation = (post: PostWithTranslations, locale: string) => {
+  if (!post.translations || post.translations.length === 0) {
+    return { title: post.slug, content: '', excerpt: '' };
+  }
+  return post.translations.find(t => t.locale === locale) || post.translations[0];
+};
 
 export default function NewsPage() {
   const { hasPermission } = useAuth();
+  const { language } = useLanguage();
+  const { toast } = useToast();
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/news', { page, category, limit: 12 }],
+    queryKey: ['/api/posts', 'news', { page, category, search, language, limit: 12 }],
     queryFn: async () => {
       const params = new URLSearchParams({
-        page: page.toString(),
+        postType: 'news',
+        status: 'published',
         limit: '12',
-        ...(category && { category }),
+        offset: ((page - 1) * 12).toString(),
+        ...(category && { tags: category }), // Use tags for category filtering (comma-separated)
+        ...(search && { search }), // Add search term
       });
-      const response = await fetch(`/api/news?${params}`);
+      
+      const response = await fetch(`/api/posts?${params}`);
+      
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          toast({
+            title: "접근 권한 없음",
+            description: "로그인이 필요하거나 권한이 없습니다.",
+            variant: "destructive",
+          });
+        }
+        throw new Error('Failed to fetch news');
+      }
+      
       return response.json();
     },
   });
 
-  const articles = data?.articles || [];
-  const totalPages = data?.totalPages || 1;
+  const posts = data?.posts || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / 12);
 
   const handleFilter = () => {
     setPage(1);
@@ -44,6 +87,44 @@ export default function NewsPage() {
     setSearch('');
     setPage(1);
     refetch();
+  };
+
+  // Convert PostWithTranslations to News format for NewsCard compatibility
+  const convertToNews = (post: PostWithTranslations): News => {
+    const translation = getTranslation(post, language);
+    const category = getMetaValue(post.meta || [], 'news.category') || 'notice';
+    const imagesRaw = getMetaValue(post.meta || [], 'news.images');
+    
+    // Backend returns JSONB as native JS arrays/objects
+    const images = Array.isArray(imagesRaw) ? imagesRaw : [];
+    const tags = Array.isArray(post.tags) ? post.tags : [];
+    
+    // Get translations for all locales
+    const enTranslation = post.translations?.find(t => t.locale === 'en');
+    const zhTranslation = post.translations?.find(t => t.locale === 'zh');
+    
+    return {
+      id: post.id,
+      title: translation?.title || post.slug,
+      titleEn: enTranslation?.title || null,
+      titleZh: zhTranslation?.title || null,
+      content: translation?.content || '',
+      contentEn: enTranslation?.content || null,
+      contentZh: zhTranslation?.content || null,
+      excerpt: translation?.excerpt || '',
+      excerptEn: enTranslation?.excerpt || null,
+      excerptZh: zhTranslation?.excerpt || null,
+      category,
+      tags,
+      featuredImage: post.coverImage || (images.length > 0 ? images[0] : null),
+      images,
+      isPublished: post.status === 'published',
+      publishedAt: post.publishedAt || post.createdAt,
+      viewCount: getMetaValue(post.meta || [], 'news.viewCount') || 0,
+      authorId: post.authorId,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+    };
   };
 
   return (
@@ -122,11 +203,11 @@ export default function NewsPage() {
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
             </div>
-          ) : articles.length > 0 ? (
+          ) : posts.length > 0 ? (
             <>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {articles.map((article: News) => (
-                  <NewsCard key={article.id} article={article} />
+                {posts.map((post: PostWithTranslations) => (
+                  <NewsCard key={post.id} article={convertToNews(post)} />
                 ))}
               </div>
               
