@@ -2151,6 +2151,10 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(resourceSchema),
+    defaultValues: {
+      category: '',
+      accessLevel: 'public',
+    }
   });
 
   const createMutation = useMutation({
@@ -2164,6 +2168,13 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       setUploadedFileName('');
       setOpen(false);
       onSuccess();
+    },
+    onError: (error) => {
+      toast({ 
+        title: "자료 생성 실패", 
+        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        variant: "destructive" 
+      });
     },
   });
 
@@ -2213,6 +2224,8 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const onSubmit = (data: any) => {
+    console.log('[Resource Form] Submitting:', data);
+    console.log('[Resource Form] Errors:', errors);
     createMutation.mutate(data);
   };
 
@@ -2238,7 +2251,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="form-label">카테고리</label>
-              <Select onValueChange={(value) => register('category').onChange({ target: { value } })}>
+              <Select onValueChange={(value) => setValue('category', value)}>
                 <SelectTrigger data-testid="select-resource-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
@@ -2249,10 +2262,11 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
                   <SelectItem value="guides">가이드북</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
             </div>
             <div>
               <label className="form-label">접근 수준</label>
-              <Select onValueChange={(value) => register('accessLevel').onChange({ target: { value } })}>
+              <Select defaultValue="public" onValueChange={(value) => setValue('accessLevel', value)}>
                 <SelectTrigger data-testid="select-resource-access">
                   <SelectValue placeholder="접근 수준 선택" />
                 </SelectTrigger>
@@ -2262,6 +2276,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
                   <SelectItem value="premium">프리미엄</SelectItem>
                 </SelectContent>
               </Select>
+              {errors.accessLevel && <p className="text-sm text-destructive mt-1">{String(errors.accessLevel.message)}</p>}
             </div>
           </div>
           
