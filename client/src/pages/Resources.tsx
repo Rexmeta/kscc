@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar, User } from 'lucide-react';
+import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
-import { Resource } from '@shared/schema';
+import type { PostWithTranslations, PostMeta } from '@shared/schema';
 
 const categoryIcons = {
   reports: FileText,
@@ -23,54 +24,107 @@ const getCategoryIcon = (category: string) => {
   return categoryIcons[category as keyof typeof categoryIcons] || FileText;
 };
 
+// Helper to get meta value by key
+const getMetaValue = (meta: PostMeta[], key: string): any => {
+  const metaItem = meta.find(m => m.key === key);
+  if (!metaItem) return null;
+  
+  // Return the appropriate value based on what's set
+  if (metaItem.valueText !== null) return metaItem.valueText;
+  if (metaItem.valueNumber !== null) return metaItem.valueNumber;
+  if (metaItem.valueBoolean !== null) return metaItem.valueBoolean;
+  if (metaItem.valueTimestamp !== null) return metaItem.valueTimestamp;
+  if (metaItem.value !== null) return metaItem.value;
+  return null;
+};
+
+// Helper to get translation for current locale with fallback
+const getTranslation = (post: PostWithTranslations, locale: string) => {
+  if (!post.translations || post.translations.length === 0) {
+    return { title: post.slug, content: '', excerpt: '' };
+  }
+  return post.translations.find(t => t.locale === locale) || post.translations[0];
+};
+
 export default function ResourcesPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
   const { isAuthenticated, isAdmin, hasPermission } = useAuth();
   const { toast } = useToast();
+  const { language } = useLanguage();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/resources', { page, category, limit: 20 }],
+    queryKey: ['/api/posts', 'resource', { page, category, language, limit: 20 }],
     queryFn: async () => {
       const params = new URLSearchParams({
-        page: page.toString(),
+        postType: 'resource',
+        status: 'published',
         limit: '20',
-        ...(category && { category }),
+        offset: ((page - 1) * 20).toString(),
+        locale: language,
+        ...(category && { tags: category }), // Use tags for category filtering
       });
-      const response = await fetch(`/api/resources?${params}`, {
-        headers: isAuthenticated ? {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        } : {}
-      });
-      return response.json();
-    },
-  });
-
-  const downloadMutation = useMutation({
-    mutationFn: async (resource: Resource) => {
-      const response = await fetch(`/api/resources/${resource.id}/download`, {
+      
+      const response = await fetch(`/api/posts?${params}`, {
         headers: isAuthenticated ? {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         } : {}
       });
       
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          toast({
+            title: "접근 권한 없음",
+            description: "로그인이 필요하거나 권한이 없습니다.",
+            variant: "destructive",
+          });
+        }
+        throw new Error('Failed to fetch resources');
+      }
+      
+      return response.json();
+    },
+  });
+
+  const downloadMutation = useMutation({
+    mutationFn: async (resource: PostWithTranslations) => {
+      const fileUrl = getMetaValue(resource.meta || [], 'resource.fileUrl');
+      const fileName = getMetaValue(resource.meta || [], 'resource.fileName') || 'download';
+      
+      if (!fileUrl) {
+        throw new Error('File URL not found');
+      }
+      
+      // Increment download count
+      if (isAuthenticated) {
+        await fetch(`/api/posts/${resource.id}/meta/increment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            key: 'resource.downloadCount',
+            amount: 1
+          })
+        });
+      }
+      
+      // Download the file
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
         throw new Error('Download failed');
       }
       
-      // Get the blob data
       const blob = await response.blob();
-      
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = resource.fileName || 'download';
+      a.download = fileName || 'download';
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
@@ -81,6 +135,7 @@ export default function ResourcesPage() {
         title: "다운로드 완료",
         description: "파일 다운로드가 완료되었습니다.",
       });
+      refetch(); // Refresh to update download count
     },
     onError: (error) => {
       toast({
@@ -91,8 +146,9 @@ export default function ResourcesPage() {
     },
   });
 
-  const resources = data?.resources || [];
-  const totalPages = data?.totalPages || 1;
+  const resources = data?.posts || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / 20);
 
   const handleFilter = () => {
     setPage(1);
@@ -105,12 +161,12 @@ export default function ResourcesPage() {
     refetch();
   };
 
-  const handleDownload = (resource: Resource, e: React.MouseEvent) => {
+  const handleDownload = (resource: PostWithTranslations, e: React.MouseEvent) => {
     e.stopPropagation();
     downloadMutation.mutate(resource);
   };
   
-  const handleViewDetails = (resource: Resource) => {
+  const handleViewDetails = (resource: PostWithTranslations) => {
     setSelectedResource(resource);
   };
 
@@ -127,10 +183,11 @@ export default function ResourcesPage() {
     }
   };
 
-  const canAccess = (resource: Resource) => {
-    if (resource.accessLevel === 'public') return true;
-    if (resource.accessLevel === 'members' && isAuthenticated) return true;
-    if (resource.accessLevel === 'premium' && isAdmin) return true;
+  const canAccess = (resource: PostWithTranslations) => {
+    const accessLevel = getMetaValue(resource.meta || [], 'resource.accessLevel') || 'public';
+    if (accessLevel === 'public') return true;
+    if (accessLevel === 'members' && isAuthenticated) return true;
+    if (accessLevel === 'premium' && isAdmin) return true;
     return false;
   };
 
@@ -254,8 +311,13 @@ export default function ResourcesPage() {
                   <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
                 </div>
               ) : resources.length > 0 ? (
-                resources.map((resource: Resource) => {
-                  const IconComponent = getCategoryIcon(resource.category);
+                resources.map((resource: PostWithTranslations) => {
+                  const translation = getTranslation(resource, language);
+                  const categoryValue = getMetaValue(resource.meta || [], 'resource.category') || 'reports';
+                  const fileType = getMetaValue(resource.meta || [], 'resource.fileType') || 'pdf';
+                  const fileSize = getMetaValue(resource.meta || [], 'resource.fileSize') || 0;
+                  const accessLevel = getMetaValue(resource.meta || [], 'resource.accessLevel') || 'public';
+                  const IconComponent = getCategoryIcon(categoryValue);
                   const accessible = canAccess(resource);
                   
                   return (
@@ -274,15 +336,15 @@ export default function ResourcesPage() {
                           </div>
                           <div className="flex-1">
                             <h4 className="font-semibold text-foreground mb-1" data-testid={`resource-title-${resource.id}`}>
-                              {resource.title}
+                              {translation?.title || resource.slug}
                             </h4>
                             <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                               <span className="flex items-center space-x-1">
                                 <File className="h-4 w-4" />
                                 <span>{new Date(resource.createdAt).toLocaleDateString()}</span>
                               </span>
-                              <span>{resource.fileType?.toUpperCase()} · {Math.round((resource.fileSize || 0) / 1024)}KB</span>
-                              {getAccessBadge(resource.accessLevel)}
+                              <span>{fileType?.toUpperCase()} · {Math.round(fileSize / 1024)}KB</span>
+                              {getAccessBadge(accessLevel)}
                             </div>
                           </div>
                         </div>
@@ -331,6 +393,29 @@ export default function ResourcesPage() {
             </div>
           </Card>
 
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-8 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                이전
+              </Button>
+              <span className="flex items-center px-4">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                다음
+              </Button>
+            </div>
+          )}
+
           {/* Member-Only Notice */}
           {!isAuthenticated && (
             <Card className="p-6 mt-8 bg-primary/5 border-primary/20">
@@ -343,8 +428,8 @@ export default function ResourcesPage() {
                   <p className="text-sm text-muted-foreground mb-3">
                     더 많은 심화 자료, 정책 브리핑, 입찰 공고는 로그인 후 이용하실 수 있습니다.
                   </p>
-                  <Button data-testid="button-login-redirect">
-                    로그인하기
+                  <Button asChild data-testid="button-login-redirect">
+                    <Link href="/login">로그인하기</Link>
                   </Button>
                 </div>
               </div>
@@ -357,7 +442,9 @@ export default function ResourcesPage() {
       <Dialog open={!!selectedResource} onOpenChange={(open) => !open && setSelectedResource(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl">{selectedResource?.title}</DialogTitle>
+            <DialogTitle className="text-2xl">
+              {selectedResource && getTranslation(selectedResource, language)?.title}
+            </DialogTitle>
           </DialogHeader>
           
           {selectedResource && (
@@ -367,37 +454,45 @@ export default function ResourcesPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 형식</p>
-                    <Badge variant="secondary">{selectedResource.fileType?.toUpperCase()}</Badge>
+                    <Badge variant="secondary">
+                      {(getMetaValue(selectedResource.meta || [], 'resource.fileType') || 'PDF')?.toUpperCase()}
+                    </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 크기</p>
-                    <p className="font-medium">{Math.round((selectedResource.fileSize || 0) / 1024)} KB</p>
+                    <p className="font-medium">
+                      {Math.round((getMetaValue(selectedResource.meta || [], 'resource.fileSize') || 0) / 1024)} KB
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">카테고리</p>
                     <Badge variant="outline">
-                      {selectedResource.category === 'reports' && '보고서'}
-                      {selectedResource.category === 'forms' && '양식'}
-                      {selectedResource.category === 'presentations' && '발표자료'}
-                      {selectedResource.category === 'guides' && '가이드북'}
+                      {(() => {
+                        const cat = getMetaValue(selectedResource.meta || [], 'resource.category') || 'reports';
+                        if (cat === 'reports') return '보고서';
+                        if (cat === 'forms') return '양식';
+                        if (cat === 'presentations') return '발표자료';
+                        if (cat === 'guides') return '가이드북';
+                        return cat;
+                      })()}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">접근 권한</p>
-                    {getAccessBadge(selectedResource.accessLevel)}
+                    {getAccessBadge(getMetaValue(selectedResource.meta || [], 'resource.accessLevel') || 'public')}
                   </div>
                 </div>
               </Card>
 
               {/* Description */}
-              {selectedResource.description && (
+              {getTranslation(selectedResource, language)?.content && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
                     <FileText className="h-4 w-4" />
                     설명
                   </h4>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {selectedResource.description}
+                    {getTranslation(selectedResource, language)?.content}
                   </p>
                 </div>
               )}
@@ -421,7 +516,9 @@ export default function ResourcesPage() {
                   <Download className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">다운로드</p>
-                    <p className="font-medium">{selectedResource.downloadCount || 0}회</p>
+                    <p className="font-medium">
+                      {getMetaValue(selectedResource.meta || [], 'resource.downloadCount') || 0}회
+                    </p>
                   </div>
                 </div>
               </div>
