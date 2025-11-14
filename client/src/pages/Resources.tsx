@@ -5,7 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
@@ -25,6 +26,7 @@ const getCategoryIcon = (category: string) => {
 export default function ResourcesPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const { isAuthenticated, isAdmin, hasPermission } = useAuth();
   const { toast } = useToast();
 
@@ -46,8 +48,8 @@ export default function ResourcesPage() {
   });
 
   const downloadMutation = useMutation({
-    mutationFn: async (resourceId: string) => {
-      const response = await fetch(`/api/resources/${resourceId}/download`, {
+    mutationFn: async (resource: Resource) => {
+      const response = await fetch(`/api/resources/${resource.id}/download`, {
         headers: isAuthenticated ? {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         } : {}
@@ -57,14 +59,27 @@ export default function ResourcesPage() {
         throw new Error('Download failed');
       }
       
-      const data = await response.json();
-      return data;
+      // Get the blob data
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = resource.fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      return { success: true };
     },
-    onSuccess: (data) => {
-      window.open(data.downloadUrl, '_blank');
+    onSuccess: () => {
       toast({
-        title: "다운로드 시작",
-        description: "파일 다운로드가 시작되었습니다.",
+        title: "다운로드 완료",
+        description: "파일 다운로드가 완료되었습니다.",
       });
     },
     onError: (error) => {
@@ -90,8 +105,13 @@ export default function ResourcesPage() {
     refetch();
   };
 
-  const handleDownload = (resourceId: string) => {
-    downloadMutation.mutate(resourceId);
+  const handleDownload = (resource: Resource, e: React.MouseEvent) => {
+    e.stopPropagation();
+    downloadMutation.mutate(resource);
+  };
+  
+  const handleViewDetails = (resource: Resource) => {
+    setSelectedResource(resource);
   };
 
   const getAccessBadge = (accessLevel: string) => {
@@ -239,9 +259,12 @@ export default function ResourcesPage() {
                   const accessible = canAccess(resource);
                   
                   return (
-                    <div key={resource.id} className="px-6 py-4 hover:bg-muted transition-all cursor-pointer">
+                    <div key={resource.id} className="px-6 py-4 hover:bg-muted transition-all">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4 flex-1">
+                        <div 
+                          className="flex items-center space-x-4 flex-1 cursor-pointer"
+                          onClick={() => handleViewDetails(resource)}
+                        >
                           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10">
                             {accessible ? (
                               <IconComponent className="h-6 w-6 text-accent" />
@@ -263,27 +286,38 @@ export default function ResourcesPage() {
                             </div>
                           </div>
                         </div>
-                        {accessible ? (
-                          <Button
-                            onClick={() => handleDownload(resource.id)}
-                            disabled={downloadMutation.isPending}
-                            className="ml-4"
-                            data-testid={`button-download-${resource.id}`}
-                          >
-                            <Download className="h-4 w-4" />
-                            <span className="hidden sm:inline">{t('common.download')}</span>
-                          </Button>
-                        ) : (
+                        <div className="flex gap-2 ml-4">
                           <Button
                             variant="outline"
-                            disabled
-                            className="ml-4"
-                            data-testid={`button-login-required-${resource.id}`}
+                            size="sm"
+                            onClick={() => handleViewDetails(resource)}
+                            data-testid={`button-view-${resource.id}`}
                           >
-                            <Lock className="h-4 w-4" />
-                            <span className="hidden sm:inline">{t('resources.loginRequired')}</span>
+                            <Eye className="h-4 w-4" />
+                            <span className="hidden sm:inline ml-2">상세보기</span>
                           </Button>
-                        )}
+                          {accessible ? (
+                            <Button
+                              size="sm"
+                              onClick={(e) => handleDownload(resource, e)}
+                              disabled={downloadMutation.isPending}
+                              data-testid={`button-download-${resource.id}`}
+                            >
+                              <Download className="h-4 w-4" />
+                              <span className="hidden sm:inline ml-2">{t('common.download')}</span>
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled
+                              data-testid={`button-login-required-${resource.id}`}
+                            >
+                              <Lock className="h-4 w-4" />
+                              <span className="hidden sm:inline ml-2">{t('resources.loginRequired')}</span>
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -318,6 +352,110 @@ export default function ResourcesPage() {
           )}
         </div>
       </section>
+
+      {/* Resource Detail Dialog */}
+      <Dialog open={!!selectedResource} onOpenChange={(open) => !open && setSelectedResource(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">{selectedResource?.title}</DialogTitle>
+          </DialogHeader>
+          
+          {selectedResource && (
+            <div className="space-y-6">
+              {/* File Info */}
+              <Card className="p-4 bg-muted/50">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">파일 형식</p>
+                    <Badge variant="secondary">{selectedResource.fileType?.toUpperCase()}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">파일 크기</p>
+                    <p className="font-medium">{Math.round((selectedResource.fileSize || 0) / 1024)} KB</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">카테고리</p>
+                    <Badge variant="outline">
+                      {selectedResource.category === 'reports' && '보고서'}
+                      {selectedResource.category === 'forms' && '양식'}
+                      {selectedResource.category === 'presentations' && '발표자료'}
+                      {selectedResource.category === 'guides' && '가이드북'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">접근 권한</p>
+                    {getAccessBadge(selectedResource.accessLevel)}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Description */}
+              {selectedResource.description && (
+                <div>
+                  <h4 className="font-semibold mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    설명
+                  </h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {selectedResource.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                <div className="flex items-center gap-2 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">등록일</p>
+                    <p className="font-medium">
+                      {new Date(selectedResource.createdAt).toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <Download className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">다운로드</p>
+                    <p className="font-medium">{selectedResource.downloadCount || 0}회</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                {canAccess(selectedResource) ? (
+                  <Button
+                    className="flex-1"
+                    onClick={(e) => handleDownload(selectedResource, e)}
+                    disabled={downloadMutation.isPending}
+                    data-testid="button-download-dialog"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {downloadMutation.isPending ? '다운로드 중...' : '다운로드'}
+                  </Button>
+                ) : (
+                  <Button className="flex-1" disabled>
+                    <Lock className="h-4 w-4 mr-2" />
+                    접근 권한 없음
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedResource(null)}
+                  data-testid="button-close-dialog"
+                >
+                  닫기
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

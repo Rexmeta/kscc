@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
 import "./types";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission } from "./permissions";
 import { db } from "./db";
 
@@ -721,8 +721,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Increment download count
       await storage.incrementResourceDownloads(req.params.id);
       
-      res.json({ downloadUrl: resource.fileUrl });
+      // Stream the file
+      try {
+        console.log('[Download] Resource fileUrl:', resource.fileUrl);
+        
+        // Parse the object path directly since it's already in the full format
+        // fileUrl format: /objects/bucket-id/.private/uploads/file-id
+        let objectPath = resource.fileUrl;
+        
+        // Remove /objects/ prefix to get bucket/object path
+        if (objectPath.startsWith('/objects/')) {
+          objectPath = objectPath.slice('/objects/'.length);
+        }
+        
+        console.log('[Download] Parsed objectPath:', objectPath);
+        
+        // Split into bucket and object name
+        const pathParts = objectPath.split('/');
+        if (pathParts.length < 2) {
+          throw new Error('Invalid object path');
+        }
+        
+        const bucketName = pathParts[0];
+        const objectName = pathParts.slice(1).join('/');
+        
+        console.log('[Download] Bucket:', bucketName, 'Object:', objectName);
+        
+        const bucket = objectStorageClient.bucket(bucketName);
+        const file = bucket.file(objectName);
+        
+        const [exists] = await file.exists();
+        if (!exists) {
+          console.error('[Download] File does not exist in bucket');
+          throw new ObjectNotFoundError();
+        }
+        
+        const [metadata] = await file.getMetadata();
+        
+        // Set headers for file download
+        res.setHeader('Content-Type', metadata.contentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${resource.fileName}"`);
+        res.setHeader('Content-Length', metadata.size || 0);
+        
+        // Stream the file
+        file.createReadStream()
+          .on('error', (error: Error) => {
+            console.error('Error serving object:', error);
+            if (!res.headersSent) {
+              res.status(500).json({ message: "Error downloading file" });
+            }
+          })
+          .pipe(res);
+      } catch (error) {
+        console.error('Error serving object:', error);
+        return res.status(404).json({ message: "File not found" });
+      }
     } catch (error) {
+      console.error('Download error:', error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
