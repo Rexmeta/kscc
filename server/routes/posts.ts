@@ -110,7 +110,7 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
       // If cancelled, reactivate it
       if (existingRegistration.status === 'cancelled') {
         const reactivated = await storage.updateEventRegistration(existingRegistration.id, {
-          status: 'confirmed',
+          status: 'registered',
           registeredAt: new Date(),
         });
         return res.status(200).json(reactivated);

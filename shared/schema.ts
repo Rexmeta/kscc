@@ -48,37 +48,6 @@ export const members = pgTable("members", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const events = pgTable("events", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  titleEn: text("title_en"),
-  titleZh: text("title_zh"),
-  description: text("description").notNull(),
-  descriptionEn: text("description_en"),
-  descriptionZh: text("description_zh"),
-  content: text("content"),
-  contentEn: text("content_en"),
-  contentZh: text("content_zh"),
-  eventDate: timestamp("event_date").notNull(),
-  endDate: timestamp("end_date"),
-  location: text("location").notNull(),
-  locationEn: text("location_en"),
-  locationZh: text("location_zh"),
-  category: text("category").notNull(), // networking, seminar, workshop, cultural
-  eventType: text("event_type").notNull().default("offline"), // offline, online, hybrid
-  capacity: integer("capacity"),
-  registrationDeadline: timestamp("registration_deadline"),
-  fee: integer("fee").default(0),
-  isPublic: boolean("is_public").notNull().default(true),
-  requiresApproval: boolean("requires_approval").notNull().default(false),
-  images: jsonb("images"), // array of image URLs
-  speakers: jsonb("speakers"), // array of speaker objects
-  program: jsonb("program"), // array of program items
-  createdBy: uuid("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
 export const eventRegistrations = pgTable("event_registrations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   eventId: uuid("event_id").references(() => posts.id, { onDelete: 'cascade' }),
@@ -90,50 +59,6 @@ export const eventRegistrations = pgTable("event_registrations", {
   status: text("status").notNull().default("registered"), // registered, approved, cancelled, attended
   paymentStatus: text("payment_status").default("free"), // free, paid, pending
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const news = pgTable("news", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  titleEn: text("title_en"),
-  titleZh: text("title_zh"),
-  excerpt: text("excerpt").notNull(),
-  excerptEn: text("excerpt_en"),
-  excerptZh: text("excerpt_zh"),
-  content: text("content").notNull(),
-  contentEn: text("content_en"),
-  contentZh: text("content_zh"),
-  category: text("category").notNull(), // notice, press, activity
-  tags: jsonb("tags"), // array of tags
-  featuredImage: text("featured_image"),
-  images: jsonb("images"), // array of image URLs
-  isPublished: boolean("is_published").notNull().default(false),
-  publishedAt: timestamp("published_at"),
-  viewCount: integer("view_count").notNull().default(0),
-  authorId: uuid("author_id").references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-export const resources = pgTable("resources", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  titleEn: text("title_en"),
-  titleZh: text("title_zh"),
-  description: text("description"),
-  descriptionEn: text("description_en"),
-  descriptionZh: text("description_zh"),
-  category: text("category").notNull(), // reports, forms, presentations, guides
-  fileUrl: text("file_url").notNull(),
-  fileName: text("file_name").notNull(),
-  fileSize: integer("file_size"), // in bytes
-  fileType: text("file_type").notNull(), // pdf, docx, xlsx, etc.
-  accessLevel: text("access_level").notNull().default("public"), // public, members, premium
-  downloadCount: integer("download_count").notNull().default(0),
-  isActive: boolean("is_active").notNull().default(true),
-  createdBy: uuid("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const inquiries = pgTable("inquiries", {
@@ -291,12 +216,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     fields: [users.id],
     references: [members.userId],
   }),
-  eventsCreated: many(events),
   registrations: many(eventRegistrations),
-  newsArticles: many(news),
-  resourcesCreated: many(resources),
   inquiriesResponded: many(inquiries),
   memberships: many(userMemberships),
+  postsCreated: many(posts),
 }));
 
 export const tiersRelations = relations(tiers, ({ many }) => ({
@@ -345,13 +268,6 @@ export const membersRelations = relations(members, ({ one }) => ({
   }),
 }));
 
-export const eventsRelations = relations(events, ({ one }) => ({
-  creator: one(users, {
-    fields: [events.createdBy],
-    references: [users.id],
-  }),
-}));
-
 export const eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({
   event: one(posts, {
     fields: [eventRegistrations.eventId],
@@ -359,20 +275,6 @@ export const eventRegistrationsRelations = relations(eventRegistrations, ({ one 
   }),
   user: one(users, {
     fields: [eventRegistrations.userId],
-    references: [users.id],
-  }),
-}));
-
-export const newsRelations = relations(news, ({ one }) => ({
-  author: one(users, {
-    fields: [news.authorId],
-    references: [users.id],
-  }),
-}));
-
-export const resourcesRelations = relations(resources, ({ one }) => ({
-  creator: one(users, {
-    fields: [resources.createdBy],
     references: [users.id],
   }),
 }));
@@ -421,37 +323,9 @@ export const insertMemberSchema = createInsertSchema(members).omit({
   updatedAt: true,
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  eventDate: z.union([z.string(), z.date()]).transform((val) => 
-    typeof val === 'string' ? new Date(val) : val
-  ),
-  endDate: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
-    val && typeof val === 'string' ? new Date(val) : val
-  ),
-  registrationDeadline: z.union([z.string(), z.date(), z.null()]).optional().transform((val) => 
-    val && typeof val === 'string' ? new Date(val) : val
-  ),
-});
-
 export const insertEventRegistrationSchema = createInsertSchema(eventRegistrations).omit({
   id: true,
   createdAt: true,
-});
-
-export const insertNewsSchema = createInsertSchema(news).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertResourceSchema = createInsertSchema(resources).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
 });
 
 export const insertInquirySchema = createInsertSchema(inquiries).omit({
@@ -515,17 +389,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Member = typeof members.$inferSelect;
 export type InsertMember = z.infer<typeof insertMemberSchema>;
 
-export type Event = typeof events.$inferSelect;
-export type InsertEvent = z.infer<typeof insertEventSchema>;
-
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSchema>;
-
-export type News = typeof news.$inferSelect;
-export type InsertNews = z.infer<typeof insertNewsSchema>;
-
-export type Resource = typeof resources.$inferSelect;
-export type InsertResource = z.infer<typeof insertResourceSchema>;
 
 export type Inquiry = typeof inquiries.$inferSelect;
 export type InsertInquiry = z.infer<typeof insertInquirySchema>;
@@ -560,7 +425,7 @@ export type InsertPostMeta = z.infer<typeof insertPostMetaSchema>;
 
 // Combined types for joined queries
 export type UserRegistrationWithEvent = EventRegistration & {
-  event: Event | null;
+  event: PostWithTranslations | null;
 };
 
 // Post with translations and meta

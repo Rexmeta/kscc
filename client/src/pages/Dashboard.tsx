@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { User, Building, Calendar, FileText, Settings, Edit, MapPin, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
-import { UserRegistrationWithEvent, Member } from '@shared/schema';
+import { UserRegistrationWithEvent, Member, PostWithTranslations } from '@shared/schema';
 import { Link } from 'wouter';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,33 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+
+// Helper to safely get translation
+function getTranslationSafe(post: PostWithTranslations, locale: string) {
+  return post.translations.find(t => t.locale === locale) || post.translations[0];
+}
+
+// Helper to extract event meta safely
+function getEventMeta(post: PostWithTranslations) {
+  const getValue = (key: string) => 
+    post.meta.find(m => m.metaKey === key)?.valueText || null;
+  
+  const getMetaTimestamp = (key: string): Date | null => {
+    const meta = post.meta.find(m => m.metaKey === key);
+    return meta?.valueTimestamp || null;
+  };
+
+  return {
+    eventDate: getMetaTimestamp('eventDate'),
+    endDate: getMetaTimestamp('endDate'),
+    location: getValue('location'),
+    capacity: post.meta.find(m => m.metaKey === 'capacity')?.valueNumber || null,
+    fee: getValue('fee'),
+    registrationDeadline: getMetaTimestamp('registrationDeadline'),
+    contactEmail: getValue('contactEmail'),
+    contactPhone: getValue('contactPhone'),
+  };
+}
 
 const profileUpdateSchema = z.object({
   name: z.string().optional().refine(val => !val || val.length >= 1, '이름을 입력해주세요'),
@@ -56,6 +84,7 @@ type ProfileUpdateFormData = z.infer<typeof profileUpdateSchema>;
 export default function Dashboard() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { language } = useLanguage();
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
 
   const { data: registrations } = useQuery({
@@ -358,32 +387,39 @@ export default function Dashboard() {
                           >
                             <div className="flex-1">
                               <h4 className="font-medium text-foreground mb-1" data-testid={`event-title-${registration.id}`}>
-                                {registration.event?.title || '행사 정보 없음'}
+                                {registration.event 
+                                  ? (getTranslationSafe(registration.event, language)?.title || registration.event.slug)
+                                  : '행사 정보 없음'}
                               </h4>
-                              {registration.event && (
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Calendar className="h-3 w-3" />
-                                    <span data-testid={`event-date-${registration.id}`}>
-                                      {new Date(registration.event.eventDate).toLocaleDateString('ko-KR', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })}
-                                    </span>
+                              {registration.event && (() => {
+                                const eventMeta = getEventMeta(registration.event);
+                                return (
+                                  <div className="space-y-1">
+                                    {eventMeta.eventDate && (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Calendar className="h-3 w-3" />
+                                        <span data-testid={`event-date-${registration.id}`}>
+                                          {new Date(eventMeta.eventDate).toLocaleDateString('ko-KR', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {eventMeta.location && (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <MapPin className="h-3 w-3" />
+                                        <span data-testid={`event-location-${registration.id}`}>
+                                          {eventMeta.location}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
-                                  {registration.event.location && (
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                      <MapPin className="h-3 w-3" />
-                                      <span data-testid={`event-location-${registration.id}`}>
-                                        {registration.event.location}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                );
+                              })()}
                             </div>
                           </Link>
                           <div className="text-right ml-4 flex flex-col gap-2">

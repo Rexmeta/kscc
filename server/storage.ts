@@ -1,9 +1,9 @@
 import { 
-  users, members, events, eventRegistrations, news, resources, inquiries, partners,
+  users, members, eventRegistrations, inquiries, partners,
   posts, postTranslations, postMeta,
-  type User, type InsertUser, type Member, type InsertMember, type Event, type InsertEvent,
-  type EventRegistration, type InsertEventRegistration, type News, type InsertNews,
-  type Resource, type InsertResource, type Inquiry, type InsertInquiry,
+  type User, type InsertUser, type Member, type InsertMember,
+  type EventRegistration, type InsertEventRegistration,
+  type Inquiry, type InsertInquiry,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
   type PostMeta, type InsertPostMeta, type PostWithTranslations
@@ -37,19 +37,6 @@ export interface IStorage {
   createMember(member: InsertMember): Promise<Member>;
   updateMember(id: string, updates: Partial<Member>): Promise<Member | undefined>;
 
-  // Events
-  getEvent(id: string): Promise<Event | undefined>;
-  getEvents(filters?: {
-    category?: string;
-    upcoming?: boolean;
-    published?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ events: Event[]; total: number }>;
-  createEvent(event: InsertEvent): Promise<Event>;
-  updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined>;
-  deleteEvent(id: string): Promise<void>;
-
   // Event Registrations
   getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined>;
   getEventRegistrationById(id: string): Promise<EventRegistration | undefined>;
@@ -57,33 +44,6 @@ export interface IStorage {
   getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]>;
   createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration>;
   updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined>;
-
-  // News
-  getNewsArticle(id: string): Promise<News | undefined>;
-  getNews(filters?: {
-    category?: string;
-    published?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ articles: News[]; total: number }>;
-  createNews(article: InsertNews): Promise<News>;
-  updateNews(id: string, updates: Partial<News>): Promise<News | undefined>;
-  deleteNews(id: string): Promise<void>;
-  incrementNewsViews(id: string): Promise<void>;
-
-  // Resources
-  getResource(id: string): Promise<Resource | undefined>;
-  getResources(filters?: {
-    category?: string;
-    accessLevel?: string;
-    active?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ resources: Resource[]; total: number }>;
-  createResource(resource: InsertResource): Promise<Resource>;
-  updateResource(id: string, updates: Partial<Resource>): Promise<Resource | undefined>;
-  deleteResource(id: string): Promise<void>;
-  incrementResourceDownloads(id: string): Promise<void>;
 
   // Inquiries
   getInquiry(id: string): Promise<Inquiry | undefined>;
@@ -300,87 +260,6 @@ export class DatabaseStorage implements IStorage {
     return member || undefined;
   }
 
-  // Events
-  async getEvent(id: string): Promise<Event | undefined> {
-    const [event] = await db.select().from(events).where(eq(events.id, id));
-    return event || undefined;
-  }
-
-  async getEvents(filters?: {
-    category?: string;
-    upcoming?: boolean;
-    published?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ events: Event[]; total: number }> {
-    const conditions = [];
-
-    if (filters?.category) {
-      conditions.push(eq(events.category, filters.category));
-    }
-    if (filters?.upcoming) {
-      conditions.push(gte(events.eventDate, new Date()));
-    }
-    if (filters?.published) {
-      conditions.push(eq(events.isPublic, true));
-    }
-
-    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
-
-    // Get events with registration count
-    const eventsWithCount = await db
-      .select({
-        event: events,
-        registrationCount: count(eventRegistrations.id),
-      })
-      .from(events)
-      .leftJoin(eventRegistrations, eq(events.id, eventRegistrations.eventId))
-      .where(whereCondition)
-      .groupBy(events.id)
-      .orderBy(desc(events.eventDate))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
-
-    // Get total count
-    let countQuery = db.select({ count: count() }).from(events);
-    if (whereCondition) {
-      countQuery = countQuery.where(whereCondition);
-    }
-    const [totalResult] = await countQuery;
-
-    // Map results to include registrationCount
-    const eventsResult = eventsWithCount.map(({ event, registrationCount }) => ({
-      ...event,
-      registrationCount: Number(registrationCount),
-    }));
-
-    return {
-      events: eventsResult as any,
-      total: totalResult.count,
-    };
-  }
-
-  async createEvent(event: InsertEvent): Promise<Event> {
-    const [newEvent] = await db
-      .insert(events)
-      .values(event)
-      .returning();
-    return newEvent;
-  }
-
-  async updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined> {
-    const [event] = await db
-      .update(events)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(events.id, id))
-      .returning();
-    return event || undefined;
-  }
-
-  async deleteEvent(id: string): Promise<void> {
-    await db.delete(events).where(eq(events.id, id));
-  }
-
   // Event Registrations
   async getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined> {
     const [registration] = await db
@@ -423,19 +302,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]> {
-    const results = await db
-      .select({
-        registration: eventRegistrations,
-        event: events,
-      })
+    // Get all registrations for this user
+    const registrations = await db
+      .select()
       .from(eventRegistrations)
-      .leftJoin(events, eq(eventRegistrations.eventId, events.id))
       .where(eq(eventRegistrations.userId, userId))
       .orderBy(desc(eventRegistrations.createdAt));
 
-    return results.map(({ registration, event }) => ({
+    // Batch fetch event posts with translations for all registrations
+    const eventIds = registrations.map(r => r.eventId).filter(Boolean) as string[];
+    
+    if (eventIds.length === 0) {
+      return registrations.map(registration => ({
+        ...registration,
+        event: null,
+      }));
+    }
+
+    // Fetch all events with their translations and meta in parallel
+    const eventsPromises = eventIds.map(id => this.getPostWithTranslations(id));
+    const events = await Promise.all(eventsPromises);
+
+    // Create a map for quick lookup
+    const eventsMap = new Map(events.filter(e => e !== null).map((e) => [e!.id, e!]));
+
+    // Merge registrations with their event data
+    return registrations.map(registration => ({
       ...registration,
-      event,
+      event: registration.eventId ? (eventsMap.get(registration.eventId) || null) : null,
     }));
   }
 
@@ -454,154 +348,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(eventRegistrations.id, id))
       .returning();
     return registration || undefined;
-  }
-
-  // News
-  async getNewsArticle(id: string): Promise<News | undefined> {
-    const [article] = await db.select().from(news).where(eq(news.id, id));
-    return article || undefined;
-  }
-
-  async getNews(filters?: {
-    category?: string;
-    published?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ articles: News[]; total: number }> {
-    let query = db.select().from(news);
-    let countQuery = db.select({ count: count() }).from(news);
-
-    const conditions = [];
-
-    if (filters?.category) {
-      conditions.push(eq(news.category, filters.category));
-    }
-    if (filters?.published) {
-      conditions.push(eq(news.isPublished, true));
-    }
-
-    if (conditions.length > 0) {
-      const whereCondition = and(...conditions);
-      if (whereCondition) {
-        query = query.where(whereCondition);
-        countQuery = countQuery.where(whereCondition);
-      }
-    }
-
-    const [totalResult] = await countQuery;
-    const articlesResult = await query
-      .orderBy(desc(news.publishedAt), desc(news.createdAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
-
-    return {
-      articles: articlesResult,
-      total: totalResult.count,
-    };
-  }
-
-  async createNews(article: InsertNews): Promise<News> {
-    const [newArticle] = await db
-      .insert(news)
-      .values(article)
-      .returning();
-    return newArticle;
-  }
-
-  async updateNews(id: string, updates: Partial<News>): Promise<News | undefined> {
-    const [article] = await db
-      .update(news)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(news.id, id))
-      .returning();
-    return article || undefined;
-  }
-
-  async deleteNews(id: string): Promise<void> {
-    await db.delete(news).where(eq(news.id, id));
-  }
-
-  async incrementNewsViews(id: string): Promise<void> {
-    await db
-      .update(news)
-      .set({ viewCount: sql`${news.viewCount} + 1` })
-      .where(eq(news.id, id));
-  }
-
-  // Resources
-  async getResource(id: string): Promise<Resource | undefined> {
-    const [resource] = await db.select().from(resources).where(eq(resources.id, id));
-    return resource || undefined;
-  }
-
-  async getResources(filters?: {
-    category?: string;
-    accessLevel?: string;
-    active?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ resources: Resource[]; total: number }> {
-    let query = db.select().from(resources);
-    let countQuery = db.select({ count: count() }).from(resources);
-
-    const conditions = [];
-
-    if (filters?.category) {
-      conditions.push(eq(resources.category, filters.category));
-    }
-    if (filters?.accessLevel) {
-      conditions.push(eq(resources.accessLevel, filters.accessLevel));
-    }
-    if (filters?.active !== undefined) {
-      conditions.push(eq(resources.isActive, filters.active));
-    }
-
-    if (conditions.length > 0) {
-      const whereCondition = and(...conditions);
-      if (whereCondition) {
-        query = query.where(whereCondition);
-        countQuery = countQuery.where(whereCondition);
-      }
-    }
-
-    const [totalResult] = await countQuery;
-    const resourcesResult = await query
-      .orderBy(desc(resources.createdAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
-
-    return {
-      resources: resourcesResult,
-      total: totalResult.count,
-    };
-  }
-
-  async createResource(resource: InsertResource): Promise<Resource> {
-    const [newResource] = await db
-      .insert(resources)
-      .values(resource)
-      .returning();
-    return newResource;
-  }
-
-  async updateResource(id: string, updates: Partial<Resource>): Promise<Resource | undefined> {
-    const [resource] = await db
-      .update(resources)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(resources.id, id))
-      .returning();
-    return resource || undefined;
-  }
-
-  async deleteResource(id: string): Promise<void> {
-    await db.delete(resources).where(eq(resources.id, id));
-  }
-
-  async incrementResourceDownloads(id: string): Promise<void> {
-    await db
-      .update(resources)
-      .set({ downloadCount: sql`${resources.downloadCount} + 1` })
-      .where(eq(resources.id, id));
   }
 
   // Inquiries
