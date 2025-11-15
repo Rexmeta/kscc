@@ -835,24 +835,9 @@ export class DatabaseStorage implements IStorage {
 
     const [totalResult] = await countQuery;
     
-    // Order by: eventDate ASC for upcoming events, publishedAt DESC otherwise
-    let orderByClause;
-    if (filters?.upcoming && filters?.postType === 'event') {
-      // For upcoming events, order by eventDate ASC (earliest first)
-      orderByClause = sql`(
-        SELECT ${postMeta.valueTimestamp}
-        FROM ${postMeta}
-        WHERE ${postMeta.postId} = ${posts.id}
-          AND ${postMeta.key} = 'event.eventDate'
-        LIMIT 1
-      ) ASC NULLS LAST`;
-    } else {
-      // Default: order by publishedAt DESC (newest first)
-      orderByClause = desc(posts.publishedAt);
-    }
-    
+    // Always order by publishedAt DESC in SQL, then sort in memory for upcoming events
     const postsResult = await query
-      .orderBy(orderByClause)
+      .orderBy(desc(posts.publishedAt))
       .limit(filters?.limit || 50)
       .offset(filters?.offset || 0);
 
@@ -896,6 +881,17 @@ export class DatabaseStorage implements IStorage {
       translations: translationsByPost.get(post.id) || [],
       meta: metaByPost.get(post.id) || [],
     }));
+
+    // Application-layer sorting for upcoming events (by eventDate ASC)
+    if (filters?.upcoming && filters?.postType === 'event') {
+      hydratedPosts.sort((a, b) => {
+        const aDate = a.meta.find(m => m.key === 'event.eventDate')?.valueTimestamp;
+        const bDate = b.meta.find(m => m.key === 'event.eventDate')?.valueTimestamp;
+        if (!aDate) return 1;  // nulls last
+        if (!bDate) return -1; // nulls last
+        return new Date(aDate).getTime() - new Date(bDate).getTime(); // ASC
+      });
+    }
 
     return {
       posts: hydratedPosts,

@@ -28,9 +28,11 @@ Preferred communication style: Simple, everyday language.
 - **EventCard.tsx** refactored to use `PostWithTranslations` with `getEventMeta()` for type-safe event meta extraction; Date fields (eventDate, endDate, registrationDeadline) automatically converted from ISO strings to Date objects via `getMetaTimestamp()`
 - **Events.tsx** migrated to `/api/posts?postType=event&status=published&upcoming=true` endpoint with SQL-level upcoming filter
 - **EventDetail.tsx** fully refactored to use PostWithTranslations: GET `/api/posts/:id` for data fetch, POST `/api/posts/:id/register` for event registration
-- **Backend registration endpoint**: POST `/api/posts/:id/register` added with authentication, post existence check, postType validation, duplicate registration check
+- **Backend registration endpoint**: POST `/api/posts/:id/register` added with authentication, post existence check (using getPostWithTranslations), postType validation, duplicate registration check
 - **Upcoming filter**: SQL EXISTS subquery on post_meta.value_timestamp > NOW() with IS NOT NULL guard for accurate pagination
+- **Event sorting**: Upcoming events now ordered by eventDate ASC (earliest first) using application-layer sorting (in-memory) after batch fetch; other posts ordered by publishedAt DESC (Drizzle-safe implementation)
 - **Shared helpers**: `getTranslationSafe()` and `getEventMeta()` provide consistent data access across all event components
+- **E2E testing**: Full Events flow verified via Playwright - event listing, sorting, detail pages, and navigation all working correctly
 
 ## System Architecture
 
