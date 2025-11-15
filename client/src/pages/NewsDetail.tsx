@@ -4,16 +4,40 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Eye, ArrowLeft, Share2 } from 'lucide-react';
-import { News } from '@shared/schema';
+import { PostWithTranslations, PostMeta } from '@shared/schema';
 import { t } from '@/lib/i18n';
+import { useLanguage } from '@/contexts/LanguageContext';
+
+// Helper to get meta value by key
+const getMetaValue = (meta: PostMeta[], key: string): any => {
+  const metaItem = meta.find(m => m.key === key);
+  if (!metaItem) return null;
+  
+  // Return the appropriate value based on what's set
+  if (metaItem.valueText !== null) return metaItem.valueText;
+  if (metaItem.valueNumber !== null) return metaItem.valueNumber;
+  if (metaItem.valueBoolean !== null) return metaItem.valueBoolean;
+  if (metaItem.valueTimestamp !== null) return metaItem.valueTimestamp;
+  if (metaItem.value !== null) return metaItem.value;
+  return null;
+};
+
+// Helper to get translation for current locale with fallback
+const getTranslation = (post: PostWithTranslations, locale: string) => {
+  if (!post.translations || post.translations.length === 0) {
+    return { title: post.slug, content: '', excerpt: '' };
+  }
+  return post.translations.find(t => t.locale === locale) || post.translations[0];
+};
 
 export default function NewsDetail() {
   const { id } = useParams<{ id: string }>();
+  const { language } = useLanguage();
 
-  const { data: article, isLoading } = useQuery<News>({
-    queryKey: ['/api/news', id],
+  const { data: post, isLoading } = useQuery<PostWithTranslations>({
+    queryKey: ['/api/posts', id],
     queryFn: async () => {
-      const response = await fetch(`/api/news/${id}`);
+      const response = await fetch(`/api/posts/${id}`);
       if (!response.ok) {
         throw new Error('News not found');
       }
@@ -33,7 +57,7 @@ export default function NewsDetail() {
     );
   }
 
-  if (!article) {
+  if (!post) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -49,6 +73,15 @@ export default function NewsDetail() {
       </div>
     );
   }
+
+  // Extract translation and meta values
+  const translation = getTranslation(post, language);
+  const category = getMetaValue(post.meta || [], 'news.category') || 'notice';
+  const viewCount = getMetaValue(post.meta || [], 'news.viewCount') || 0;
+  const imagesRaw = getMetaValue(post.meta || [], 'news.images');
+  const images = Array.isArray(imagesRaw) ? imagesRaw : [];
+  const featuredImage = post.coverImage || (images.length > 0 ? images[0] : null);
+  const tags = Array.isArray(post.tags) ? post.tags : [];
 
   const getCategoryBadge = (category: string) => {
     const badgeMap = {
@@ -74,8 +107,8 @@ export default function NewsDetail() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: article.title,
-          text: article.excerpt,
+          title: translation?.title || post.slug,
+          text: translation?.excerpt || '',
           url: window.location.href,
         });
       } catch (error) {
@@ -106,10 +139,10 @@ export default function NewsDetail() {
       <section className="py-12">
         <div className="container max-w-4xl">
           <Card>
-            {article.featuredImage && (
+            {featuredImage && (
               <img
-                src={article.featuredImage}
-                alt={article.title}
+                src={featuredImage}
+                alt={translation?.title || post.slug}
                 className="w-full h-96 object-cover rounded-t-lg"
                 data-testid="news-featured-image"
               />
@@ -119,8 +152,8 @@ export default function NewsDetail() {
               {/* Article Meta */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  {getCategoryBadge(article.category)}
-                  {article.isPublished ? (
+                  {getCategoryBadge(category)}
+                  {post.status === 'published' ? (
                     <Badge variant="default" className="badge-primary">
                       발행됨
                     </Badge>
@@ -145,43 +178,43 @@ export default function NewsDetail() {
 
               {/* Title */}
               <h1 className="text-4xl font-bold text-foreground mb-4" data-testid="news-title">
-                {article.title}
+                {translation?.title || post.slug}
               </h1>
 
               {/* Date and Views */}
               <div className="flex items-center gap-6 text-sm text-muted-foreground mb-6 pb-6 border-b">
                 <span className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  {article.publishedAt ? formatDate(article.publishedAt) : formatDate(article.createdAt)}
+                  {post.publishedAt ? formatDate(post.publishedAt) : formatDate(post.createdAt)}
                 </span>
-                {article.viewCount > 0 && (
+                {viewCount > 0 && (
                   <span className="flex items-center gap-2">
                     <Eye className="h-4 w-4" />
-                    조회수 {article.viewCount}
+                    조회수 {viewCount}
                   </span>
                 )}
               </div>
 
               {/* Excerpt */}
               <p className="text-xl text-muted-foreground mb-8" data-testid="news-excerpt">
-                {article.excerpt}
+                {translation?.excerpt || ''}
               </p>
 
               {/* Content */}
               <div className="prose prose-lg max-w-none" data-testid="news-content">
-                {article.content}
+                {translation?.content || ''}
               </div>
 
               {/* Image Gallery */}
-              {article.images && Array.isArray(article.images) && article.images.length > 0 && (
+              {images.length > 0 && (
                 <div className="mt-8 pt-8 border-t">
                   <h3 className="text-lg font-semibold mb-4">이미지</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {article.images.map((imageUrl, index) => (
+                    {images.map((imageUrl, index) => (
                       <img
                         key={index}
                         src={imageUrl}
-                        alt={`${article.title} - 이미지 ${index + 1}`}
+                        alt={`${translation?.title || post.slug} - 이미지 ${index + 1}`}
                         className="w-full h-64 object-cover rounded-lg"
                         data-testid={`news-image-${index}`}
                       />
@@ -191,10 +224,10 @@ export default function NewsDetail() {
               )}
 
               {/* Tags */}
-              {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
+              {tags.length > 0 && (
                 <div className="mt-8 pt-8 border-t">
                   <div className="flex flex-wrap gap-2">
-                    {article.tags.map((tag, index) => (
+                    {tags.map((tag, index) => (
                       <Badge key={index} variant="outline">
                         #{tag}
                       </Badge>
