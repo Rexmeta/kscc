@@ -46,6 +46,10 @@ Preferred communication style: Simple, everyday language.
   - **Resources Section**: `GET /api/posts?postType=resource` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'resource', admin: true }]`
   - CreateNews/Event/ResourceDialog + Edit forms all refactored
   - All API calls use `apiRequest()` for consistent authentication and error handling
+- **ACL Migration**: Replaced `requirePermission('posts:*')` with `requireAdmin` middleware in Posts API (posts:create/update/delete not in ACL PERMS)
+  - All mutating endpoints (POST, PATCH, DELETE) now use `requireAdmin` (checks `req.user?.role === 'admin'`)
+  - Local `requireAdmin` function defined in `server/routes/posts.ts` to avoid circular dependency
+- **E2E Testing**: Admin News creation flow verified end-to-end via Playwright - POST /api/posts returns 201, success toast appears, dialog closes, new item appears in list
 
 ## System Architecture
 

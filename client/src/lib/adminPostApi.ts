@@ -50,34 +50,22 @@ export async function createPost({ post, translation, meta }: CreatePostPayload)
 /**
  * Update an existing post with translation and meta
  * 3-step orchestration:
- * 1. PUT /api/posts/:id (update base post)
- * 2. Check if translation exists, then POST or PUT
- * 3. For each meta: Check if exists, then POST or PUT
+ * 1. PATCH /api/posts/:id (update base post)
+ * 2. POST /api/posts/:id/translations (upsert translation)
+ * 3. For each meta: POST /api/posts/:id/meta (upsert meta)
  */
 export async function updatePost({ postId, post, translation, meta }: UpdatePostPayload) {
   // Step 1: Update base post
   if (Object.keys(post).length > 0) {
-    await apiRequest('PUT', `/api/posts/${postId}`, post);
+    await apiRequest('PATCH', `/api/posts/${postId}`, post);
   }
 
-  // Step 2: Upsert translation
-  // Try updating first, fallback to create if not found
-  try {
-    await apiRequest('PUT', `/api/posts/${postId}/translations/${translation.locale}`, translation);
-  } catch (error) {
-    // If translation doesn't exist (404), create it
-    await apiRequest('POST', `/api/posts/${postId}/translations`, translation);
-  }
+  // Step 2: Upsert translation (POST endpoint supports upsert)
+  await apiRequest('POST', `/api/posts/${postId}/translations`, translation);
 
-  // Step 3: Upsert meta
+  // Step 3: Upsert meta (POST endpoint supports upsert via setPostMeta)
   for (const metaItem of meta) {
-    // Always upsert - backend should handle it
-    try {
-      await apiRequest('PUT', `/api/posts/${postId}/meta/${metaItem.key}`, metaItem);
-    } catch (error) {
-      // If PUT fails, try POST
-      await apiRequest('POST', `/api/posts/${postId}/meta`, metaItem);
-    }
+    await apiRequest('POST', `/api/posts/${postId}/meta`, metaItem);
   }
 
   // Return updated post using apiRequest for consistent auth/error handling
@@ -89,6 +77,5 @@ export async function updatePost({ postId, post, translation, meta }: UpdatePost
  * Delete a post (cascades to translations and meta)
  */
 export async function deletePost(postId: string) {
-  const response = await apiRequest('DELETE', `/api/posts/${postId}`, {});
-  return response.json();
+  await apiRequest('DELETE', `/api/posts/${postId}`);
 }
