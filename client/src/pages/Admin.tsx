@@ -32,9 +32,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
-import { News, Event, Member, Resource, Inquiry, Partner } from '@shared/schema';
+import { News, Event, Member, Resource, Inquiry, Partner, type PostWithTranslations } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
+import { mapNewsFormToPost, mapPostToNewsForm, type NewsFormData } from '@/lib/adminPostMappers';
+import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 
 // Form schemas
 const newsSchema = z.object({
@@ -267,12 +269,18 @@ export default function AdminPage() {
   });
 
   const { data: newsData } = useQuery({
-    queryKey: ['/api/news', { admin: true }],
+    queryKey: ['/api/posts', { postType: 'news', admin: true }],
     queryFn: async () => {
-      const response = await fetch('/api/news?limit=50', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      return response.json();
+      const response = await apiRequest('GET', '/api/posts?postType=news&limit=50');
+      const data = await response.json();
+      // Convert PostWithTranslations[] to legacy News format for backward compatibility
+      return {
+        articles: data.posts?.map((post: PostWithTranslations) => ({
+          ...mapPostToNewsForm(post),
+          id: post.id,
+        })) || [],
+        total: data.total || 0,
+      };
     },
     enabled: isAdmin && activeTab === 'news',
   });
@@ -312,12 +320,12 @@ export default function AdminPage() {
 
   // Mutations
   const createNewsMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/news', data);
-      return response.json();
+    mutationFn: async (formData: NewsFormData) => {
+      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       toast({ title: "뉴스가 생성되었습니다" });
     },
   });
@@ -380,12 +388,12 @@ export default function AdminPage() {
   });
 
   const updateNewsMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & any) => {
-      const response = await apiRequest('PUT', `/api/news/${id}`, data);
-      return response.json();
+    mutationFn: async ({ id, ...formData }: { id: string } & NewsFormData) => {
+      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       toast({ title: "뉴스가 수정되었습니다" });
       setEditDialogOpen(false);
     },
@@ -429,11 +437,10 @@ export default function AdminPage() {
 
   const deleteNewsMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest('DELETE', `/api/news/${id}`, {});
-      return response.json();
+      return await deletePost(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       toast({ title: "뉴스가 삭제되었습니다" });
     },
   });
@@ -740,7 +747,7 @@ export default function AdminPage() {
             <TabsContent value="news" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">뉴스 관리</h2>
-                <CreateNewsDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/news'] })} />
+                <CreateNewsDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })} />
               </div>
               
               <div className="grid gap-4">
@@ -1109,7 +1116,7 @@ export default function AdminPage() {
               article={selectedItem} 
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['/api/news'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
               }}
               updateMutation={updateNewsMutation}
             />
@@ -1704,6 +1711,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(newsSchema),
@@ -1784,13 +1792,9 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/news', {
-        ...data,
-        featuredImage: featuredImageUrl || null,
-        images: imageUrls.length > 0 ? imageUrls : null,
-      });
-      return response.json();
+    mutationFn: async (formData: NewsFormData) => {
+      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
       toast({ title: "뉴스가 생성되었습니다" });
@@ -1804,7 +1808,11 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const onSubmit = (data: any) => {
-    createMutation.mutate(data);
+    createMutation.mutate({
+      ...data,
+      featuredImage: featuredImageUrl || '',
+      images: imageUrls.length > 0 ? imageUrls : [],
+    });
   };
 
   return (

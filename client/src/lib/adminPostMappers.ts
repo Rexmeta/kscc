@@ -24,6 +24,7 @@ export interface NewsFormData {
   featuredImage?: string;
   images?: string[];
   isPublished: boolean;
+  publishedAt?: Date | string | null;
 }
 
 export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
@@ -42,7 +43,10 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
       visibility: 'public',
       isFeatured: false,
       tags: [formData.category],
-      publishedAt: formData.isPublished ? new Date() : null,
+      // Preserve existing publishedAt when editing, or use current time for new published articles
+      publishedAt: formData.isPublished 
+        ? (formData.publishedAt ? new Date(formData.publishedAt) : new Date())
+        : null,
       coverImage: formData.featuredImage || null,
     },
     translation: {
@@ -90,6 +94,7 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     featuredImage: post.coverImage || '',
     images: getMetaValue(NEWS_META_KEYS.images) || [],
     isPublished: post.status === 'published',
+    publishedAt: post.publishedAt,
   };
 }
 
