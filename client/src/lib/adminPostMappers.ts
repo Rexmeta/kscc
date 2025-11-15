@@ -77,7 +77,7 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
 }
 
 export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
-  const translation = post.translations.find(t => t.locale === 'ko') || post.translations[0];
+  const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
   const meta = post.meta || [];
   
   const getMetaValue = (key: string): any => {
@@ -90,7 +90,7 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     title: translation?.title || post.slug,
     excerpt: translation?.excerpt || '',
     content: translation?.content || '',
-    category: getMetaValue(NEWS_META_KEYS.category) || post.tags?.[0] || '',
+    category: getMetaValue(NEWS_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
     featuredImage: post.coverImage || '',
     images: getMetaValue(NEWS_META_KEYS.images) || [],
     isPublished: post.status === 'published',
@@ -225,7 +225,7 @@ export function mapEventFormToPost(formData: EventFormData, authorId: string): {
 }
 
 export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
-  const translation = post.translations.find(t => t.locale === 'ko') || post.translations[0];
+  const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
   const meta = post.meta || [];
   
   const getMetaValue = (key: string): any => {
@@ -241,7 +241,7 @@ export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
     eventDate: getMetaValue(EVENT_META_KEYS.eventDate) || '',
     endDate: getMetaValue(EVENT_META_KEYS.endDate) || undefined,
     location: getMetaValue(EVENT_META_KEYS.location) || '',
-    category: getMetaValue(EVENT_META_KEYS.category) || post.tags?.[0] || '',
+    category: getMetaValue(EVENT_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
     eventType: getMetaValue(EVENT_META_KEYS.eventType) || 'offline',
     capacity: getMetaValue(EVENT_META_KEYS.capacity) || undefined,
     fee: parseInt(getMetaValue(EVENT_META_KEYS.fee) || '0'),
@@ -346,7 +346,7 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
 }
 
 export function mapPostToResourceForm(post: PostWithTranslations): ResourceFormData {
-  const translation = post.translations.find(t => t.locale === 'ko') || post.translations[0];
+  const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
   const meta = post.meta || [];
   
   const getMetaValue = (key: string): any => {
@@ -358,7 +358,7 @@ export function mapPostToResourceForm(post: PostWithTranslations): ResourceFormD
   return {
     title: translation?.title || post.slug,
     description: translation?.excerpt || '',
-    category: getMetaValue(RESOURCE_META_KEYS.category) || post.tags?.[0] || '',
+    category: getMetaValue(RESOURCE_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
     fileUrl: getMetaValue(RESOURCE_META_KEYS.fileUrl) || '',
     fileName: getMetaValue(RESOURCE_META_KEYS.fileName) || '',
     fileType: getMetaValue(RESOURCE_META_KEYS.fileType) || '',
