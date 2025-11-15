@@ -834,8 +834,25 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [totalResult] = await countQuery;
+    
+    // Order by: eventDate ASC for upcoming events, publishedAt DESC otherwise
+    let orderByClause;
+    if (filters?.upcoming && filters?.postType === 'event') {
+      // For upcoming events, order by eventDate ASC (earliest first)
+      orderByClause = sql`(
+        SELECT ${postMeta.valueTimestamp}
+        FROM ${postMeta}
+        WHERE ${postMeta.postId} = ${posts.id}
+          AND ${postMeta.key} = 'event.eventDate'
+        LIMIT 1
+      ) ASC NULLS LAST`;
+    } else {
+      // Default: order by publishedAt DESC (newest first)
+      orderByClause = desc(posts.publishedAt);
+    }
+    
     const postsResult = await query
-      .orderBy(desc(posts.publishedAt))
+      .orderBy(orderByClause)
       .limit(filters?.limit || 50)
       .offset(filters?.offset || 0);
 
