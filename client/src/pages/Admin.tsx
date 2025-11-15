@@ -228,9 +228,33 @@ export default function AdminPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
+  const [createNewsDialogOpen, setCreateNewsDialogOpen] = useState(false);
+  const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
+  const [createResourceDialogOpen, setCreateResourceDialogOpen] = useState(false);
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Read URL parameters to auto-navigate to specific tab and action
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const action = params.get('action');
+    
+    if (tab) {
+      setActiveTab(tab);
+    }
+    
+    if (action === 'create') {
+      if (tab === 'news') {
+        setCreateNewsDialogOpen(true);
+      } else if (tab === 'events') {
+        setCreateEventDialogOpen(true);
+      } else if (tab === 'resources') {
+        setCreateResourceDialogOpen(true);
+      }
+    }
+  }, []);
 
   // Dashboard stats query
   const { data: dashboardStats } = useQuery({
@@ -770,7 +794,11 @@ export default function AdminPage() {
             <TabsContent value="news" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">뉴스 관리</h2>
-                <CreateNewsDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })} />
+                <CreateNewsDialog 
+                  open={createNewsDialogOpen}
+                  onOpenChange={setCreateNewsDialogOpen}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })} 
+                />
               </div>
               
               <div className="grid gap-4">
@@ -1750,13 +1778,25 @@ function EditPartnerForm({ partner, onSuccess, updateMutation }: any) {
 }
 
 // Create News Dialog Component
-function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
-  const [open, setOpen] = useState(false);
+function CreateNewsDialog({ 
+  onSuccess, 
+  open, 
+  onOpenChange 
+}: { 
+  onSuccess: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Use external open state if provided, otherwise use internal state
+  const isOpen = open !== undefined ? open : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(newsSchema),
@@ -1857,7 +1897,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
       setFeaturedImageUrl('');
       setImageUrls([]);
       setNewImageUrl('');
-      setOpen(false);
+      setIsOpen(false);
       onSuccess();
     },
     onError: (error) => {
@@ -1882,7 +1922,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button data-testid="button-create-news">
           <Plus className="h-4 w-4" />
@@ -1993,7 +2033,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
             <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-news">
               {createMutation.isPending ? '생성 중...' : '생성'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
               취소
             </Button>
           </div>
