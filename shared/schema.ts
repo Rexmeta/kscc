@@ -390,6 +390,11 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Allow date fields to accept ISO strings from JSON and coerce to Date
+  publishedAt: z.coerce.date().nullable().optional(),
+  scheduledAt: z.coerce.date().nullable().optional(),
+  expiresAt: z.coerce.date().nullable().optional(),
 });
 
 export const insertPostTranslationSchema = createInsertSchema(postTranslations).omit({
@@ -402,6 +407,9 @@ export const insertPostMetaSchema = createInsertSchema(postMeta).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Allow timestamp fields to accept ISO strings from JSON and coerce to Date
+  valueTimestamp: z.coerce.date().nullable().optional(),
 });
 
 // Types

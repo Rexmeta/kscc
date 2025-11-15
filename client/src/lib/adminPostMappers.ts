@@ -38,6 +38,7 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
     post: {
       postType: 'news',
       slug,
+      primaryLocale: 'ko',
       authorId,
       status: formData.isPublished ? 'published' : 'draft',
       visibility: 'public',
@@ -131,6 +132,7 @@ export function mapEventFormToPost(formData: EventFormData, authorId: string): {
     post: {
       postType: 'event',
       slug,
+      primaryLocale: 'ko',
       authorId,
       status: formData.isPublished ? 'published' : 'draft',
       visibility: formData.isPublic ? 'public' : 'members',
@@ -287,6 +289,7 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
     post: {
       postType: 'resource',
       slug,
+      primaryLocale: 'ko',
       authorId,
       status: formData.isActive ? 'published' : 'draft',
       visibility: visibilityMap[formData.accessLevel] || 'public',
