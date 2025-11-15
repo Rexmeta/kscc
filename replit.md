@@ -34,15 +34,18 @@ Preferred communication style: Simple, everyday language.
 - **Shared helpers**: `getTranslationSafe()` and `getEventMeta()` provide consistent data access across all event components
 - **E2E testing**: Full Events flow verified via Playwright - event listing, sorting, detail pages, and navigation all working correctly
 
-#### Admin News Management Migration (November 15, 2025)
-- **API Orchestration Helpers** (`adminPostApi.ts`): 3-step create/update/delete operations for Posts API (post → translations → meta)
-- **Form Mappers** (`adminPostMappers.ts`): Bidirectional converters between legacy form data and Posts API (`mapNewsFormToPost`, `mapPostToNewsForm`)
-- **Admin.tsx News Section** fully migrated to Posts API:
-  - `newsData` query: `GET /api/posts?postType=news` with PostWithTranslations → NewsFormData conversion
-  - `createNewsMutation`/`updateNewsMutation`/`deleteNewsMutation`: Use adminPostApi helpers with consistent query key invalidation `['/api/posts', { postType: 'news', admin: true }]`
-  - `CreateNewsDialog`: Internal mutation refactored to use mapNewsFormToPost + createPost API
-  - `EditNewsForm`: Query key updated to match new cache structure
-  - `mapPostToNewsForm`: Extended to include `publishedAt` field for admin list rendering
+#### Admin Content Management Migration (November 15, 2025)
+- **API Orchestration Helpers** (`adminPostApi.ts`): 3-step create/update/delete operations for Posts API (post → translations → meta) with centralized auth/error handling via `apiRequest()`
+- **Form Mappers** (`adminPostMappers.ts`): Bidirectional converters for News/Events/Resources between legacy form data and Posts API
+  - News: `mapNewsFormToPost`, `mapPostToNewsForm` (preserves `publishedAt` timestamps)
+  - Events: `mapEventFormToPost`, `mapPostToEventForm`
+  - Resources: `mapResourceFormToPost`, `mapPostToResourceForm`
+- **Admin.tsx Complete Migration**:
+  - **News Section**: `GET /api/posts?postType=news` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'news', admin: true }]`
+  - **Events Section**: `GET /api/posts?postType=event` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'event', admin: true }]`
+  - **Resources Section**: `GET /api/posts?postType=resource` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'resource', admin: true }]`
+  - CreateNews/Event/ResourceDialog + Edit forms all refactored
+  - All API calls use `apiRequest()` for consistent authentication and error handling
 
 ## System Architecture
 

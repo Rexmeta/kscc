@@ -35,7 +35,11 @@ import { t } from '@/lib/i18n';
 import { News, Event, Member, Resource, Inquiry, Partner, type PostWithTranslations } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
-import { mapNewsFormToPost, mapPostToNewsForm, type NewsFormData } from '@/lib/adminPostMappers';
+import { 
+  mapNewsFormToPost, mapPostToNewsForm, type NewsFormData,
+  mapEventFormToPost, mapPostToEventForm, type EventFormData,
+  mapResourceFormToPost, mapPostToResourceForm, type ResourceFormData
+} from '@/lib/adminPostMappers';
 import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 
 // Form schemas
@@ -258,12 +262,18 @@ export default function AdminPage() {
   });
 
   const { data: eventsData } = useQuery({
-    queryKey: ['/api/events', { admin: true }],
+    queryKey: ['/api/posts', { postType: 'event', admin: true }],
     queryFn: async () => {
-      const response = await fetch('/api/events?limit=50', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      return response.json();
+      const response = await apiRequest('GET', '/api/posts?postType=event&limit=50');
+      const data = await response.json();
+      // Convert PostWithTranslations[] to legacy Event format for backward compatibility
+      return {
+        events: data.posts?.map((post: PostWithTranslations) => ({
+          ...mapPostToEventForm(post),
+          id: post.id,
+        })) || [],
+        total: data.total || 0,
+      };
     },
     enabled: isAdmin && activeTab === 'events',
   });
@@ -286,12 +296,18 @@ export default function AdminPage() {
   });
 
   const { data: resourcesData } = useQuery({
-    queryKey: ['/api/resources', { admin: true }],
+    queryKey: ['/api/posts', { postType: 'resource', admin: true }],
     queryFn: async () => {
-      const response = await fetch('/api/resources?limit=50', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      return response.json();
+      const response = await apiRequest('GET', '/api/posts?postType=resource&limit=50');
+      const data = await response.json();
+      // Convert PostWithTranslations[] to legacy Resource format for backward compatibility
+      return {
+        resources: data.posts?.map((post: PostWithTranslations) => ({
+          ...mapPostToResourceForm(post),
+          id: post.id,
+        })) || [],
+        total: data.total || 0,
+      };
     },
     enabled: isAdmin && activeTab === 'resources',
   });
@@ -321,7 +337,7 @@ export default function AdminPage() {
   // Mutations
   const createNewsMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
-      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -331,23 +347,23 @@ export default function AdminPage() {
   });
 
   const createEventMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/events', data);
-      return response.json();
+    mutationFn: async (formData: EventFormData) => {
+      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
       toast({ title: "행사가 생성되었습니다" });
     },
   });
 
   const createResourceMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/resources', data);
-      return response.json();
+    mutationFn: async (formData: ResourceFormData) => {
+      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
       toast({ title: "자료가 생성되었습니다" });
     },
   });
@@ -376,12 +392,12 @@ export default function AdminPage() {
 
   // Update mutations
   const updateEventMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & any) => {
-      const response = await apiRequest('PUT', `/api/events/${id}`, data);
-      return response.json();
+    mutationFn: async ({ id, ...formData }: { id: string } & EventFormData) => {
+      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
       toast({ title: "행사가 수정되었습니다" });
       setEditDialogOpen(false);
     },
@@ -389,7 +405,7 @@ export default function AdminPage() {
 
   const updateNewsMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & NewsFormData) => {
-      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
@@ -400,12 +416,12 @@ export default function AdminPage() {
   });
 
   const updateResourceMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: string } & any) => {
-      const response = await apiRequest('PUT', `/api/resources/${id}`, data);
-      return response.json();
+    mutationFn: async ({ id, ...formData }: { id: string } & ResourceFormData) => {
+      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
       toast({ title: "자료가 수정되었습니다" });
       setEditDialogOpen(false);
     },
@@ -426,11 +442,10 @@ export default function AdminPage() {
   // Delete mutations
   const deleteEventMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest('DELETE', `/api/events/${id}`, {});
-      return response.json();
+      return await deletePost(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
       toast({ title: "행사가 삭제되었습니다" });
     },
   });
@@ -447,11 +462,10 @@ export default function AdminPage() {
 
   const deleteResourceMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiRequest('DELETE', `/api/resources/${id}`, {});
-      return response.json();
+      return await deletePost(id);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
       toast({ title: "자료가 삭제되었습니다" });
     },
   });
@@ -657,7 +671,7 @@ export default function AdminPage() {
             <TabsContent value="events" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">행사 관리</h2>
-                <CreateEventDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/events'] })} />
+                <CreateEventDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] })} />
               </div>
               
               <div className="grid gap-4">
@@ -813,7 +827,7 @@ export default function AdminPage() {
             <TabsContent value="resources" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">자료 관리</h2>
-                <CreateResourceDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/resources'] })} />
+                <CreateResourceDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] })} />
               </div>
               
               <div className="grid gap-4">
@@ -1106,7 +1120,7 @@ export default function AdminPage() {
               event={selectedItem} 
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
               }}
               updateMutation={updateEventMutation}
             />
@@ -1126,7 +1140,7 @@ export default function AdminPage() {
               resource={selectedItem} 
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
               }}
               updateMutation={updateResourceMutation}
             />
@@ -1942,6 +1956,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
@@ -2001,15 +2016,9 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/events', {
-        ...data,
-        eventDate: new Date(data.eventDate).toISOString(),
-        capacity: data.capacity ? parseInt(data.capacity) : null,
-        fee: parseInt(data.fee) || 0,
-        images: imageUrls.length > 0 ? imageUrls : null,
-      });
-      return response.json();
+    mutationFn: async (formData: EventFormData) => {
+      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
       toast({ title: "행사가 생성되었습니다" });
@@ -2022,7 +2031,10 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const onSubmit = (data: any) => {
-    createMutation.mutate(data);
+    createMutation.mutate({
+      ...data,
+      images: imageUrls.length > 0 ? imageUrls : [],
+    });
   };
 
   return (
@@ -2156,19 +2168,26 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(resourceSchema),
     defaultValues: {
+      title: '',
+      description: '',
       category: '',
+      fileUrl: '',
+      fileName: '',
+      fileType: '',
       accessLevel: 'public',
+      isActive: true,
     }
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('POST', '/api/resources', data);
-      return response.json();
+    mutationFn: async (formData: ResourceFormData) => {
+      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
       toast({ title: "자료가 생성되었습니다" });
