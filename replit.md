@@ -10,13 +10,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### Backend Hydration Implementation (November 14, 2025)
+### Backend Hydration Implementation (November 15, 2025)
 - **storage.getPosts()** now returns `PostWithTranslations[]` instead of `Post[]`, with all translations hydrated using batch fetching (3 queries total) to prevent N+1 queries
 - **Search functionality** added to Posts API: EXISTS subquery matches title/content/excerpt in post_translations table, plus slug in posts table (case-insensitive ILIKE)
 - **Removed meta/locale filtering** from getPosts due to type incompatibility; all translations now returned for multi-locale support
 - **Frontend integration**: News.tsx updated to pass search via URLSearchParams and queryKey, JSON.parse removed (JSONB auto-parses)
 - **E2E testing**: Search functionality verified via run_test (input, filtering, reset all working)
-- **Known issue**: NewsCard still uses legacy News type via convertToNews adapter (scheduled for separate refactoring task)
+
+### NewsCard Refactoring (November 15, 2025)
+- **NewsCard.tsx** refactored to consume `PostWithTranslations` directly instead of legacy `News` type
+- **convertToNews adapter removed** from News.tsx; all components now use PostWithTranslations natively
+- **Home.tsx** updated to use `/api/posts?postType=news&status=published` instead of `/api/news`
+- **NewsDetail.tsx** refactored to use `/api/posts/:id` instead of `/api/news/:id`, fixing 404 error
+- **React DOM nesting warning fixed**: Badge moved out of `<p>` tag to `<div>`
+- **Locale-aware helpers**: `getTranslation()` and `getMetaValue()` added to each component for consistent data extraction
+- **E2E testing**: All news pages (Home, News, NewsDetail) verified working with PostWithTranslations
 
 ## System Architecture
 
