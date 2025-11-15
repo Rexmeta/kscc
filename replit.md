@@ -53,10 +53,19 @@ Preferred communication style: Simple, everyday language.
   - Update: Changed PUT → PATCH for /api/posts/:id
   - Translation/Meta: Removed PUT fallback logic, using POST exclusively (endpoints support upsert)
   - Delete: Removed empty body from DELETE request
+- **Event Registrations Endpoint**: Added GET /api/posts/:id/registrations to Posts API
+  - Requires authentication + admin role
+  - Validates post exists and is an event
+  - Admin.tsx registrations query migrated to use new endpoint
+- **Legacy Endpoints Cleanup**: Removed all legacy /api/events and /api/news routes from server/routes.ts
+  - Deleted 12 legacy routes (GET, POST, PUT, DELETE for events/news)
+  - Retained /api/user/registrations (used by User Dashboard)
+  - Updated API Structure documentation to reflect unified Posts API
 - **E2E Testing**: Full CRUD flow verified end-to-end via Playwright
   - Create: POST /api/posts → 201, success toast, dialog closes, item appears in list
   - Edit: PATCH /api/posts/:id → 200, success toast, updated item reflects changes
   - Delete: DELETE /api/posts/:id → 204, success toast, item removed from list
+  - Registrations: GET /api/posts/:id/registrations → 200, dialog displays correctly
 
 ## System Architecture
 
@@ -76,7 +85,7 @@ Preferred communication style: Simple, everyday language.
 
 **Authentication & Authorization:** JWT for stateless authentication, bcrypt for password hashing, and a comprehensive 5-tier, 5-role, 27-permission ACL system with wildcard support.
 
-**API Structure:** RESTful conventions with endpoints for authentication (`/api/auth`), users (`/api/users`), members (`/api/members`), events (`/api/events`), news (`/api/news`), resources (`/api/resources`), inquiries (`/api/inquiries`), and partners (`/api/partners`).
+**API Structure:** RESTful conventions with endpoints for authentication (`/api/auth`), users (`/api/users`), members (`/api/members`), unified posts (`/api/posts`), resources (`/api/resources`), inquiries (`/api/inquiries`), and partners (`/api/partners`).
 
 **Data Access Layer:** Storage abstraction pattern, type-safe database queries using Drizzle ORM, connection pooling via Neon, and transaction support.
 
