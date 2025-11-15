@@ -127,6 +127,33 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
   }
 });
 
+// GET /api/posts/:id/registrations - Get all registrations for an event (Admin only)
+router.get("/:id/registrations", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = postIdSchema.parse(req.params);
+    
+    // Check if post exists and is an event
+    const post = await storage.getPostWithTranslations(id);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    
+    if (post.postType !== 'event') {
+      return res.status(400).json({ message: "Post is not an event" });
+    }
+    
+    // Get all registrations for this event
+    const registrations = await storage.getEventRegistrations(id);
+    res.json(registrations);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
+    }
+    console.error("[Posts API] Error fetching registrations:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // POST /api/posts - Create new post
 router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {

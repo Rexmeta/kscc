@@ -49,7 +49,14 @@ Preferred communication style: Simple, everyday language.
 - **ACL Migration**: Replaced `requirePermission('posts:*')` with `requireAdmin` middleware in Posts API (posts:create/update/delete not in ACL PERMS)
   - All mutating endpoints (POST, PATCH, DELETE) now use `requireAdmin` (checks `req.user?.role === 'admin'`)
   - Local `requireAdmin` function defined in `server/routes/posts.ts` to avoid circular dependency
-- **E2E Testing**: Admin News creation flow verified end-to-end via Playwright - POST /api/posts returns 201, success toast appears, dialog closes, new item appears in list
+- **HTTP Method Alignment**: Fixed adminPostApi.ts to use correct HTTP methods matching actual API endpoints
+  - Update: Changed PUT → PATCH for /api/posts/:id
+  - Translation/Meta: Removed PUT fallback logic, using POST exclusively (endpoints support upsert)
+  - Delete: Removed empty body from DELETE request
+- **E2E Testing**: Full CRUD flow verified end-to-end via Playwright
+  - Create: POST /api/posts → 201, success toast, dialog closes, item appears in list
+  - Edit: PATCH /api/posts/:id → 200, success toast, updated item reflects changes
+  - Delete: DELETE /api/posts/:id → 204, success toast, item removed from list
 
 ## System Architecture
 
