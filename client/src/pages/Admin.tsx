@@ -272,7 +272,6 @@ export default function AdminPage() {
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/posts?postType=event&limit=50');
       const data = await response.json();
-      // Convert PostWithTranslations[] to legacy Event format for backward compatibility
       return {
         events: data.posts?.map((post: PostWithTranslations) => ({
           ...mapPostToEventForm(post),
@@ -289,7 +288,6 @@ export default function AdminPage() {
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/posts?postType=news&limit=50');
       const data = await response.json();
-      // Convert PostWithTranslations[] to legacy News format for backward compatibility
       return {
         articles: data.posts?.map((post: PostWithTranslations) => ({
           ...mapPostToNewsForm(post),
@@ -306,7 +304,6 @@ export default function AdminPage() {
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/posts?postType=resource&limit=50');
       const data = await response.json();
-      // Convert PostWithTranslations[] to legacy Resource format for backward compatibility
       return {
         resources: data.posts?.map((post: PostWithTranslations) => ({
           ...mapPostToResourceForm(post),
