@@ -59,11 +59,13 @@ const eventSchema = z.object({
   description: z.string().min(1, '설명을 입력해주세요'),
   content: z.string().optional(),
   eventDate: z.string().min(1, '날짜를 선택해주세요'),
+  endDate: z.string().optional(),
   location: z.string().min(1, '장소를 입력해주세요'),
   category: z.string().min(1, '카테고리를 선택해주세요'),
   eventType: z.string().default('offline'),
   capacity: z.number().optional().or(z.nan()).transform((val) => Number.isNaN(val) ? undefined : val),
   fee: z.number().optional().or(z.nan()).transform((val) => Number.isNaN(val) ? 0 : val),
+  registrationDeadline: z.string().optional(),
   images: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
   isPublished: z.boolean().default(true),
@@ -424,7 +426,9 @@ export default function AdminPage() {
   const updateEventMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & EventFormData) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      console.log('[Admin] Updating event:', id, formData);
       const { post, translation, meta } = mapEventFormToPost(formData, user.id);
+      console.log('[Admin] Mapped data:', { post, translation, meta });
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
@@ -432,18 +436,36 @@ export default function AdminPage() {
       toast({ title: "행사가 수정되었습니다" });
       setEditDialogOpen(false);
     },
+    onError: (error: any) => {
+      console.error('[Admin] Error updating event:', error);
+      toast({ 
+        title: "행사 수정 실패", 
+        description: error.message || "행사를 수정하는 중 오류가 발생했습니다",
+        variant: "destructive"
+      });
+    },
   });
 
   const updateNewsMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & NewsFormData) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      console.log('[Admin] Updating news:', id, formData);
       const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      console.log('[Admin] Mapped data:', { post, translation, meta });
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       toast({ title: "뉴스가 수정되었습니다" });
       setEditDialogOpen(false);
+    },
+    onError: (error: any) => {
+      console.error('[Admin] Error updating news:', error);
+      toast({ 
+        title: "뉴스 수정 실패", 
+        description: error.message || "뉴스를 수정하는 중 오류가 발생했습니다",
+        variant: "destructive"
+      });
     },
   });
 
@@ -1176,7 +1198,9 @@ export default function AdminPage() {
           </DialogHeader>
           {selectedItem && activeTab === 'events' && (
             <EditEventForm 
-              event={selectedItem} 
+              key={selectedItem.id}
+              event={mapPostToEventForm(selectedItem)} 
+              eventId={selectedItem.id}
               onSuccess={() => {
                 setEditDialogOpen(false);
                 queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
@@ -1186,7 +1210,9 @@ export default function AdminPage() {
           )}
           {selectedItem && activeTab === 'news' && (
             <EditNewsForm 
-              article={selectedItem} 
+              key={selectedItem.id}
+              article={mapPostToNewsForm(selectedItem)} 
+              articleId={selectedItem.id}
               onSuccess={() => {
                 setEditDialogOpen(false);
                 queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
@@ -1228,27 +1254,57 @@ export default function AdminPage() {
 }
 
 // Edit Forms
-function EditEventForm({ event, onSuccess, updateMutation }: any) {
+function EditEventForm({ event, eventId, onSuccess, updateMutation }: any) {
   const [imageUrls, setImageUrls] = useState<string[]>(event.images || []);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
 
-  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+  // Helper to safely convert date to datetime-local format
+  const toDateTimeLocal = (date: any): string => {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return ''; // Invalid date check
+    return d.toISOString().slice(0, 16);
+  };
+
+  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm({
     resolver: zodResolver(eventSchema),
     defaultValues: {
       title: event.title,
       description: event.description,
       content: event.content || '',
-      eventDate: new Date(event.eventDate).toISOString().slice(0, 16),
+      eventDate: toDateTimeLocal(event.eventDate),
+      endDate: toDateTimeLocal(event.endDate),
       location: event.location,
       category: event.category,
       eventType: event.eventType || 'offline',
       capacity: event.capacity || undefined,
       fee: event.fee || 0,
+      registrationDeadline: toDateTimeLocal(event.registrationDeadline),
       images: event.images || [],
       isPublic: event.isPublic !== false,
     }
   });
+
+  // Reset form when event changes
+  useEffect(() => {
+    reset({
+      title: event.title,
+      description: event.description,
+      content: event.content || '',
+      eventDate: toDateTimeLocal(event.eventDate),
+      endDate: toDateTimeLocal(event.endDate),
+      location: event.location,
+      category: event.category,
+      eventType: event.eventType || 'offline',
+      capacity: event.capacity || undefined,
+      fee: event.fee || 0,
+      registrationDeadline: toDateTimeLocal(event.registrationDeadline),
+      images: event.images || [],
+      isPublic: event.isPublic !== false,
+    });
+    setImageUrls(event.images || []);
+  }, [event, reset]);
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -1305,10 +1361,9 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
 
   const onSubmit = (data: any) => {
     updateMutation.mutate({
-      id: event.id,
+      id: eventId,
       ...data,
-      eventDate: new Date(data.eventDate).toISOString(),
-      images: imageUrls.length > 0 ? imageUrls : null,
+      images: imageUrls.length > 0 ? imageUrls : [],
     });
   };
 
@@ -1331,9 +1386,16 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="form-label">날짜</label>
+          <label className="form-label">시작 날짜</label>
           <Input type="datetime-local" {...register('eventDate')} data-testid="input-event-date" />
+          {errors.eventDate && <p className="text-sm text-destructive mt-1">{String(errors.eventDate.message)}</p>}
         </div>
+        <div>
+          <label className="form-label">종료 날짜 (선택)</label>
+          <Input type="datetime-local" {...register('endDate')} data-testid="input-event-end-date" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">장소</label>
           <LocationPicker
@@ -1341,10 +1403,14 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
             onChange={(value) => setValue('location', value)}
           />
         </div>
+        <div>
+          <label className="form-label">등록 마감일 (선택)</label>
+          <Input type="datetime-local" {...register('registrationDeadline')} data-testid="input-event-registration-deadline" />
+        </div>
       </div>
       <div>
         <label className="form-label">카테고리</label>
-        <Select defaultValue={event.category} onValueChange={(value) => setValue('category', value)}>
+        <Select defaultValue={event.category} onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
           <SelectTrigger data-testid="select-event-category">
             <SelectValue />
           </SelectTrigger>
@@ -1424,12 +1490,12 @@ function EditEventForm({ event, onSuccess, updateMutation }: any) {
   );
 }
 
-function EditNewsForm({ article, onSuccess, updateMutation }: any) {
+function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
   const [imageUrls, setImageUrls] = useState<string[]>(article.images || []);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
 
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors }, setValue, reset, watch } = useForm({
     resolver: zodResolver(newsSchema),
     defaultValues: {
       title: article.title,
@@ -1441,6 +1507,20 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
       isPublished: article.isPublished,
     }
   });
+
+  // Reset form when article changes
+  useEffect(() => {
+    reset({
+      title: article.title,
+      excerpt: article.excerpt,
+      content: article.content,
+      category: article.category,
+      featuredImage: article.featuredImage || '',
+      images: article.images || [],
+      isPublished: article.isPublished,
+    });
+    setImageUrls(article.images || []);
+  }, [article, reset]);
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -1517,9 +1597,9 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
 
   const onSubmit = (data: any) => {
     updateMutation.mutate({ 
-      id: article.id, 
+      id: articleId, 
       ...data,
-      images: imageUrls.length > 0 ? imageUrls : null,
+      images: imageUrls.length > 0 ? imageUrls : [],
       featuredImage: data.featuredImage || null,
     });
   };
@@ -1543,7 +1623,7 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
       </div>
       <div>
         <label className="form-label">카테고리</label>
-        <Select defaultValue={article.category} onValueChange={(value) => register('category').onChange({ target: { value } })}>
+        <Select value={watch('category')} onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
           <SelectTrigger data-testid="select-news-category">
             <SelectValue />
           </SelectTrigger>
@@ -1553,6 +1633,7 @@ function EditNewsForm({ article, onSuccess, updateMutation }: any) {
             <SelectItem value="activity">활동소식</SelectItem>
           </SelectContent>
         </Select>
+        {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
       </div>
       <div>
         <label className="form-label">대표 이미지</label>
@@ -2160,7 +2241,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div>
               <label className="form-label">카테고리</label>
-              <Select onValueChange={(value) => setValue('category', value)}>
+              <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
                 <SelectTrigger data-testid="select-event-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
@@ -2189,10 +2270,17 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="form-label">날짜</label>
+              <label className="form-label">시작 날짜</label>
               <Input type="datetime-local" {...register('eventDate')} data-testid="input-event-date" />
               {errors.eventDate && <p className="text-sm text-destructive mt-1">{String(errors.eventDate.message)}</p>}
             </div>
+            <div>
+              <label className="form-label">종료 날짜 (선택)</label>
+              <Input type="datetime-local" {...register('endDate')} data-testid="input-event-end-date" />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="form-label">장소</label>
               <LocationPicker
@@ -2200,6 +2288,10 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
                 onChange={(value) => setValue('location', value)}
               />
               {errors.location && <p className="text-sm text-destructive mt-1">{String(errors.location.message)}</p>}
+            </div>
+            <div>
+              <label className="form-label">등록 마감일 (선택)</label>
+              <Input type="datetime-local" {...register('registrationDeadline')} data-testid="input-event-registration-deadline" />
             </div>
           </div>
           
@@ -2382,7 +2474,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="form-label">카테고리</label>
-              <Select onValueChange={(value) => setValue('category', value)}>
+              <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
                 <SelectTrigger data-testid="select-resource-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
@@ -2397,7 +2489,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div>
               <label className="form-label">접근 수준</label>
-              <Select defaultValue="public" onValueChange={(value) => setValue('accessLevel', value)}>
+              <Select defaultValue="public" onValueChange={(value) => setValue('accessLevel', value, { shouldValidate: true, shouldDirty: true })}>
                 <SelectTrigger data-testid="select-resource-access">
                   <SelectValue placeholder="접근 수준 선택" />
                 </SelectTrigger>

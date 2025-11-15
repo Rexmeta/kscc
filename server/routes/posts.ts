@@ -253,10 +253,15 @@ router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Re
     
     const translationData = insertPostTranslationSchema.omit({ postId: true }).parse(req.body);
     
+    console.log("[Posts API] Upserting translation for post:", id);
+    console.log("[Posts API] Translation data:", translationData);
+    
     const translation = await storage.upsertPostTranslation({
       postId: id,
       ...translationData,
     });
+    
+    console.log("[Posts API] Upserted translation result:", translation);
     
     res.json(translation);
   } catch (error) {
@@ -303,16 +308,23 @@ router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, r
       return res.status(404).json({ message: "Post not found" });
     }
     
-    const metaSchema = z.object({
-      key: z.string(),
-      value: z.any(), // Any type for meta value
-    });
+    const metaData = insertPostMetaSchema.omit({ id: true, postId: true }).parse(req.body);
     
-    const { key, value } = metaSchema.parse(req.body);
+    // Determine value from typed columns
+    let value: any = metaData.value;
+    if (metaData.valueText !== null && metaData.valueText !== undefined) {
+      value = metaData.valueText;
+    } else if (metaData.valueNumber !== null && metaData.valueNumber !== undefined) {
+      value = metaData.valueNumber;
+    } else if (metaData.valueBoolean !== null && metaData.valueBoolean !== undefined) {
+      value = metaData.valueBoolean;
+    } else if (metaData.valueTimestamp !== null && metaData.valueTimestamp !== undefined) {
+      value = metaData.valueTimestamp;
+    }
     
-    await storage.setPostMeta(id, key, value);
+    await storage.setPostMeta(id, metaData.key, value);
     
-    res.json({ success: true, key, value });
+    res.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid meta data", errors: error.errors });

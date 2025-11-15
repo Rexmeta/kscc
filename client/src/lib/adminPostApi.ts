@@ -55,9 +55,10 @@ export async function createPost({ post, translation, meta }: CreatePostPayload)
  * 3. For each meta: POST /api/posts/:id/meta (upsert meta)
  */
 export async function updatePost({ postId, post, translation, meta }: UpdatePostPayload) {
-  // Step 1: Update base post
-  if (Object.keys(post).length > 0) {
-    await apiRequest('PATCH', `/api/posts/${postId}`, post);
+  // Step 1: Update base post (exclude slug to prevent URL changes)
+  const { slug, ...postWithoutSlug } = post as any;
+  if (Object.keys(postWithoutSlug).length > 0) {
+    await apiRequest('PATCH', `/api/posts/${postId}`, postWithoutSlug);
   }
 
   // Step 2: Upsert translation (POST endpoint supports upsert)

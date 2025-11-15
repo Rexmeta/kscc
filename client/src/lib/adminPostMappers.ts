@@ -78,7 +78,9 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
 }
 
 export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
+  console.log('[mapPostToNewsForm] post:', { id: post.id, slug: post.slug, translationsCount: post.translations?.length, metaCount: post.meta?.length });
   const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
+  console.log('[mapPostToNewsForm] translation:', translation);
   const meta = post.meta || [];
   
   const getMetaValue = (key: string): any => {
@@ -87,7 +89,7 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     return item.valueText || item.valueNumber || item.valueBoolean || item.valueTimestamp || item.value || null;
   };
   
-  return {
+  const result = {
     title: translation?.title || post.slug,
     excerpt: translation?.excerpt || '',
     content: translation?.content || '',
@@ -97,6 +99,8 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     isPublished: post.status === 'published',
     publishedAt: post.publishedAt,
   };
+  console.log('[mapPostToNewsForm] result:', result);
+  return result;
 }
 
 // ============================================
@@ -236,18 +240,26 @@ export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
     return item.valueText || item.valueNumber || item.valueBoolean || item.valueTimestamp || item.value || null;
   };
   
+  // Helper to convert Date to datetime-local string format
+  const toDateTimeLocalString = (date: any): string | undefined => {
+    if (!date) return undefined;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return undefined;
+    return d.toISOString().slice(0, 16);
+  };
+  
   return {
     title: translation?.title || post.slug,
     description: translation?.excerpt || '',
     content: translation?.content || '',
-    eventDate: getMetaValue(EVENT_META_KEYS.eventDate) || '',
-    endDate: getMetaValue(EVENT_META_KEYS.endDate) || undefined,
+    eventDate: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.eventDate)) || '',
+    endDate: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.endDate)),
     location: getMetaValue(EVENT_META_KEYS.location) || '',
     category: getMetaValue(EVENT_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
     eventType: getMetaValue(EVENT_META_KEYS.eventType) || 'offline',
     capacity: getMetaValue(EVENT_META_KEYS.capacity) || undefined,
     fee: parseInt(getMetaValue(EVENT_META_KEYS.fee) || '0'),
-    registrationDeadline: getMetaValue(EVENT_META_KEYS.registrationDeadline) || undefined,
+    registrationDeadline: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.registrationDeadline)),
     images: getMetaValue(EVENT_META_KEYS.images) || [],
     isPublic: post.visibility === 'public',
     isPublished: post.status === 'published',
