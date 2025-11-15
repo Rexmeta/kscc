@@ -337,7 +337,8 @@ export default function AdminPage() {
   // Mutations
   const createNewsMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
-      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -348,7 +349,8 @@ export default function AdminPage() {
 
   const createEventMutation = useMutation({
     mutationFn: async (formData: EventFormData) => {
-      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapEventFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -359,7 +361,8 @@ export default function AdminPage() {
 
   const createResourceMutation = useMutation({
     mutationFn: async (formData: ResourceFormData) => {
-      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapResourceFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -393,7 +396,8 @@ export default function AdminPage() {
   // Update mutations
   const updateEventMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & EventFormData) => {
-      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapEventFormToPost(formData, user.id);
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
@@ -405,7 +409,8 @@ export default function AdminPage() {
 
   const updateNewsMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & NewsFormData) => {
-      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
@@ -417,7 +422,8 @@ export default function AdminPage() {
 
   const updateResourceMutation = useMutation({
     mutationFn: async ({ id, ...formData }: { id: string } & ResourceFormData) => {
-      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapResourceFormToPost(formData, user.id);
       return await updatePost({ postId: id, post, translation, meta });
     },
     onSuccess: () => {
@@ -2186,7 +2192,8 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: async (formData: ResourceFormData) => {
-      const { post, translation, meta } = mapResourceFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapResourceFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
