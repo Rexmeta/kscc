@@ -4,31 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Eye, ArrowLeft, Share2 } from 'lucide-react';
-import { PostWithTranslations, PostMeta } from '@shared/schema';
+import { PostWithTranslations } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
-
-// Helper to get meta value by key
-const getMetaValue = (meta: PostMeta[], key: string): any => {
-  const metaItem = meta.find(m => m.key === key);
-  if (!metaItem) return null;
-  
-  // Return the appropriate value based on what's set
-  if (metaItem.valueText !== null) return metaItem.valueText;
-  if (metaItem.valueNumber !== null) return metaItem.valueNumber;
-  if (metaItem.valueBoolean !== null) return metaItem.valueBoolean;
-  if (metaItem.valueTimestamp !== null) return metaItem.valueTimestamp;
-  if (metaItem.value !== null) return metaItem.value;
-  return null;
-};
-
-// Helper to get translation for current locale with fallback
-const getTranslation = (post: PostWithTranslations, locale: string) => {
-  if (!post.translations || post.translations.length === 0) {
-    return { title: post.slug, content: '', excerpt: '' };
-  }
-  return post.translations.find(t => t.locale === locale) || post.translations[0];
-};
+import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 
 export default function NewsDetail() {
   const { id } = useParams<{ id: string }>();
@@ -75,7 +54,7 @@ export default function NewsDetail() {
   }
 
   // Extract translation and meta values
-  const translation = getTranslation(post, language);
+  const translation = getTranslationSafe(post, language);
   const category = getMetaValue(post.meta || [], 'news.category') || 'notice';
   const viewCount = getMetaValue(post.meta || [], 'news.viewCount') || 0;
   const imagesRaw = getMetaValue(post.meta || [], 'news.images');
@@ -107,8 +86,8 @@ export default function NewsDetail() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: translation?.title || post.slug,
-          text: translation?.excerpt || '',
+          title: translation.title || post.slug,
+          text: translation.excerpt || '',
           url: window.location.href,
         });
       } catch (error) {
@@ -142,7 +121,7 @@ export default function NewsDetail() {
             {featuredImage && (
               <img
                 src={featuredImage}
-                alt={translation?.title || post.slug}
+                alt={translation.title || post.slug}
                 className="w-full h-96 object-cover rounded-t-lg"
                 data-testid="news-featured-image"
               />
@@ -178,7 +157,7 @@ export default function NewsDetail() {
 
               {/* Title */}
               <h1 className="text-4xl font-bold text-foreground mb-4" data-testid="news-title">
-                {translation?.title || post.slug}
+                {translation.title || post.slug}
               </h1>
 
               {/* Date and Views */}
@@ -197,12 +176,12 @@ export default function NewsDetail() {
 
               {/* Excerpt */}
               <p className="text-xl text-muted-foreground mb-8" data-testid="news-excerpt">
-                {translation?.excerpt || ''}
+                {translation.excerpt || ''}
               </p>
 
               {/* Content */}
               <div className="prose prose-lg max-w-none" data-testid="news-content">
-                {translation?.content || ''}
+                {translation.content || ''}
               </div>
 
               {/* Image Gallery */}
@@ -214,7 +193,7 @@ export default function NewsDetail() {
                       <img
                         key={index}
                         src={imageUrl}
-                        alt={`${translation?.title || post.slug} - 이미지 ${index + 1}`}
+                        alt={`${translation.title || post.slug} - 이미지 ${index + 1}`}
                         className="w-full h-64 object-cover rounded-lg"
                         data-testid={`news-image-${index}`}
                       />

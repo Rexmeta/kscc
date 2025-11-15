@@ -2,40 +2,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Eye, Share2, ArrowRight } from 'lucide-react';
-import { PostWithTranslations, PostMeta } from '@shared/schema';
+import { PostWithTranslations } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { Link } from 'wouter';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 
 interface NewsCardProps {
   post: PostWithTranslations;
 }
 
-// Helper to get meta value by key
-const getMetaValue = (meta: PostMeta[], key: string): any => {
-  const metaItem = meta.find(m => m.key === key);
-  if (!metaItem) return null;
-  
-  // Return the appropriate value based on what's set
-  if (metaItem.valueText !== null) return metaItem.valueText;
-  if (metaItem.valueNumber !== null) return metaItem.valueNumber;
-  if (metaItem.valueBoolean !== null) return metaItem.valueBoolean;
-  if (metaItem.valueTimestamp !== null) return metaItem.valueTimestamp;
-  if (metaItem.value !== null) return metaItem.value;
-  return null;
-};
-
-// Helper to get translation for current locale with fallback
-const getTranslation = (post: PostWithTranslations, locale: string) => {
-  if (!post.translations || post.translations.length === 0) {
-    return { title: post.slug, content: '', excerpt: '' };
-  }
-  return post.translations.find(t => t.locale === locale) || post.translations[0];
-};
-
 export default function NewsCard({ post }: NewsCardProps) {
   const { language } = useLanguage();
-  const translation = getTranslation(post, language);
+  const translation = getTranslationSafe(post, language);
   const category = getMetaValue(post.meta || [], 'news.category') || 'notice';
   const viewCount = getMetaValue(post.meta || [], 'news.viewCount') || 0;
   const imagesRaw = getMetaValue(post.meta || [], 'news.images');
