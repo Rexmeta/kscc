@@ -32,8 +32,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
-import { Member, Inquiry, Partner, type PostWithTranslations } from '@shared/schema';
+import { Member, Inquiry, Partner, type PostWithTranslations, type InquiryWithReplies, type InquiryReply } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
+import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { UploadResult } from '@uppy/core';
 import { 
   mapNewsFormToPost, mapPostToNewsForm, type NewsFormData,
@@ -913,10 +914,12 @@ export default function AdminPage() {
                           <h4 className="font-medium mb-2">{inquiry.subject}</h4>
                           <p className="text-sm text-muted-foreground mb-2">
                             {inquiry.name} • {inquiry.email}
+                            {inquiry.phone && ` • ${inquiry.phone}`}
+                            {inquiry.companyName && ` • ${inquiry.companyName}`}
                           </p>
-                          <p className="text-sm mb-2">{inquiry.message}</p>
+                          <p className="text-sm mb-2 whitespace-pre-wrap">{inquiry.message}</p>
                           <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                            <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
+                            <span>{new Date(inquiry.createdAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                             <Badge variant="outline">{inquiry.category}</Badge>
                             <Badge variant={
                               inquiry.status === 'resolved' ? 'default' :
@@ -929,6 +932,17 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedItem(inquiry);
+                              setViewDialogOpen(true);
+                            }}
+                            data-testid={`button-view-inquiry-${inquiry.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           {inquiry.status !== 'resolved' && (
                             <Button
                               size="sm"
@@ -936,9 +950,9 @@ export default function AdminPage() {
                                 id: inquiry.id,
                                 status: 'resolved'
                               })}
+                              data-testid={`button-resolve-inquiry-${inquiry.id}`}
                             >
                               <CheckCircle className="h-4 w-4" />
-                              해결
                             </Button>
                           )}
                         </div>
@@ -1114,6 +1128,15 @@ export default function AdminPage() {
                     <Badge variant="outline">{selectedItem.accessLevel}</Badge>
                   </div>
                 </>
+              )}
+              {activeTab === 'inquiries' && selectedItem && (
+                <InquiryDetailView 
+                  inquiryId={selectedItem.id}
+                  onClose={() => {
+                    setViewDialogOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                  }}
+                />
               )}
             </div>
           )}
