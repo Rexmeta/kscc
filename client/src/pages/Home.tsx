@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Event, News, Member, Partner } from '@shared/schema';
+import { Event, Member, Partner, PostWithTranslations } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 
@@ -21,9 +21,9 @@ export default function Home() {
 
   // Fetch latest news
   const { data: newsData } = useQuery({
-    queryKey: ['/api/news', { limit: 3 }],
+    queryKey: ['/api/posts', 'news', { limit: 3 }],
     queryFn: async () => {
-      const response = await fetch('/api/news?limit=3');
+      const response = await fetch('/api/posts?postType=news&status=published&limit=3');
       return response.json();
     },
   });
@@ -47,7 +47,7 @@ export default function Home() {
   });
 
   const events = eventsData?.events || [];
-  const news = newsData?.articles || [];
+  const news = newsData?.posts || [];
   const memberCount = membersData?.total || 0;
 
   return (
@@ -180,8 +180,8 @@ export default function Home() {
           
           <div className="grid gap-6 lg:grid-cols-3">
             {news.length > 0 ? (
-              news.map((article: News) => (
-                <NewsCard key={article.id} article={article} />
+              news.map((post: PostWithTranslations) => (
+                <NewsCard key={post.id} post={post} />
               ))
             ) : (
               <div className="col-span-full text-center py-12">
