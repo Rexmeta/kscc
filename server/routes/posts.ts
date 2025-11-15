@@ -1,6 +1,6 @@
 import { Router, type Request, Response } from "express";
 import { storage } from "../storage";
-import { insertPostSchema, insertPostTranslationSchema, insertPostMetaSchema } from "@shared/schema";
+import { insertPostSchema, insertPostTranslationSchema, insertPostMetaSchema, insertEventRegistrationSchema } from "@shared/schema";
 import { z } from "zod";
 import { requirePermission } from "../permissions";
 import { authenticateToken } from "../routes";
@@ -77,6 +77,45 @@ router.get("/:id", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
     console.error("[Posts API] Error fetching post:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST /api/posts/:id/register - Register for an event
+router.post("/:id/register", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = postIdSchema.parse(req.params);
+    
+    // Check if post exists and is an event (use getPostWithTranslations for consistency)
+    const post = await storage.getPostWithTranslations(id);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    
+    if (post.postType !== 'event') {
+      return res.status(400).json({ message: "Post is not an event" });
+    }
+    
+    // Check for duplicate registration
+    const existingRegistration = await storage.getEventRegistration(id, req.user.id);
+    if (existingRegistration) {
+      return res.status(400).json({ message: "Already registered for this event" });
+    }
+    
+    // Create registration
+    const registrationData = insertEventRegistrationSchema.parse({
+      ...req.body,
+      eventId: id,
+      userId: req.user.id,
+    });
+    
+    const registration = await storage.createEventRegistration(registrationData);
+    res.status(201).json(registration);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid registration data", errors: error.errors });
+    }
+    console.error("[Posts API] Error registering for event:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });

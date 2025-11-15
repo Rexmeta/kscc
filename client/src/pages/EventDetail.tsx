@@ -8,6 +8,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
+import { PostWithTranslations } from '@shared/schema';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 
 export default function EventDetailPage() {
   const { id } = useParams();
@@ -15,12 +18,13 @@ export default function EventDetailPage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { language } = useLanguage();
 
-  const { data: event, isLoading } = useQuery({
-    queryKey: ['/api/events', id],
+  const { data: post, isLoading } = useQuery<PostWithTranslations>({
+    queryKey: ['/api/posts', id],
     queryFn: async () => {
-      const response = await fetch(`/api/events/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch event');
+      const response = await fetch(`/api/posts/${id}`);
+      if (!response.ok) throw new Error('Failed to fetch post');
       return response.json();
     },
     enabled: !!id,
@@ -28,7 +32,7 @@ export default function EventDetailPage() {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/events/${id}/register`, {
+      const response = await apiRequest('POST', `/api/posts/${id}/register`, {
         attendeeName: user?.name || '',
         attendeeEmail: user?.email || '',
         attendeePhone: '',
@@ -41,6 +45,7 @@ export default function EventDetailPage() {
         description: "행사 신청이 성공적으로 완료되었습니다.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/user/registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', id] });
     },
     onError: (error: any) => {
       toast({
@@ -74,7 +79,7 @@ export default function EventDetailPage() {
     );
   }
 
-  if (!event) {
+  if (!post) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -88,10 +93,13 @@ export default function EventDetailPage() {
     );
   }
 
-  const eventDate = new Date(event.eventDate);
-  const isPastEvent = eventDate < new Date();
-  const isRegistrationClosed = event.registrationDeadline 
-    ? new Date(event.registrationDeadline) < new Date()
+  const translation = getTranslationSafe(post, language);
+  const eventMeta = getEventMeta(post);
+  
+  const now = new Date();
+  const isPastEvent = eventMeta.eventDate ? eventMeta.eventDate < now : false;
+  const isRegistrationClosed = eventMeta.registrationDeadline 
+    ? eventMeta.registrationDeadline < now
     : false;
   const canRegister = !isPastEvent && !isRegistrationClosed;
 
@@ -131,12 +139,12 @@ export default function EventDetailPage() {
           <div className="mb-8">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <h1 className="text-4xl font-bold mb-4" data-testid="text-event-title">{event.title}</h1>
+                <h1 className="text-4xl font-bold mb-4" data-testid="text-event-title">{translation.title || post.slug}</h1>
                 <div className="flex gap-2 flex-wrap">
-                  {getCategoryBadge(event.category)}
-                  {event.eventType && (
+                  {eventMeta.category && getCategoryBadge(eventMeta.category)}
+                  {eventMeta.eventType && (
                     <Badge variant="outline">
-                      {event.eventType === 'online' ? '온라인' : event.eventType === 'offline' ? '오프라인' : '하이브리드'}
+                      {eventMeta.eventType === 'online' ? '온라인' : eventMeta.eventType === 'offline' ? '오프라인' : '하이브리드'}
                     </Badge>
                   )}
                   {isPastEvent && <Badge variant="secondary">종료된 행사</Badge>}
@@ -144,18 +152,18 @@ export default function EventDetailPage() {
                 </div>
               </div>
             </div>
-            <p className="text-xl text-muted-foreground" data-testid="text-event-description">{event.description}</p>
+            <p className="text-xl text-muted-foreground" data-testid="text-event-description">{translation.excerpt || translation.subtitle || ''}</p>
           </div>
 
           {/* Images */}
-          {event.images && event.images.length > 0 && (
+          {eventMeta.images && eventMeta.images.length > 0 && (
             <div className="mb-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {event.images.map((image: string, index: number) => (
+                {eventMeta.images.map((image: string, index: number) => (
                   <img
                     key={index}
                     src={image}
-                    alt={`${event.title} 이미지 ${index + 1}`}
+                    alt={`${translation.title || post.slug} 이미지 ${index + 1}`}
                     className="w-full h-64 object-cover rounded-lg"
                     data-testid={`img-event-${index}`}
                     onError={(e) => {
@@ -169,65 +177,25 @@ export default function EventDetailPage() {
 
           {/* Event Info Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <Calendar className="h-5 w-5 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold mb-1">일시</h3>
-                    <p className="text-muted-foreground" data-testid="text-event-date">
-                      {eventDate.toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {eventDate.toLocaleTimeString('ko-KR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <MapPin className="h-5 w-5 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold mb-1">장소</h3>
-                    <p className="text-muted-foreground" data-testid="text-event-location">{event.location}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {event.capacity && (
+            {eventMeta.eventDate && (
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    <Users className="h-5 w-5 text-primary mt-1" />
+                    <Calendar className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <h3 className="font-semibold mb-1">정원</h3>
-                      <p className="text-muted-foreground" data-testid="text-event-capacity">{event.capacity}명</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {event.fee !== undefined && event.fee !== null && (
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <DollarSign className="h-5 w-5 text-primary mt-1" />
-                    <div>
-                      <h3 className="font-semibold mb-1">참가비</h3>
-                      <p className="text-muted-foreground" data-testid="text-event-fee">
-                        {event.fee === 0 ? '무료' : `${event.fee.toLocaleString()}원`}
+                      <h3 className="font-semibold mb-1">일시</h3>
+                      <p className="text-muted-foreground" data-testid="text-event-date">
+                        {eventMeta.eventDate.toLocaleDateString('ko-KR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {eventMeta.eventDate.toLocaleTimeString('ko-KR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </p>
                     </div>
                   </div>
@@ -235,7 +203,51 @@ export default function EventDetailPage() {
               </Card>
             )}
 
-            {event.registrationDeadline && (
+            {eventMeta.location && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <MapPin className="h-5 w-5 text-primary mt-1" />
+                    <div>
+                      <h3 className="font-semibold mb-1">장소</h3>
+                      <p className="text-muted-foreground" data-testid="text-event-location">{eventMeta.location}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {eventMeta.capacity && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <Users className="h-5 w-5 text-primary mt-1" />
+                    <div>
+                      <h3 className="font-semibold mb-1">정원</h3>
+                      <p className="text-muted-foreground" data-testid="text-event-capacity">{eventMeta.capacity}명</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {eventMeta.fee !== undefined && eventMeta.fee !== null && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <DollarSign className="h-5 w-5 text-primary mt-1" />
+                    <div>
+                      <h3 className="font-semibold mb-1">참가비</h3>
+                      <p className="text-muted-foreground" data-testid="text-event-fee">
+                        {eventMeta.fee === 0 ? '무료' : `${eventMeta.fee.toLocaleString()}원`}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {eventMeta.registrationDeadline && (
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
@@ -243,7 +255,7 @@ export default function EventDetailPage() {
                     <div>
                       <h3 className="font-semibold mb-1">신청 마감</h3>
                       <p className="text-muted-foreground">
-                        {new Date(event.registrationDeadline).toLocaleDateString('ko-KR', {
+                        {eventMeta.registrationDeadline.toLocaleDateString('ko-KR', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
@@ -257,13 +269,13 @@ export default function EventDetailPage() {
           </div>
 
           {/* Content */}
-          {event.content && (
+          {translation.content && (
             <Card className="mb-8">
               <CardContent className="p-6">
                 <h3 className="text-xl font-semibold mb-4">상세 내용</h3>
                 <div className="prose dark:prose-invert max-w-none">
                   <p className="whitespace-pre-wrap text-muted-foreground" data-testid="text-event-content">
-                    {event.content}
+                    {translation.content}
                   </p>
                 </div>
               </CardContent>
@@ -271,15 +283,15 @@ export default function EventDetailPage() {
           )}
 
           {/* Speakers */}
-          {event.speakers && event.speakers.length > 0 && (
+          {eventMeta.speakers && eventMeta.speakers.length > 0 && (
             <Card className="mb-8">
               <CardContent className="p-6">
                 <h3 className="text-xl font-semibold mb-4">연사</h3>
                 <div className="space-y-2">
-                  {event.speakers.map((speaker: string, index: number) => (
+                  {eventMeta.speakers.map((speaker: any, index: number) => (
                     <div key={index} className="flex items-center gap-2">
                       <UserCheck className="h-4 w-4 text-primary" />
-                      <span>{speaker}</span>
+                      <span>{typeof speaker === 'string' ? speaker : speaker.name || ''}</span>
                     </div>
                   ))}
                 </div>

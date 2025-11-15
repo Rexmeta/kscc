@@ -10,21 +10,27 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### Backend Hydration Implementation (November 15, 2025)
+### Unified Posts System Migration (November 15, 2025)
+
+#### Backend Hydration Implementation
 - **storage.getPosts()** now returns `PostWithTranslations[]` instead of `Post[]`, with all translations hydrated using batch fetching (3 queries total) to prevent N+1 queries
 - **Search functionality** added to Posts API: EXISTS subquery matches title/content/excerpt in post_translations table, plus slug in posts table (case-insensitive ILIKE)
 - **Removed meta/locale filtering** from getPosts due to type incompatibility; all translations now returned for multi-locale support
-- **Frontend integration**: News.tsx updated to pass search via URLSearchParams and queryKey, JSON.parse removed (JSONB auto-parses)
-- **E2E testing**: Search functionality verified via run_test (input, filtering, reset all working)
 
-### NewsCard Refactoring (November 15, 2025)
+#### News Pages Migration
 - **NewsCard.tsx** refactored to consume `PostWithTranslations` directly instead of legacy `News` type
 - **convertToNews adapter removed** from News.tsx; all components now use PostWithTranslations natively
 - **Home.tsx** updated to use `/api/posts?postType=news&status=published` instead of `/api/news`
 - **NewsDetail.tsx** refactored to use `/api/posts/:id` instead of `/api/news/:id`, fixing 404 error
-- **React DOM nesting warning fixed**: Badge moved out of `<p>` tag to `<div>`
-- **Locale-aware helpers**: `getTranslation()` and `getMetaValue()` added to each component for consistent data extraction
-- **E2E testing**: All news pages (Home, News, NewsDetail) verified working with PostWithTranslations
+- **Locale-aware helpers**: `getTranslationSafe()` and `getMetaValue()` added to each component for consistent data extraction
+
+#### Event Pages Migration
+- **EventCard.tsx** refactored to use `PostWithTranslations` with `getEventMeta()` for type-safe event meta extraction; Date fields (eventDate, endDate, registrationDeadline) automatically converted from ISO strings to Date objects via `getMetaTimestamp()`
+- **Events.tsx** migrated to `/api/posts?postType=event&status=published&upcoming=true` endpoint with SQL-level upcoming filter
+- **EventDetail.tsx** fully refactored to use PostWithTranslations: GET `/api/posts/:id` for data fetch, POST `/api/posts/:id/register` for event registration
+- **Backend registration endpoint**: POST `/api/posts/:id/register` added with authentication, post existence check, postType validation, duplicate registration check
+- **Upcoming filter**: SQL EXISTS subquery on post_meta.value_timestamp > NOW() with IS NOT NULL guard for accurate pagination
+- **Shared helpers**: `getTranslationSafe()` and `getEventMeta()` provide consistent data access across all event components
 
 ## System Architecture
 
