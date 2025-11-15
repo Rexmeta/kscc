@@ -1942,7 +1942,7 @@ function CreateNewsDialog({
           
           <div>
             <label className="form-label">카테고리</label>
-            <Select onValueChange={(value) => setValue('category', value)}>
+            <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
               <SelectTrigger data-testid="select-news-category">
                 <SelectValue placeholder="카테고리 선택" />
               </SelectTrigger>
