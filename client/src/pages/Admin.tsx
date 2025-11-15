@@ -1735,6 +1735,15 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(newsSchema),
+    defaultValues: {
+      title: '',
+      excerpt: '',
+      content: '',
+      category: '',
+      featuredImage: '',
+      images: [] as string[],
+      isPublished: false,
+    }
   });
 
   const handleGetUploadParameters = async () => {
@@ -1813,7 +1822,8 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
-      const { post, translation, meta } = mapNewsFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -1825,9 +1835,20 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
       setOpen(false);
       onSuccess();
     },
+    onError: (error) => {
+      console.error('[CreateNewsDialog] Create failed:', error);
+      toast({
+        title: "뉴스 생성 실패",
+        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        variant: "destructive"
+      });
+    },
   });
 
   const onSubmit = (data: any) => {
+    console.log('[CreateNewsDialog] Form submitted:', data);
+    console.log('[CreateNewsDialog] Form errors:', errors);
+    console.log('[CreateNewsDialog] User:', user);
     createMutation.mutate({
       ...data,
       featuredImage: featuredImageUrl || '',
@@ -1856,7 +1877,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
           
           <div>
             <label className="form-label">카테고리</label>
-            <Select onValueChange={(value) => register('category').onChange({ target: { value } })}>
+            <Select onValueChange={(value) => setValue('category', value)}>
               <SelectTrigger data-testid="select-news-category">
                 <SelectValue placeholder="카테고리 선택" />
               </SelectTrigger>
@@ -1866,6 +1887,7 @@ function CreateNewsDialog({ onSuccess }: { onSuccess: () => void }) {
                 <SelectItem value="activity">활동소식</SelectItem>
               </SelectContent>
             </Select>
+            {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
           </div>
           
           <div>
@@ -2023,7 +2045,8 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: async (formData: EventFormData) => {
-      const { post, translation, meta } = mapEventFormToPost(formData, user?.id || '');
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapEventFormToPost(formData, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -2033,6 +2056,14 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
       setNewImageUrl('');
       setOpen(false);
       onSuccess();
+    },
+    onError: (error) => {
+      console.error('[CreateEventDialog] Create failed:', error);
+      toast({
+        title: "행사 생성 실패",
+        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        variant: "destructive"
+      });
     },
   });
 
@@ -2204,6 +2235,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       onSuccess();
     },
     onError: (error) => {
+      console.error('[CreateResourceDialog] Create failed:', error);
       toast({ 
         title: "자료 생성 실패", 
         description: error instanceof Error ? error.message : "알 수 없는 오류",

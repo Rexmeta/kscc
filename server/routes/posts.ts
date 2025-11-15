@@ -1,12 +1,19 @@
-import { Router, type Request, Response } from "express";
+import { Router, type Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { insertPostSchema, insertPostTranslationSchema, insertPostMetaSchema, insertEventRegistrationSchema } from "@shared/schema";
 import { z } from "zod";
-import { requirePermission } from "../permissions";
 import { authenticateToken } from "../routes";
 import "../types";
 
 const router = Router();
+
+// Middleware to require admin access
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ message: 'Admin access required' });
+  }
+  next();
+}
 
 // Validation schemas
 const postQuerySchema = z.object({
@@ -121,7 +128,7 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
 });
 
 // POST /api/posts - Create new post
-router.post("/", authenticateToken, requirePermission('posts:create'), async (req: Request, res: Response) => {
+router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const postData = insertPostSchema.parse(req.body);
     
@@ -147,7 +154,7 @@ router.post("/", authenticateToken, requirePermission('posts:create'), async (re
 });
 
 // PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, requirePermission('posts:update'), async (req: Request, res: Response) => {
+router.patch("/:id", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -174,7 +181,7 @@ router.patch("/:id", authenticateToken, requirePermission('posts:update'), async
 });
 
 // DELETE /api/posts/:id - Delete post
-router.delete("/:id", authenticateToken, requirePermission('posts:delete'), async (req: Request, res: Response) => {
+router.delete("/:id", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -197,7 +204,7 @@ router.delete("/:id", authenticateToken, requirePermission('posts:delete'), asyn
 });
 
 // POST /api/posts/:id/translations - Upsert translation
-router.post("/:id/translations", authenticateToken, requirePermission('posts:update'), async (req: Request, res: Response) => {
+router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -249,7 +256,7 @@ router.get("/:id/meta", async (req: Request, res: Response) => {
 });
 
 // POST /api/posts/:id/meta - Set post meta
-router.post("/:id/meta", authenticateToken, requirePermission('posts:update'), async (req: Request, res: Response) => {
+router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -279,7 +286,7 @@ router.post("/:id/meta", authenticateToken, requirePermission('posts:update'), a
 });
 
 // POST /api/posts/:id/meta/increment - Increment numeric meta value
-router.post("/:id/meta/increment", authenticateToken, requirePermission('posts:update'), async (req: Request, res: Response) => {
+router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
