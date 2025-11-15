@@ -2515,14 +2515,9 @@ function EventRegistrationsDialog({
   event: any;
 }) {
   const { data: registrations, isLoading } = useQuery({
-    queryKey: ['/api/events', event?.id, 'registrations'],
+    queryKey: ['/api/posts', event?.id, 'registrations'],
     queryFn: async () => {
-      const response = await fetch(`/api/events/${event.id}/registrations`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch registrations');
+      const response = await apiRequest('GET', `/api/posts/${event.id}/registrations`);
       return response.json();
     },
     enabled: !!event?.id && open,
