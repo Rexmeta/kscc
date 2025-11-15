@@ -89,6 +89,34 @@ Preferred communication style: Simple, everyday language.
   - API endpoints: All /api/posts?postType={type} return proper PostWithTranslations structure
   - No legacy endpoint calls detected
 
+#### Inquiry Reply System (November 15, 2025)
+- **Database Schema**: Created inquiry_replies table for board-style threaded replies
+  - Removed single-response fields (response, respondedBy, respondedAt) from inquiries table
+  - New table tracks: inquiryId, message, respondedBy, emailSent, emailSentAt, createdAt
+  - Cascade delete: replies auto-deleted when inquiry is deleted
+- **Email Service**: Implemented email notification system (server/email.ts)
+  - Resend API integration with fallback logging when RESEND_API_KEY not configured
+  - Professional HTML email template with Korean localization
+  - Includes original inquiry context + reply message
+  - Environment variables: RESEND_API_KEY (optional), EMAIL_FROM (default: noreply@example.com)
+- **Storage Methods**: Added inquiry reply operations
+  - getInquiryWithReplies(): Fetches inquiry with all replies + responder details (InquiryWithReplies type)
+  - createInquiryReply(): Creates new reply
+  - updateInquiryReplyEmailStatus(): Tracks email delivery status
+- **API Endpoints**:
+  - GET /api/inquiries/:id: Returns InquiryWithReplies (inquiry + replies array with responder info)
+  - POST /api/inquiries/:id/reply: Creates reply with optional email notification (body: { message, sendEmail })
+  - Email sent asynchronously, emailSent flag updated after delivery
+- **Admin UI Enhancements**:
+  - Inquiry list: Added full contact info display (phone, company), improved date formatting
+  - InquiryDetailView component (client/src/components/InquiryDetailView.tsx):
+    - Original inquiry details with full contact information
+    - Reply history with responder name, timestamp, email sent badge
+    - New reply form with Textarea input
+    - Email notification checkbox (default: checked)
+    - Real-time refetch after reply submission
+  - Integrated into Admin.tsx View Dialog for seamless UX
+
 ## System Architecture
 
 ### Frontend Architecture
