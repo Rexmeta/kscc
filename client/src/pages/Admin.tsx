@@ -32,7 +32,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
-import { News, Event, Member, Resource, Inquiry, Partner, type PostWithTranslations } from '@shared/schema';
+import { Member, Inquiry, Partner, type PostWithTranslations } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
 import { 
@@ -248,6 +248,10 @@ export default function AdminPage() {
   // Data queries
   const { data: usersData } = useQuery({
     queryKey: ['/api/users'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/users');
+      return response.json();
+    },
     enabled: isAdmin && activeTab === 'users',
   });
 
@@ -772,7 +776,7 @@ export default function AdminPage() {
               </div>
               
               <div className="grid gap-4">
-                {newsData?.articles?.map((article: News) => (
+                {newsData?.articles?.map((article: NewsFormData & { id: string }) => (
                   <Card key={article.id}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
@@ -838,7 +842,7 @@ export default function AdminPage() {
               </div>
               
               <div className="grid gap-4">
-                {resourcesData?.resources?.map((resource: Resource) => (
+                {resourcesData?.resources?.map((resource: ResourceFormData & { id: string }) => (
                   <Card key={resource.id}>
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">

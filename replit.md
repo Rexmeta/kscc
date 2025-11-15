@@ -10,7 +10,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### Unified Posts System Migration (November 15, 2025)
+### Unified Posts System Migration - COMPLETED (November 15, 2025)
 
 #### Backend Hydration Implementation
 - **storage.getPosts()** now returns `PostWithTranslations[]` instead of `Post[]`, with all translations hydrated using batch fetching (3 queries total) to prevent N+1 queries
@@ -66,6 +66,28 @@ Preferred communication style: Simple, everyday language.
   - Edit: PATCH /api/posts/:id → 200, success toast, updated item reflects changes
   - Delete: DELETE /api/posts/:id → 204, success toast, item removed from list
   - Registrations: GET /api/posts/:id/registrations → 200, dialog displays correctly
+
+#### Legacy Code Complete Removal (November 15, 2025)
+- **Database Migration**: Executed `npm run db:push --force` to physically remove legacy tables (events, news, resources) from database
+  - 3 events, 3 news, 1 resource migrated to unified posts system before deletion
+  - Database schema now 100% aligned with code
+- **Schema Cleanup**: 
+  - Removed events, news, resources table definitions from shared/schema.ts
+  - Removed Event, News, Resource, InsertEvent, InsertNews, InsertResource types
+  - Removed eventsRelations, newsRelations, resourcesRelations
+  - Cleaned usersRelations: removed eventsCreated, newsArticles, resourcesCreated references
+- **Admin.tsx Type Safety**:
+  - Removed legacy News, Event, Resource type imports
+  - Added explicit queryFn to usersData query for proper type inference
+  - Updated type annotations to use NewsFormData & { id: string }, ResourceFormData & { id: string }
+  - LSP diagnostics: 0 errors in Admin.tsx
+- **Storage Interface**: Removed all legacy CRUD methods (getEvent*, createEvent*, getNews*, createNews*, getResource*, createResource*)
+- **E2E Verification**: Public pages test passed
+  - News list & detail pages: PostWithTranslations correctly displayed
+  - Events list & detail pages: Event meta properly extracted
+  - Resources list & detail: File metadata correctly shown
+  - API endpoints: All /api/posts?postType={type} return proper PostWithTranslations structure
+  - No legacy endpoint calls detected
 
 ## System Architecture
 
