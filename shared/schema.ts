@@ -81,7 +81,7 @@ export const events = pgTable("events", {
 
 export const eventRegistrations = pgTable("event_registrations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: uuid("event_id").references(() => events.id, { onDelete: 'cascade' }),
+  eventId: uuid("event_id").references(() => posts.id, { onDelete: 'cascade' }),
   userId: uuid("user_id").references(() => users.id),
   attendeeName: text("attendee_name").notNull(),
   attendeeEmail: text("attendee_email").notNull(),
@@ -345,18 +345,17 @@ export const membersRelations = relations(members, ({ one }) => ({
   }),
 }));
 
-export const eventsRelations = relations(events, ({ one, many }) => ({
+export const eventsRelations = relations(events, ({ one }) => ({
   creator: one(users, {
     fields: [events.createdBy],
     references: [users.id],
   }),
-  registrations: many(eventRegistrations),
 }));
 
 export const eventRegistrationsRelations = relations(eventRegistrations, ({ one }) => ({
-  event: one(events, {
+  event: one(posts, {
     fields: [eventRegistrations.eventId],
-    references: [events.id],
+    references: [posts.id],
   }),
   user: one(users, {
     fields: [eventRegistrations.userId],
@@ -392,6 +391,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
   }),
   translations: many(postTranslations),
   meta: many(postMeta),
+  registrations: many(eventRegistrations),
 }));
 
 export const postTranslationsRelations = relations(postTranslations, ({ one }) => ({

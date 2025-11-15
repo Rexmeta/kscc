@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar } from 'lucide-react';
+import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import type { PostWithTranslations, PostMeta } from '@shared/schema';
+import { deletePost } from '@/lib/adminPostApi';
 
 const categoryIcons = {
   reports: FileText,
@@ -50,9 +51,11 @@ export default function ResourcesPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
-  const { isAuthenticated, isAdmin, hasPermission } = useAuth();
+  const [, navigate] = useLocation();
+  const { isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const { language } = useLanguage();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['/api/posts', 'resource', { page, category, language, limit: 20 }],
@@ -83,6 +86,31 @@ export default function ResourcesPage() {
       }
       
       return response.json();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (resourceId: string) => deletePost(resourceId),
+    onSuccess: () => {
+      toast({
+        title: "삭제 완료",
+        description: "자료가 성공적으로 삭제되었습니다.",
+      });
+      // Invalidate all posts-related queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === '/api/posts';
+        }
+      });
+      setSelectedResource(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "삭제 실패",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -158,6 +186,17 @@ export default function ResourcesPage() {
     setCategory('');
     setPage(1);
     refetch();
+  };
+
+  const handleEdit = (resourceId: string) => {
+    navigate(`/admin?tab=resources&edit=${resourceId}`);
+    setSelectedResource(null);
+  };
+
+  const handleDelete = (resourceId: string) => {
+    if (confirm('정말로 이 자료를 삭제하시겠습니까?')) {
+      deleteMutation.mutate(resourceId);
+    }
   };
 
   const handleDownload = (resource: PostWithTranslations, e: React.MouseEvent) => {
@@ -258,7 +297,7 @@ export default function ResourcesPage() {
           {/* Filter */}
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-semibold">자료 목록</h2>
-            {hasPermission('resource.upload') && (
+            {isAdmin && (
               <Button asChild data-testid="button-upload-resource">
                 <Link href="/admin?tab=resources">
                   <Plus className="h-4 w-4 mr-2" />
@@ -523,30 +562,57 @@ export default function ResourcesPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-4 border-t">
-                {canAccess(selectedResource) ? (
+              <div className="space-y-3 pt-4 border-t">
+                <div className="flex gap-2">
+                  {canAccess(selectedResource) ? (
+                    <Button
+                      className="flex-1"
+                      onClick={(e) => handleDownload(selectedResource, e)}
+                      disabled={downloadMutation.isPending}
+                      data-testid="button-download-dialog"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {downloadMutation.isPending ? '다운로드 중...' : '다운로드'}
+                    </Button>
+                  ) : (
+                    <Button className="flex-1" disabled>
+                      <Lock className="h-4 w-4 mr-2" />
+                      접근 권한 없음
+                    </Button>
+                  )}
                   <Button
-                    className="flex-1"
-                    onClick={(e) => handleDownload(selectedResource, e)}
-                    disabled={downloadMutation.isPending}
-                    data-testid="button-download-dialog"
+                    variant="outline"
+                    onClick={() => setSelectedResource(null)}
+                    data-testid="button-close-dialog"
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    {downloadMutation.isPending ? '다운로드 중...' : '다운로드'}
+                    닫기
                   </Button>
-                ) : (
-                  <Button className="flex-1" disabled>
-                    <Lock className="h-4 w-4 mr-2" />
-                    접근 권한 없음
-                  </Button>
+                </div>
+                
+                {/* Admin Actions */}
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleEdit(selectedResource.id)}
+                      data-testid="button-edit-resource"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      수정
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() => handleDelete(selectedResource.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid="button-delete-resource"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                    </Button>
+                  </div>
                 )}
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedResource(null)}
-                  data-testid="button-close-dialog"
-                >
-                  닫기
-                </Button>
               </div>
             </div>
           )}

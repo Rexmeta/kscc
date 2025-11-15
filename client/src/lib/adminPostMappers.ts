@@ -116,6 +116,8 @@ export interface EventFormData {
   registrationDeadline?: string;
   images?: string[];
   isPublic: boolean;
+  isPublished: boolean;
+  publishedAt?: Date | string | null;
 }
 
 export function mapEventFormToPost(formData: EventFormData, authorId: string): {
@@ -130,11 +132,14 @@ export function mapEventFormToPost(formData: EventFormData, authorId: string): {
       postType: 'event',
       slug,
       authorId,
-      status: 'published',
+      status: formData.isPublished ? 'published' : 'draft',
       visibility: formData.isPublic ? 'public' : 'members',
       isFeatured: false,
       tags: [formData.category],
-      publishedAt: new Date(),
+      // Preserve existing publishedAt when editing, or use current time for new published events
+      publishedAt: formData.isPublished 
+        ? (formData.publishedAt ? new Date(formData.publishedAt) : new Date())
+        : null,
     },
     translation: {
       locale: 'ko',
@@ -243,6 +248,8 @@ export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
     registrationDeadline: getMetaValue(EVENT_META_KEYS.registrationDeadline) || undefined,
     images: getMetaValue(EVENT_META_KEYS.images) || [],
     isPublic: post.visibility === 'public',
+    isPublished: post.status === 'published',
+    publishedAt: post.publishedAt,
   };
 }
 

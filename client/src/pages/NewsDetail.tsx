@@ -1,17 +1,25 @@
-import { useParams, Link } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useParams, Link, useLocation } from 'wouter';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Eye, ArrowLeft, Share2 } from 'lucide-react';
+import { Calendar, Eye, ArrowLeft, Share2, Edit, Trash2 } from 'lucide-react';
 import { PostWithTranslations } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
+import { deletePost } from '@/lib/adminPostApi';
 
 export default function NewsDetail() {
+  // ALL HOOKS MUST BE AT THE TOP (Rules of Hooks)
   const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
   const { language } = useLanguage();
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
     queryKey: ['/api/posts', id],
@@ -25,6 +33,31 @@ export default function NewsDetail() {
     enabled: !!id,
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deletePost(id!),
+    onSuccess: () => {
+      toast({
+        title: "삭제 완료",
+        description: "뉴스가 성공적으로 삭제되었습니다.",
+      });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === '/api/posts';
+        }
+      });
+      navigate('/news');
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "삭제 실패",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // CONDITIONAL RETURNS AFTER ALL HOOKS
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -82,6 +115,16 @@ export default function NewsDetail() {
     });
   };
 
+  const handleEdit = () => {
+    navigate(`/admin?tab=news&edit=${id}`);
+  };
+
+  const handleDelete = () => {
+    if (confirm('정말로 이 뉴스를 삭제하시겠습니까?')) {
+      deleteMutation.mutate();
+    }
+  };
+
   const handleShare = async () => {
     if (navigator.share) {
       try {
@@ -103,14 +146,39 @@ export default function NewsDetail() {
       {/* Back Navigation */}
       <section className="bg-muted py-8">
         <div className="container">
-          <Link 
-            href="/news"
-            className="inline-flex items-center text-sm font-medium text-foreground hover:text-primary transition-colors mb-4"
-            data-testid="link-back"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            뉴스 목록으로
-          </Link>
+          <div className="flex items-center justify-between">
+            <Link 
+              href="/news"
+              className="inline-flex items-center text-sm font-medium text-foreground hover:text-primary transition-colors mb-4"
+              data-testid="link-back"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              뉴스 목록으로
+            </Link>
+            {isAdmin && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEdit}
+                  data-testid="button-edit-news"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  수정
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleteMutation.isPending}
+                  data-testid="button-delete-news"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

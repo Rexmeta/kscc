@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Calendar, MapPin, Users, Clock, DollarSign, ArrowLeft, UserCheck } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, DollarSign, ArrowLeft, UserCheck, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -11,11 +11,12 @@ import { t } from '@/lib/i18n';
 import { PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
+import { deletePost } from '@/lib/adminPostApi';
 
 export default function EventDetailPage() {
   const { id } = useParams();
   const [, navigate] = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
@@ -55,6 +56,41 @@ export default function EventDetailPage() {
       });
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deletePost(id!),
+    onSuccess: () => {
+      toast({
+        title: "삭제 완료",
+        description: "행사가 성공적으로 삭제되었습니다.",
+      });
+      // Invalidate all posts-related queries (list + detail + admin)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === '/api/posts';
+        }
+      });
+      navigate('/events');
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "삭제 실패",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEdit = () => {
+    navigate(`/admin?tab=events&edit=${id}`);
+  };
+
+  const handleDelete = () => {
+    if (confirm('정말로 이 행사를 삭제하시겠습니까?')) {
+      deleteMutation.mutate();
+    }
+  };
 
   const handleRegister = () => {
     if (!isAuthenticated) {
@@ -120,15 +156,40 @@ export default function EventDetailPage() {
       {/* Header */}
       <section className="bg-muted py-8">
         <div className="container">
-          <Button 
-            variant="ghost" 
-            onClick={() => navigate('/events')} 
-            className="mb-4"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            목록으로
-          </Button>
+          <div className="flex items-center justify-between">
+            <Button 
+              variant="ghost" 
+              onClick={() => navigate('/events')} 
+              className="mb-4"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              목록으로
+            </Button>
+            {isAdmin && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEdit}
+                  data-testid="button-edit-event"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  수정
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleteMutation.isPending}
+                  data-testid="button-delete-event"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

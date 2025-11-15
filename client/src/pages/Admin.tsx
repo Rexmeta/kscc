@@ -65,6 +65,7 @@ const eventSchema = z.object({
   fee: z.number().optional().or(z.nan()).transform((val) => Number.isNaN(val) ? 0 : val),
   images: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
+  isPublished: z.boolean().default(true),
 });
 
 const resourceSchema = z.object({

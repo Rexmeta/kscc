@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useLocation } from 'wouter';
 import { User } from '@shared/schema';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -26,6 +27,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [, setLocation] = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
@@ -96,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setPermissions(new Set());
     localStorage.removeItem('token');
+    setLocation('/');
   };
 
   const hasPermission = (permission: string): boolean => {
