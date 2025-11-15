@@ -42,10 +42,21 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
 
       if (!response.ok) throw new Error('Failed to submit reply');
 
-      toast({
-        title: '성공',
-        description: sendEmail ? '답변이 등록되고 이메일이 발송되었습니다.' : '답변이 등록되었습니다.',
-      });
+      const result = await response.json();
+      const actualEmailSent = result.emailSent;
+
+      if (sendEmail && !actualEmailSent) {
+        toast({
+          title: '답변 등록 완료',
+          description: '답변이 등록되었으나 이메일 발송에 실패했습니다. (API 키가 설정되지 않았거나 전송 오류 발생)',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: '성공',
+          description: actualEmailSent ? '답변이 등록되고 이메일이 발송되었습니다.' : '답변이 등록되었습니다.',
+        });
+      }
 
       setReplyMessage('');
       refetch();
@@ -124,7 +135,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
       {inquiry.replies && inquiry.replies.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-lg">답변 히스토리</h3>
-          {inquiry.replies.map((reply: InquiryReply & { responder: any }) => (
+          {inquiry.replies.map((reply) => (
             <div key={reply.id} className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-start justify-between mb-2">
                 <div className="text-sm text-muted-foreground">

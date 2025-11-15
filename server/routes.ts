@@ -528,6 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const reply = await storage.createInquiryReply(replyData);
 
+      let emailSent = false;
       if (sendEmail) {
         const emailContent = emailService.generateInquiryReplyEmail(
           inquiry.subject,
@@ -536,7 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           inquiry.name
         );
 
-        const emailSent = await emailService.sendEmail({
+        emailSent = await emailService.sendEmail({
           to: inquiry.email,
           subject: `[한국 사천-충칭 총상회] ${inquiry.subject} - 답변`,
           html: emailContent.html,
@@ -547,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedInquiry = await storage.getInquiryWithReplies(inquiryId);
-      res.status(201).json(updatedInquiry);
+      res.status(201).json({ inquiry: updatedInquiry, emailSent });
     } catch (error) {
       console.error('[API] Error creating inquiry reply:', error);
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create reply" });
