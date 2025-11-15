@@ -71,9 +71,16 @@ export const inquiries = pgTable("inquiries", {
   subject: text("subject").notNull(),
   message: text("message").notNull(),
   status: text("status").notNull().default("new"), // new, in_progress, resolved
-  response: text("response"),
-  respondedBy: uuid("responded_by").references(() => users.id),
-  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const inquiryReplies = pgTable("inquiry_replies", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  inquiryId: uuid("inquiry_id").notNull().references(() => inquiries.id, { onDelete: 'cascade' }),
+  message: text("message").notNull(),
+  respondedBy: uuid("responded_by").notNull().references(() => users.id),
+  emailSent: boolean("email_sent").notNull().default(false),
+  emailSentAt: timestamp("email_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -279,9 +286,17 @@ export const eventRegistrationsRelations = relations(eventRegistrations, ({ one 
   }),
 }));
 
-export const inquiriesRelations = relations(inquiries, ({ one }) => ({
+export const inquiriesRelations = relations(inquiries, ({ many }) => ({
+  replies: many(inquiryReplies),
+}));
+
+export const inquiryRepliesRelations = relations(inquiryReplies, ({ one }) => ({
+  inquiry: one(inquiries, {
+    fields: [inquiryReplies.inquiryId],
+    references: [inquiries.id],
+  }),
   responder: one(users, {
-    fields: [inquiries.respondedBy],
+    fields: [inquiryReplies.respondedBy],
     references: [users.id],
   }),
 }));
@@ -331,6 +346,13 @@ export const insertEventRegistrationSchema = createInsertSchema(eventRegistratio
 export const insertInquirySchema = createInsertSchema(inquiries).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertInquiryReplySchema = createInsertSchema(inquiryReplies).omit({
+  id: true,
+  createdAt: true,
+  emailSent: true,
+  emailSentAt: true,
 });
 
 export const insertPartnerSchema = createInsertSchema(partners).omit({
@@ -395,6 +417,9 @@ export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSche
 export type Inquiry = typeof inquiries.$inferSelect;
 export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 
+export type InquiryReply = typeof inquiryReplies.$inferSelect;
+export type InsertInquiryReply = z.infer<typeof insertInquiryReplySchema>;
+
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
 
@@ -426,6 +451,10 @@ export type InsertPostMeta = z.infer<typeof insertPostMetaSchema>;
 // Combined types for joined queries
 export type UserRegistrationWithEvent = EventRegistration & {
   event: PostWithTranslations | null;
+};
+
+export type InquiryWithReplies = Inquiry & {
+  replies: (InquiryReply & { responder: User | null })[];
 };
 
 // Post with translations and meta

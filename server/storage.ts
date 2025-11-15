@@ -1,9 +1,10 @@
 import { 
-  users, members, eventRegistrations, inquiries, partners,
+  users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postMeta,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
-  type Inquiry, type InsertInquiry,
+  type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
+  type InquiryWithReplies,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
   type PostMeta, type InsertPostMeta, type PostWithTranslations
@@ -47,6 +48,7 @@ export interface IStorage {
 
   // Inquiries
   getInquiry(id: string): Promise<Inquiry | undefined>;
+  getInquiryWithReplies(id: string): Promise<InquiryWithReplies | undefined>;
   getInquiries(filters?: {
     status?: string;
     category?: string;
@@ -55,6 +57,11 @@ export interface IStorage {
   }): Promise<{ inquiries: Inquiry[]; total: number }>;
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
   updateInquiry(id: string, updates: Partial<Inquiry>): Promise<Inquiry | undefined>;
+  
+  // Inquiry Replies
+  getInquiryReplies(inquiryId: string): Promise<InquiryReply[]>;
+  createInquiryReply(reply: InsertInquiryReply): Promise<InquiryReply>;
+  updateInquiryReplyEmailStatus(id: string, sent: boolean): Promise<void>;
 
   // Partners
   getPartner(id: string): Promise<Partner | undefined>;
@@ -409,6 +416,55 @@ export class DatabaseStorage implements IStorage {
       .where(eq(inquiries.id, id))
       .returning();
     return inquiry || undefined;
+  }
+
+  async getInquiryWithReplies(id: string): Promise<InquiryWithReplies | undefined> {
+    const inquiry = await this.getInquiry(id);
+    if (!inquiry) return undefined;
+
+    const replies = await db
+      .select({
+        reply: inquiryReplies,
+        responder: users,
+      })
+      .from(inquiryReplies)
+      .leftJoin(users, eq(inquiryReplies.respondedBy, users.id))
+      .where(eq(inquiryReplies.inquiryId, id))
+      .orderBy(inquiryReplies.createdAt);
+
+    return {
+      ...inquiry,
+      replies: replies.map(r => ({
+        ...r.reply,
+        responder: r.responder || null,
+      })),
+    };
+  }
+
+  async getInquiryReplies(inquiryId: string): Promise<InquiryReply[]> {
+    return db
+      .select()
+      .from(inquiryReplies)
+      .where(eq(inquiryReplies.inquiryId, inquiryId))
+      .orderBy(inquiryReplies.createdAt);
+  }
+
+  async createInquiryReply(reply: InsertInquiryReply): Promise<InquiryReply> {
+    const [newReply] = await db
+      .insert(inquiryReplies)
+      .values(reply)
+      .returning();
+    return newReply;
+  }
+
+  async updateInquiryReplyEmailStatus(id: string, sent: boolean): Promise<void> {
+    await db
+      .update(inquiryReplies)
+      .set({
+        emailSent: sent,
+        emailSentAt: sent ? new Date() : null,
+      })
+      .where(eq(inquiryReplies.id, id));
   }
 
   // Partners

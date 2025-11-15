@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertPartnerSchema, userMemberships, type User } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, userMemberships, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
@@ -10,6 +10,7 @@ import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "
 import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission } from "./permissions";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
+import { emailService } from "./email";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key";
 
@@ -480,18 +481,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const inquiry = await storage.getInquiryWithReplies(req.params.id);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+      res.json(inquiry);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.put("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const updateData = req.body;
-      if (updateData.response) {
-        updateData.respondedBy = req.user.id;
-        updateData.respondedAt = new Date();
-      }
-      
       const inquiry = await storage.updateInquiry(req.params.id, updateData);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
       res.json(inquiry);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.post("/api/inquiries/:id/reply", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const inquiryId = req.params.id;
+      const { message, sendEmail } = req.body;
+
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ message: "Reply message is required" });
+      }
+
+      const inquiry = await storage.getInquiry(inquiryId);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+
+      const replyData = insertInquiryReplySchema.parse({
+        inquiryId,
+        message,
+        respondedBy: req.user!.id,
+      });
+
+      const reply = await storage.createInquiryReply(replyData);
+
+      if (sendEmail) {
+        const emailContent = emailService.generateInquiryReplyEmail(
+          inquiry.subject,
+          inquiry.message,
+          message,
+          inquiry.name
+        );
+
+        const emailSent = await emailService.sendEmail({
+          to: inquiry.email,
+          subject: `[한국 사천-충칭 총상회] ${inquiry.subject} - 답변`,
+          html: emailContent.html,
+          text: emailContent.text,
+        });
+
+        await storage.updateInquiryReplyEmailStatus(reply.id, emailSent);
+      }
+
+      const updatedInquiry = await storage.getInquiryWithReplies(inquiryId);
+      res.status(201).json(updatedInquiry);
+    } catch (error) {
+      console.error('[API] Error creating inquiry reply:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create reply" });
     }
   });
 
