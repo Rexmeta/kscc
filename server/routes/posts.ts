@@ -17,6 +17,7 @@ const postQuerySchema = z.object({
   authorId: z.string().uuid().optional(),
   locale: z.enum(['ko', 'en', 'zh']).optional(),
   search: z.string().optional(), // Search term for title/content/excerpt/slug
+  upcoming: z.enum(['true', 'false']).optional(), // Filter for upcoming events (eventDate > now)
   limit: z.coerce.number().positive().max(100).optional().default(20),
   offset: z.coerce.number().nonnegative().optional().default(0),
 });
@@ -33,6 +34,9 @@ router.get("/", async (req: Request, res: Response) => {
     // Parse tags from comma-separated string
     const tags = query.tags ? query.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined;
     
+    // Parse upcoming filter for events
+    const upcoming = query.upcoming === 'true' ? true : undefined;
+    
     const posts = await storage.getPosts({
       postType: query.postType,
       status: query.status,
@@ -40,6 +44,7 @@ router.get("/", async (req: Request, res: Response) => {
       tags,
       authorId: query.authorId,
       search: query.search,
+      upcoming,
       limit: query.limit,
       offset: query.offset,
     });

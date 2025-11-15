@@ -5,16 +5,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Event, Member, Partner, PostWithTranslations } from '@shared/schema';
+import { Member, Partner, PostWithTranslations } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 
 export default function Home() {
   // Fetch upcoming events
   const { data: eventsData } = useQuery({
-    queryKey: ['/api/events', { upcoming: true, limit: 3 }],
+    queryKey: ['/api/posts', 'event', { upcoming: true, limit: 3 }],
     queryFn: async () => {
-      const response = await fetch('/api/events?upcoming=true&limit=3');
+      const response = await fetch('/api/posts?postType=event&status=published&upcoming=true&limit=3');
       return response.json();
     },
   });
@@ -46,7 +46,7 @@ export default function Home() {
     },
   });
 
-  const events = eventsData?.events || [];
+  const events = eventsData?.posts || [];
   const news = newsData?.posts || [];
   const memberCount = membersData?.total || 0;
 
@@ -149,8 +149,8 @@ export default function Home() {
           
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events.length > 0 ? (
-              events.map((event: Event) => (
-                <EventCard key={event.id} event={event} />
+              events.map((post: PostWithTranslations) => (
+                <EventCard key={post.id} post={post} />
               ))
             ) : (
               <div className="col-span-full text-center py-12">

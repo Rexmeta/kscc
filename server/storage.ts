@@ -118,6 +118,7 @@ export interface IStorage {
     search?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
+    upcoming?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
@@ -752,6 +753,7 @@ export class DatabaseStorage implements IStorage {
     search?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
+    upcoming?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ posts: PostWithTranslations[]; total: number }> {
@@ -810,6 +812,17 @@ export class DatabaseStorage implements IStorage {
             OR ${postTranslations.excerpt} ILIKE ${searchTerm}
           )
       ) OR ${posts.slug} ILIKE ${searchTerm}`);
+    }
+
+    // Upcoming events filtering (SQL-level for correct pagination)
+    if (filters?.upcoming && filters?.postType === 'event') {
+      conditions.push(sql`EXISTS (
+        SELECT 1 FROM ${postMeta}
+        WHERE ${postMeta.postId} = ${posts.id}
+          AND ${postMeta.key} = 'event.eventDate'
+          AND ${postMeta.valueTimestamp} IS NOT NULL
+          AND ${postMeta.valueTimestamp} > NOW()
+      )`);
     }
 
     if (conditions.length > 0) {

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, Filter, RefreshCw, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Event } from '@shared/schema';
+import { PostWithTranslations } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -15,23 +15,27 @@ export default function EventsPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [upcoming, setUpcoming] = useState('true');
+  const limit = 9;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/events', { page, category, upcoming, limit: 9 }],
+    queryKey: ['/api/posts', { postType: 'event', page, category, upcoming, limit }],
     queryFn: async () => {
+      const offset = (page - 1) * limit;
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '9',
-        ...(category && { category }),
-        ...(upcoming && { upcoming }),
+        postType: 'event',
+        status: 'published',
+        offset: offset.toString(),
+        limit: limit.toString(),
+        ...(category && { tags: category }),
+        ...(upcoming === 'true' && { upcoming: 'true' }),
       });
-      const response = await fetch(`/api/events?${params}`);
+      const response = await fetch(`/api/posts?${params}`);
       return response.json();
     },
   });
 
-  const events = data?.events || [];
-  const totalPages = data?.totalPages || 1;
+  const events = data?.posts || [];
+  const totalPages = Math.ceil((data?.total || 0) / limit) || 1;
 
   const handleFilter = () => {
     setPage(1);
@@ -122,8 +126,8 @@ export default function EventsPage() {
           ) : events.length > 0 ? (
             <>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {events.map((event: Event) => (
-                  <EventCard key={event.id} event={event} />
+                {events.map((post: PostWithTranslations) => (
+                  <EventCard key={post.id} post={post} />
                 ))}
               </div>
               
