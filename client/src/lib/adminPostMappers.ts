@@ -78,9 +78,7 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
 }
 
 export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
-  console.log('[mapPostToNewsForm] post:', { id: post.id, slug: post.slug, translationsCount: post.translations?.length, metaCount: post.meta?.length });
   const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
-  console.log('[mapPostToNewsForm] translation:', translation);
   const meta = post.meta || [];
   
   const getMetaValue = (key: string): any => {
@@ -89,18 +87,18 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     return item.valueText || item.valueNumber || item.valueBoolean || item.valueTimestamp || item.value || null;
   };
   
-  const result = {
+  const category = getMetaValue(NEWS_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '';
+  
+  return {
     title: translation?.title || post.slug,
     excerpt: translation?.excerpt || '',
     content: translation?.content || '',
-    category: getMetaValue(NEWS_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
+    category,
     featuredImage: post.coverImage || '',
     images: getMetaValue(NEWS_META_KEYS.images) || [],
     isPublished: post.status === 'published',
     publishedAt: post.publishedAt,
   };
-  console.log('[mapPostToNewsForm] result:', result);
-  return result;
 }
 
 // ============================================

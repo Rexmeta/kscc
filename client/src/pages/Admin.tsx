@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -1199,7 +1200,7 @@ export default function AdminPage() {
           {selectedItem && activeTab === 'events' && (
             <EditEventForm 
               key={selectedItem.id}
-              event={mapPostToEventForm(selectedItem)} 
+              event={selectedItem} 
               eventId={selectedItem.id}
               onSuccess={() => {
                 setEditDialogOpen(false);
@@ -1211,7 +1212,7 @@ export default function AdminPage() {
           {selectedItem && activeTab === 'news' && (
             <EditNewsForm 
               key={selectedItem.id}
-              article={mapPostToNewsForm(selectedItem)} 
+              article={selectedItem} 
               articleId={selectedItem.id}
               onSuccess={() => {
                 setEditDialogOpen(false);
@@ -1879,7 +1880,7 @@ function CreateNewsDialog({
   const isOpen = open !== undefined ? open : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
   
-  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(newsSchema),
     defaultValues: {
       title: '',
@@ -1891,6 +1892,8 @@ function CreateNewsDialog({
       isPublished: false,
     }
   });
+  
+  const isPublished = watch('isPublished');
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -2108,6 +2111,20 @@ function CreateNewsDialog({
                 ))}
               </div>
             )}
+          </div>
+          
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-0.5">
+              <label className="text-base font-medium">발행 상태</label>
+              <p className="text-sm text-muted-foreground">
+                {isPublished ? '✓ 생성 시 즉시 발행됩니다' : '미발행 상태로 저장됩니다'}
+              </p>
+            </div>
+            <Switch
+              checked={isPublished}
+              onCheckedChange={(checked) => setValue('isPublished', checked, { shouldValidate: true, shouldDirty: true })}
+              data-testid="switch-news-published"
+            />
           </div>
           
           <div className="flex gap-2">
