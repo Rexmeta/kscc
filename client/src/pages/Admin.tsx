@@ -1317,6 +1317,7 @@ function EditEventForm({ event, eventId, onSuccess, updateMutation }: any) {
       },
     });
     const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
@@ -1325,23 +1326,13 @@ function EditEventForm({ event, eventId, onSuccess, updateMutation }: any) {
 
   const handleEventImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      const updated = [...imageUrls, data.objectPath];
-      setImageUrls(updated);
-      setValue('images', updated);
-      toast({ title: '이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        const updated = [...imageUrls, objectPath];
+        setImageUrls(updated);
+        setValue('images', updated);
+        toast({ title: '이미지 업로드 완료!' });
+      }
     }
   };
 
@@ -1534,6 +1525,7 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
       },
     });
     const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
@@ -1542,43 +1534,23 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
 
   const handleFeaturedImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      setValue('featuredImage', data.objectPath);
-      toast({ title: '대표 이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setValue('featuredImage', objectPath);
+        toast({ title: '대표 이미지 업로드 완료!' });
+      }
     }
   };
 
   const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      const updated = [...imageUrls, data.objectPath];
-      setImageUrls(updated);
-      setValue('images', updated);
-      toast({ title: '이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        const updated = [...imageUrls, objectPath];
+        setImageUrls(updated);
+        setValue('images', updated);
+        toast({ title: '이미지 업로드 완료!' });
+      }
     }
   };
 
@@ -1906,6 +1878,7 @@ function CreateNewsDialog({
       },
     });
     const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
@@ -1935,23 +1908,13 @@ function CreateNewsDialog({
 
   const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      const updated = [...imageUrls, data.objectPath];
-      setImageUrls(updated);
-      setValue('images', updated);
-      toast({ title: '이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        const updated = [...imageUrls, objectPath];
+        setImageUrls(updated);
+        setValue('images', updated);
+        toast({ title: '이미지 업로드 완료!' });
+      }
     }
   };
 
@@ -2181,6 +2144,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
       },
     });
     const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
@@ -2189,23 +2153,13 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
 
   const handleEventImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      const updated = [...imageUrls, data.objectPath];
-      setImageUrls(updated);
-      setValue('images', updated);
-      toast({ title: '이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        const updated = [...imageUrls, objectPath];
+        setImageUrls(updated);
+        setValue('images', updated);
+        toast({ title: '이미지 업로드 완료!' });
+      }
     }
   };
 
@@ -2463,6 +2417,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       },
     });
     const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
@@ -2472,29 +2427,19 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   const handleResourceFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
       const file = result.successful[0];
-      const uploadURL = file.uploadURL;
       const originalFileName = file.name || 'file';
       const fileExtension = originalFileName.split('.').pop() || '';
       const fileSize = file.size || 0;
       
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      
-      setValue('fileUrl', data.objectPath);
-      setValue('fileName', originalFileName);
-      setValue('fileType', fileExtension.toUpperCase());
-      setUploadedFileName(originalFileName);
-      
-      toast({ title: '파일 업로드 완료!', description: `${originalFileName} (${(fileSize / 1024).toFixed(2)} KB)` });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setValue('fileUrl', objectPath);
+        setValue('fileName', originalFileName);
+        setValue('fileType', fileExtension.toUpperCase());
+        setUploadedFileName(originalFileName);
+        
+        toast({ title: '파일 업로드 완료!', description: `${originalFileName} (${(fileSize / 1024).toFixed(2)} KB)` });
+      }
     }
   };
 
