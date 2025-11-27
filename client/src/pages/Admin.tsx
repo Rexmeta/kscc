@@ -2100,12 +2100,28 @@ function CreateNewsDialog({
               </ObjectUploader>
             </div>
             {imageUrls.length > 0 && (
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
                 {imageUrls.map((url, index) => (
-                  <div key={index} className="flex items-center gap-2 p-2 bg-secondary rounded">
-                    <span className="flex-1 text-sm truncate">{url}</span>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeImageUrl(index)}>
-                      <X className="h-4 w-4" />
+                  <div key={index} className="relative group">
+                    <img
+                      src={url}
+                      alt={`이미지 ${index + 1}`}
+                      className="w-full h-32 object-cover rounded border bg-gray-100 dark:bg-gray-800"
+                      data-testid={`img-news-create-preview-${index}`}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                      }}
+                    />
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      variant="destructive" 
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => removeImageUrl(index)}
+                      data-testid={`button-remove-news-create-image-${index}`}
+                    >
+                      <X className="h-3 w-3" />
                     </Button>
                   </div>
                 ))}
