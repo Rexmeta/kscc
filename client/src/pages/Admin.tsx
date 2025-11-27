@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -832,6 +832,21 @@ export default function AdminPage() {
             <TabsContent value="inquiries" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">문의사항 관리</h2>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-create-inquiry">
+                      <Plus className="h-4 w-4 mr-2" />
+                      새 문의
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>새 문의 등록</DialogTitle>
+                      <DialogDescription>문의 정보를 입력해주세요</DialogDescription>
+                    </DialogHeader>
+                    <CreateInquiryForm onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] })} />
+                  </DialogContent>
+                </Dialog>
               </div>
               
               <Card>
@@ -948,6 +963,7 @@ export default function AdminPage() {
               <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{selectedItem.companyName} 상세 정보</DialogTitle>
+                  <DialogDescription>회원사 정보를 확인하고 관리할 수 있습니다</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   {selectedItem.logo && (
@@ -1544,6 +1560,65 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       </DialogTrigger>
       <DialogContent>자료 생성 폼</DialogContent>
     </Dialog>
+  );
+}
+
+// Create Inquiry Form
+function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
+  const { toast } = useToast();
+  const form = useForm({
+    defaultValues: {
+      subject: '',
+      category: '',
+      message: '',
+      name: '',
+      email: '',
+      phone: '',
+    }
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!response.ok) throw new Error('Failed to create inquiry');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "문의가 접수되었습니다" });
+      form.reset();
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "문의 접수 실패", variant: "destructive" });
+    }
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(data => submitMutation.mutate(data))} className="space-y-4">
+      <Input placeholder="제목" {...form.register('subject', { required: true })} data-testid="input-inquiry-subject" />
+      <Input placeholder="이름" {...form.register('name', { required: true })} data-testid="input-inquiry-name" />
+      <Input placeholder="이메일" type="email" {...form.register('email', { required: true })} data-testid="input-inquiry-email" />
+      <Input placeholder="전화번호" {...form.register('phone')} data-testid="input-inquiry-phone" />
+      <Select onValueChange={(value) => form.setValue('category', value)}>
+        <SelectTrigger data-testid="select-inquiry-category">
+          <SelectValue placeholder="카테고리 선택" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="product">상품 문의</SelectItem>
+          <SelectItem value="billing">결제 문의</SelectItem>
+          <SelectItem value="support">기술 지원</SelectItem>
+          <SelectItem value="other">기타</SelectItem>
+        </SelectContent>
+      </Select>
+      <Textarea placeholder="문의 내용" {...form.register('message', { required: true })} data-testid="textarea-inquiry-message" />
+      <Button type="submit" disabled={submitMutation.isPending} data-testid="button-submit-inquiry" className="w-full">
+        {submitMutation.isPending ? '접수 중...' : '문의 접수'}
+      </Button>
+    </form>
   );
 }
 
