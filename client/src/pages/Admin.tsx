@@ -376,10 +376,10 @@ export default function AdminPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid grid-cols-7 w-full">
               <TabsTrigger value="dashboard" data-testid="tab-dashboard">대시보드</TabsTrigger>
-              <TabsTrigger value="users" data-testid="tab-users">{t('admin.users')}</TabsTrigger>
-              <TabsTrigger value="members" data-testid="tab-members">{t('admin.members')}</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
+              <TabsTrigger value="members" data-testid="tab-members">회원</TabsTrigger>
               <TabsTrigger value="articles" data-testid="tab-articles">뉴스</TabsTrigger>
-              <TabsTrigger value="events" data-testid="tab-events">{t('admin.events')}</TabsTrigger>
+              <TabsTrigger value="events" data-testid="tab-events">행사</TabsTrigger>
               <TabsTrigger value="resources" data-testid="tab-resources">자료</TabsTrigger>
               <TabsTrigger value="inquiries" data-testid="tab-inquiries">문의</TabsTrigger>
             </TabsList>
@@ -718,15 +718,15 @@ export default function AdminPage() {
                         {article.listImage && (
                           <img 
                             src={article.listImage} 
-                            alt={article.title}
+                            alt={article.translations?.[0]?.title || '뉴스'}
                             className="w-20 h-20 object-cover rounded border"
                             data-testid={`img-news-${article.id}`}
                             onError={(e) => e.currentTarget.style.display = 'none'}
                           />
                         )}
                         <div className="flex-1">
-                          <h4 className="font-medium mb-2">{article.title}</h4>
-                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{article.excerpt}</p>
+                          <h4 className="font-medium mb-2">{article.translations?.[0]?.title || '제목 없음'}</h4>
+                          <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{article.translations?.[0]?.excerpt || '설명 없음'}</p>
                           <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                             <span>{new Date(article.publishedAt || article.createdAt).toLocaleDateString()}</span>
                             <Badge variant="secondary">{article.status}</Badge>
@@ -783,10 +783,10 @@ export default function AdminPage() {
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h4 className="font-medium mb-2">{resource.title}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">{resource.excerpt}</p>
+                          <h4 className="font-medium mb-2">{resource.translations?.[0]?.title || '제목 없음'}</h4>
+                          <p className="text-sm text-muted-foreground mb-2">{resource.translations?.[0]?.excerpt || '설명 없음'}</p>
                           <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                            <Badge variant="outline">{resource.tags?.[0] || '기타'}</Badge>
+                            <Badge variant="outline">{(resource.tags as any)?.[0] || '기타'}</Badge>
                             <Badge variant="secondary">{resource.status}</Badge>
                           </div>
                         </div>
@@ -973,7 +973,7 @@ export default function AdminPage() {
           {/* Inquiry View Dialog */}
           {selectedItem && activeTab === 'inquiries' && (
             <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-              <InquiryDetailView inquiry={selectedItem} onClose={() => setViewDialogOpen(false)} />
+              <InquiryDetailView inquiryId={selectedItem.id} onClose={() => setViewDialogOpen(false)} />
             </Dialog>
           )}
 
