@@ -1456,9 +1456,10 @@ function EditEventForm({ event, eventId, onSuccess, updateMutation }: any) {
                   alt={`이미지 ${index + 1}`}
                   className="w-full h-32 object-cover rounded border bg-gray-100 dark:bg-gray-800"
                   data-testid={`img-event-edit-preview-${index}`}
+                  style={{ minHeight: '128px' }}
                   onError={(e) => {
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
+                    e.currentTarget.style.borderColor = '#ef4444';
+                    e.currentTarget.style.opacity = '0.5';
                   }}
                 />
                 <Button 
@@ -2108,9 +2109,10 @@ function CreateNewsDialog({
                       alt={`이미지 ${index + 1}`}
                       className="w-full h-32 object-cover rounded border bg-gray-100 dark:bg-gray-800"
                       data-testid={`img-news-create-preview-${index}`}
+                      style={{ minHeight: '128px' }}
                       onError={(e) => {
-                        const target = e.currentTarget;
-                        target.style.display = 'none';
+                        e.currentTarget.style.borderColor = '#ef4444';
+                        e.currentTarget.style.opacity = '0.5';
                       }}
                     />
                     <Button 
@@ -2371,9 +2373,10 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
                       alt={`이미지 ${index + 1}`}
                       className="w-full h-32 object-cover rounded border bg-gray-100 dark:bg-gray-800"
                       data-testid={`img-event-create-preview-${index}`}
+                      style={{ minHeight: '128px' }}
                       onError={(e) => {
-                        const target = e.currentTarget;
-                        target.style.display = 'none';
+                        e.currentTarget.style.borderColor = '#ef4444';
+                        e.currentTarget.style.opacity = '0.5';
                       }}
                     />
                     <Button 

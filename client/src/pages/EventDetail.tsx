@@ -221,16 +221,27 @@ export default function EventDetailPage() {
             <div className="mb-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {eventMeta.images.map((image: string, index: number) => (
-                  <img
+                  <div
                     key={index}
-                    src={image}
-                    alt={`${translation.title || post.slug} 이미지 ${index + 1}`}
-                    className="w-full h-64 object-cover rounded-lg"
-                    data-testid={`img-event-${index}`}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
+                    className="relative bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden"
+                    style={{ minHeight: '256px' }}
+                  >
+                    <img
+                      src={image}
+                      alt={`${translation.title || post.slug} 이미지 ${index + 1}`}
+                      className="w-full h-64 object-cover rounded-lg"
+                      data-testid={`img-event-${index}`}
+                      onError={(e) => {
+                        e.currentTarget.style.borderColor = '#ef4444';
+                        e.currentTarget.style.opacity = '0.5';
+                      }}
+                    />
+                    {!image && (
+                      <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                        이미지를 불러올 수 없습니다
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
