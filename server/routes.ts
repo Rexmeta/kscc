@@ -156,14 +156,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", authenticateToken, async (req, res) => {
     try {
-      const user = await storage.getUser(req.user.id);
+      const user = await storage.getUser(req.user!.id);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
       
       // Get user's membership information
-      const membership = await getUserMembershipInfo(req.user.id);
-      const permissions = await getUserPermissions(req.user.id);
+      const membership = await getUserMembershipInfo(req.user!.id);
+      const permissions = await getUserPermissions(req.user!.id);
       
       res.json({ 
         ...user, 
@@ -196,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/auth/profile", authenticateToken, async (req, res) => {
     try {
       const updates = profileUpdateSchema.parse(req.body);
-      const user = await storage.getUser(req.user.id);
+      const user = await storage.getUser(req.user!.id);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.password = await bcrypt.hash(updates.newPassword, 10);
       }
 
-      const updatedUser = await storage.updateUser(req.user.id, updateData);
+      const updatedUser = await storage.updateUser(req.user!.id, updateData);
       
       if (!updatedUser) {
         return res.status(500).json({ message: "Failed to update profile" });
@@ -244,7 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/registrations", authenticateToken, async (req, res) => {
     try {
-      const registrations = await storage.getUserRegistrations(req.user.id);
+      const registrations = await storage.getUserRegistrations(req.user!.id);
       res.json(registrations);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -266,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify ownership
-      if (registration.userId !== req.user.id) {
+      if (registration.userId !== req.user!.id) {
         return res.status(403).json({ message: "You can only cancel your own registrations" });
       }
 
@@ -410,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/members", authenticateToken, async (req, res) => {
     try {
-      const memberData = insertMemberSchema.parse({ ...req.body, userId: req.user.id });
+      const memberData = insertMemberSchema.parse({ ...req.body, userId: req.user!.id });
       const member = await storage.createMember(memberData);
       res.status(201).json(member);
     } catch (error) {
@@ -426,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user owns this member record or is admin
-      if (member.userId !== req.user.id && req.user.role !== 'admin') {
+      if (member.userId !== req.user!.id && req.user!.role !== 'admin') {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
@@ -454,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User registrations (used by Dashboard)
   app.get("/api/user/registrations", authenticateToken, async (req, res) => {
     try {
-      const registrations = await storage.getUserRegistrations(req.user.id);
+      const registrations = await storage.getUserRegistrations(req.user!.id);
       res.json(registrations);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

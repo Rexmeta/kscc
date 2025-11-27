@@ -269,6 +269,10 @@ export class DatabaseStorage implements IStorage {
     return member || undefined;
   }
 
+  async deleteMember(id: string): Promise<void> {
+    await db.delete(members).where(eq(members.id, id));
+  }
+
   // Event Registrations
   async getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined> {
     const [registration] = await db
@@ -420,6 +424,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(inquiries.id, id))
       .returning();
     return inquiry || undefined;
+  }
+
+  async deleteInquiry(id: string): Promise<void> {
+    await db.delete(inquiries).where(eq(inquiries.id, id));
   }
 
   async getInquiryWithReplies(id: string): Promise<InquiryWithReplies | undefined> {
