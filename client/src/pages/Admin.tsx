@@ -1888,22 +1888,12 @@ function CreateNewsDialog({
 
   const handleFeaturedImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: uploadURL }),
-      });
-      
-      const data = await response.json();
-      setFeaturedImageUrl(data.objectPath);
-      setValue('featuredImage', data.objectPath);
-      toast({ title: '대표 이미지 업로드 완료!' });
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setFeaturedImageUrl(objectPath);
+        setValue('featuredImage', objectPath);
+        toast({ title: '대표 이미지 업로드 완료!' });
+      }
     }
   };
 
