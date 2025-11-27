@@ -520,6 +520,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const inquiry = await storage.getInquiry(req.params.id);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+      
+      await storage.deleteInquiry(req.params.id);
+      res.json({ message: "Inquiry deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/inquiries/:id/reply", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const inquiryId = req.params.id;

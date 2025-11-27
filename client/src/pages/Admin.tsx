@@ -840,19 +840,61 @@ export default function AdminPage() {
                     {inquiriesData?.inquiries?.map((inquiry: InquiryWithReplies) => (
                       <div key={inquiry.id} className="p-4 flex items-center justify-between" data-testid={`inquiry-row-${inquiry.id}`}>
                         <div className="flex-1">
-                          <h4 className="font-medium">{inquiry.subject}</h4>
+                          <h4 className="font-medium cursor-pointer hover:underline" onClick={() => {
+                            setSelectedItem(inquiry);
+                            setViewDialogOpen(true);
+                          }}>{inquiry.subject}</h4>
                           <p className="text-sm text-muted-foreground">
                             {inquiry.name} • {inquiry.category} • {inquiry.phone || inquiry.email}
                           </p>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{inquiry.message}</p>
                         </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge variant={
-                            inquiry.status === 'new' ? 'destructive' :
-                            inquiry.status === 'in_progress' ? 'secondary' : 'default'
-                          }>
-                            {inquiry.status === 'new' ? '새 문의' :
-                             inquiry.status === 'in_progress' ? '진행 중' : '해결'}
-                          </Badge>
+                        <div className="flex items-center space-x-3">
+                          <div className="flex flex-col items-end space-y-1">
+                            <Badge variant={
+                              inquiry.status === 'new' ? 'destructive' :
+                              inquiry.status === 'in_progress' ? 'secondary' : 'default'
+                            }>
+                              {inquiry.status === 'new' ? '새 문의' :
+                               inquiry.status === 'in_progress' ? '진행 중' : '해결'}
+                            </Badge>
+                          </div>
+                          {inquiry.status === 'new' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await apiRequest('PUT', `/api/inquiries/${inquiry.id}`, { status: 'in_progress' });
+                                  toast({ title: "상태가 변경되었습니다" });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                                } catch (error) {
+                                  toast({ title: "상태 변경 실패", variant: "destructive" });
+                                }
+                              }}
+                              data-testid={`button-progress-inquiry-${inquiry.id}`}
+                            >
+                              진행 중
+                            </Button>
+                          )}
+                          {inquiry.status !== 'resolved' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await apiRequest('PUT', `/api/inquiries/${inquiry.id}`, { status: 'resolved' });
+                                  toast({ title: "문의가 해결되었습니다" });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                                } catch (error) {
+                                  toast({ title: "상태 변경 실패", variant: "destructive" });
+                                }
+                              }}
+                              data-testid={`button-resolve-inquiry-${inquiry.id}`}
+                            >
+                              ✓ 해결
+                            </Button>
+                          )}
                           <Button 
                             size="sm" 
                             variant="outline"
@@ -862,7 +904,27 @@ export default function AdminPage() {
                             }}
                             data-testid={`button-view-inquiry-${inquiry.id}`}
                           >
-                            보기
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={async () => {
+                              if (confirm('정말 이 문의를 삭제하시겠습니까?')) {
+                                try {
+                                  const response = await apiRequest('DELETE', `/api/inquiries/${inquiry.id}`, null);
+                                  if (response.ok) {
+                                    toast({ title: "문의가 삭제되었습니다" });
+                                    queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                                  }
+                                } catch (error) {
+                                  toast({ title: "삭제 실패", variant: "destructive" });
+                                }
+                              }
+                            }}
+                            data-testid={`button-delete-inquiry-${inquiry.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </div>
