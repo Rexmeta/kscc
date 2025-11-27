@@ -1848,6 +1848,7 @@ function CreateNewsDialog({
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   // Use external open state if provided, otherwise use internal state
   const isOpen = open !== undefined ? open : internalOpen;
@@ -1946,6 +1947,7 @@ function CreateNewsDialog({
       setImageUrls([]);
       setNewImageUrl('');
       setIsOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       onSuccess();
     },
     onError: (error) => {
@@ -2371,6 +2373,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm({
     resolver: zodResolver(resourceSchema),
@@ -2397,6 +2400,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       reset();
       setUploadedFileName('');
       setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
       onSuccess();
     },
     onError: (error) => {
