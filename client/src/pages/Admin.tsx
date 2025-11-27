@@ -1485,6 +1485,7 @@ function EditEventForm({ event, eventId, onSuccess, updateMutation }: any) {
 
 function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
   const [imageUrls, setImageUrls] = useState<string[]>(article.images || []);
+  const [featuredImageUrl, setFeaturedImageUrl] = useState(article.featuredImage || '');
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
 
@@ -1513,6 +1514,7 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
       isPublished: article.isPublished,
     });
     setImageUrls(article.images || []);
+    setFeaturedImageUrl(article.featuredImage || '');
   }, [article, reset]);
 
   const handleGetUploadParameters = async () => {
@@ -1536,6 +1538,7 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        setFeaturedImageUrl(objectPath);
         setValue('featuredImage', objectPath);
         toast({ title: '대표 이미지 업로드 완료!' });
       }
@@ -1613,7 +1616,11 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
         <label className="form-label">대표 이미지</label>
         <div className="flex gap-2 mb-2">
           <Input 
-            {...register('featuredImage')} 
+            value={featuredImageUrl}
+            onChange={(e) => {
+              setFeaturedImageUrl(e.target.value);
+              setValue('featuredImage', e.target.value);
+            }}
             placeholder="https://example.com/image.jpg 또는 파일 업로드" 
             data-testid="input-featured-image"
           />
@@ -1628,6 +1635,34 @@ function EditNewsForm({ article, articleId, onSuccess, updateMutation }: any) {
             파일 업로드
           </ObjectUploader>
         </div>
+        {featuredImageUrl && (
+          <div className="relative group w-full mb-2">
+            <img
+              src={featuredImageUrl}
+              alt="대표 이미지"
+              className="w-full h-40 object-cover rounded border bg-gray-100 dark:bg-gray-800"
+              data-testid="img-news-edit-featured-preview"
+              style={{ minHeight: '160px' }}
+              onError={(e) => {
+                e.currentTarget.style.borderColor = '#ef4444';
+                e.currentTarget.style.opacity = '0.5';
+              }}
+            />
+            <Button 
+              type="button" 
+              size="sm" 
+              variant="destructive" 
+              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => {
+                setFeaturedImageUrl('');
+                setValue('featuredImage', '');
+              }}
+              data-testid="button-remove-news-featured-image"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         {errors.featuredImage && <p className="text-sm text-destructive mt-1">{String(errors.featuredImage.message)}</p>}
       </div>
       <div>
@@ -2009,7 +2044,7 @@ function CreateNewsDialog({
 
           <div>
             <label className="form-label">대표 이미지</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2">
               <Input 
                 value={featuredImageUrl}
                 onChange={(e) => {
@@ -2030,6 +2065,34 @@ function CreateNewsDialog({
                 파일 업로드
               </ObjectUploader>
             </div>
+            {featuredImageUrl && (
+              <div className="relative group w-full mb-2">
+                <img
+                  src={featuredImageUrl}
+                  alt="대표 이미지"
+                  className="w-full h-40 object-cover rounded border bg-gray-100 dark:bg-gray-800"
+                  data-testid="img-news-create-featured-preview"
+                  style={{ minHeight: '160px' }}
+                  onError={(e) => {
+                    e.currentTarget.style.borderColor = '#ef4444';
+                    e.currentTarget.style.opacity = '0.5';
+                  }}
+                />
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="destructive" 
+                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => {
+                    setFeaturedImageUrl('');
+                    setValue('featuredImage', '');
+                  }}
+                  data-testid="button-remove-news-featured-image"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
 
           <div>
