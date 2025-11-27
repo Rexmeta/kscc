@@ -1792,6 +1792,13 @@ function EditResourceForm({ resource, onSuccess, updateMutation }: any) {
           <Input {...register('fileType')} />
         </div>
       </div>
+      {resource.fileUrl && (
+        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-sm font-medium text-blue-900 dark:text-blue-100">파일 정보</p>
+          <p className="text-xs text-blue-800 dark:text-blue-200 mt-1 truncate" title={resource.fileUrl}>📎 {resource.fileName || 'file'} ({resource.fileType || 'unknown'})</p>
+          <p className="text-xs text-blue-700 dark:text-blue-300 mt-1 truncate" title={resource.fileUrl}>{resource.fileUrl}</p>
+        </div>
+      )}
       <div className="flex gap-2">
         <Button type="submit" disabled={updateMutation.isPending}>
           {updateMutation.isPending ? '수정 중...' : '수정'}
@@ -1833,6 +1840,19 @@ function EditPartnerForm({ partner, onSuccess, updateMutation }: any) {
         <label className="form-label">로고 URL</label>
         <Input {...register('logo')} />
         {errors.logo && <p className="text-sm text-destructive mt-1">{String(errors.logo.message)}</p>}
+        {partner.logo && (
+          <div className="mt-2">
+            <img 
+              src={partner.logo} 
+              alt="로고 미리보기" 
+              className="h-16 object-contain rounded border bg-gray-100 dark:bg-gray-800"
+              onError={(e) => {
+                e.currentTarget.style.borderColor = '#ef4444';
+                e.currentTarget.style.opacity = '0.5';
+              }}
+            />
+          </div>
+        )}
       </div>
       <div>
         <label className="form-label">웹사이트</label>
@@ -2604,6 +2624,13 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
               {errors.fileType && <p className="text-sm text-destructive mt-1">{String(errors.fileType.message)}</p>}
             </div>
           </div>
+          
+          {uploadedFileName && (
+            <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+              <p className="text-sm font-medium text-green-900 dark:text-green-100">✓ 파일 준비 완료</p>
+              <p className="text-xs text-green-800 dark:text-green-200 mt-1 truncate" title={uploadedFileName}>📎 {uploadedFileName}</p>
+            </div>
+          )}
           
           <div className="flex gap-2">
             <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-resource">
