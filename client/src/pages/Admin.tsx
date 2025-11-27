@@ -2129,6 +2129,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
@@ -2190,6 +2191,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
       setImageUrls([]);
       setNewImageUrl('');
       setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
       onSuccess();
     },
     onError: (error) => {
