@@ -437,6 +437,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const member = await storage.getMember(req.params.id);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+      
+      await storage.deleteMember(req.params.id);
+      res.json({ message: "Member deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // User registrations (used by Dashboard)
   app.get("/api/user/registrations", authenticateToken, async (req, res) => {
     try {

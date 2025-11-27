@@ -693,28 +693,62 @@ export default function AdminPage() {
                   <div className="divide-y">
                     {membersData?.members?.map((member: Member) => (
                       <div key={member.id} className="p-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-4 flex-1">
                           <Building2 className="h-8 w-8 text-muted-foreground" />
-                          <div>
+                          <div className="flex-1">
                             <h4 className="font-medium">{member.companyName}</h4>
                             <p className="text-sm text-muted-foreground">
                               {member.contactPerson} • {member.contactEmail}
                             </p>
+                            {member.website && <p className="text-xs text-muted-foreground mt-1">{member.website}</p>}
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant={
-                            member.membershipStatus === 'active' ? 'default' :
-                            member.membershipStatus === 'pending' ? 'secondary' :
-                            'destructive'
-                          }>
-                            {member.membershipStatus === 'active' ? '활성' :
-                             member.membershipStatus === 'pending' ? '승인대기' : '비활성'}
-                          </Badge>
-                          <Badge variant="outline">
-                            {member.membershipLevel === 'premium' ? '프리미엄' :
-                             member.membershipLevel === 'sponsor' ? '후원' : '정회원'}
-                          </Badge>
+                        <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-2">
+                            <Badge variant={
+                              member.membershipStatus === 'active' ? 'default' :
+                              member.membershipStatus === 'pending' ? 'secondary' :
+                              'destructive'
+                            }>
+                              {member.membershipStatus === 'active' ? '활성' :
+                               member.membershipStatus === 'pending' ? '승인대기' : '비활성'}
+                            </Badge>
+                            <Badge variant="outline">
+                              {member.membershipLevel === 'premium' ? '프리미엄' :
+                               member.membershipLevel === 'sponsor' ? '후원' : '정회원'}
+                            </Badge>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedItem(member);
+                              setEditDialogOpen(true);
+                            }}
+                            data-testid={`button-edit-member-${member.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={async () => {
+                              if (confirm('정말 이 회원을 삭제하시겠습니까?')) {
+                                try {
+                                  const response = await apiRequest('DELETE', `/api/members/${member.id}`, null);
+                                  if (response.ok) {
+                                    toast({ title: "회원이 삭제되었습니다" });
+                                    queryClient.invalidateQueries({ queryKey: ['/api/members', { admin: true }] });
+                                  }
+                                } catch (error) {
+                                  toast({ title: "삭제 실패", variant: "destructive" });
+                                }
+                              }
+                            }}
+                            data-testid={`button-delete-member-${member.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
                       </div>
                     ))}
