@@ -606,18 +606,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get("/api/admin/dashboard", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const [membersResult, eventsResult, newsResult, inquiriesResult] = await Promise.all([
+      const [membersResult, eventsResult, inquiriesResult] = await Promise.all([
         storage.getMembers({ limit: 1 }),
-        storage.getEvents({ limit: 1 }),
-        storage.getNews({ limit: 1 }),
+        storage.getPosts({ postType: 'event', limit: 1 }),
         storage.getInquiries({ limit: 1 }),
       ]);
 
       res.json({
         stats: {
           totalMembers: membersResult.total,
-          totalEvents: eventsResult.total,
-          totalNews: newsResult.total,
+          totalEvents: eventsResult.posts?.length || 0,
+          totalNews: 0,
           totalInquiries: inquiriesResult.total,
         },
       });
@@ -658,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: "imageURL is required" });
     }
 
-    const userId = req.user?.id;
+    const userId = req.user?.id || '';
 
     try {
       const objectStorageService = new ObjectStorageService();
