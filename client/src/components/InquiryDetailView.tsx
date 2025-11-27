@@ -17,7 +17,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
   const { data: inquiry, isLoading, refetch } = useQuery<InquiryWithReplies>({
     queryKey: ['/api/inquiries', inquiryId],
     queryFn: async () => {
-      const response = await apiRequest(`/api/inquiries/${inquiryId}`);
+      const response = await apiRequest('GET', `/api/inquiries/${inquiryId}`);
       if (!response.ok) throw new Error('Failed to load inquiry details');
       return response.json();
     },
@@ -35,10 +35,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
 
     setIsSubmitting(true);
     try {
-      const response = await apiRequest(`/api/inquiries/${inquiryId}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ message: replyMessage, sendEmail }),
-      });
+      const response = await apiRequest('POST', `/api/inquiries/${inquiryId}/reply`, { message: replyMessage, sendEmail });
 
       if (!response.ok) throw new Error('Failed to submit reply');
 
