@@ -543,7 +543,7 @@ export default function AdminPage() {
                                member.membershipLevel === 'sponsor' ? '후원' : '정회원'}
                             </Badge>
                           </div>
-                          {member.membershipStatus === 'pending' && (
+                          {member.membershipStatus !== 'active' && (
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -561,7 +561,25 @@ export default function AdminPage() {
                               ✓ 승인
                             </Button>
                           )}
-                          {member.membershipStatus !== 'inactive' && member.membershipStatus !== 'pending' && (
+                          {member.membershipStatus !== 'pending' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await apiRequest('PUT', `/api/members/${member.id}`, { membershipStatus: 'pending' });
+                                  toast({ title: "상태가 승인 대기로 변경되었습니다" });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/members', { admin: true }] });
+                                } catch (error) {
+                                  toast({ title: "상태 변경 실패", variant: "destructive" });
+                                }
+                              }}
+                              data-testid={`button-pending-member-${member.id}`}
+                            >
+                              대기
+                            </Button>
+                          )}
+                          {member.membershipStatus !== 'inactive' && (
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -1213,7 +1231,21 @@ function EditMemberForm({ member, onSuccess }: any) {
           </ObjectUploader>
         </div>
         {logoUrl && (
-          <img src={logoUrl} alt="로고" className="h-16 object-contain rounded border" onError={(e) => e.currentTarget.style.display = 'none'} />
+          <div className="flex gap-2 items-center">
+            <img src={logoUrl} alt="로고" className="h-16 object-contain rounded border" onError={(e) => e.currentTarget.style.display = 'none'} data-testid="img-member-logo" />
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setLogoUrl('');
+                setValue('logo', '');
+              }}
+              data-testid="button-remove-logo"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         )}
       </div>
 
