@@ -508,41 +508,47 @@ export default function AdminPage() {
                 <CardContent className="p-0">
                   <div className="divide-y">
                     {membersData?.members?.map((member: Member) => (
-                      <div key={member.id} className="p-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-4 flex-1">
-                          {member.logo && (
-                            <img src={member.logo} alt={member.companyName} className="w-12 h-12 object-contain rounded border" onError={(e) => e.currentTarget.style.display = 'none'} />
-                          )}
-                          <Building2 className="h-8 w-8 text-muted-foreground" />
-                          <div 
-                            className="flex-1 cursor-pointer"
-                            onClick={() => {
-                              setSelectedItem(member);
-                              setViewDialogOpen(true);
-                            }}
-                          >
-                            <h4 className="font-medium hover:underline">{member.companyName}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {member.contactPerson} • {member.contactEmail}
-                            </p>
-                            {member.website && <p className="text-xs text-muted-foreground mt-1">{member.website}</p>}
+                      <div key={member.id} className="p-4 space-y-3 border-b last:border-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3 flex-1">
+                            {member.logo && (
+                              <img src={member.logo} alt={member.companyName} className="w-12 h-12 object-contain rounded border" onError={(e) => e.currentTarget.style.display = 'none'} />
+                            )}
+                            {!member.logo && <Building2 className="h-8 w-8 text-muted-foreground flex-shrink-0" />}
+                            <div 
+                              className="flex-1 cursor-pointer"
+                              onClick={() => {
+                                setSelectedItem(member);
+                                setViewDialogOpen(true);
+                              }}
+                            >
+                              <h4 className="font-medium hover:underline">{member.companyName}</h4>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {member.contactPerson} • {member.contactEmail}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <div className="flex flex-col items-end space-y-1">
+                          <div className="flex items-center gap-2">
                             <Badge variant={
                               member.membershipStatus === 'active' ? 'default' :
                               member.membershipStatus === 'pending' ? 'secondary' :
                               'destructive'
-                            }>
+                            } className="whitespace-nowrap">
                               {member.membershipStatus === 'active' ? '활성' :
                                member.membershipStatus === 'pending' ? '승인대기' : '보류'}
                             </Badge>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs whitespace-nowrap">
                               {member.membershipLevel === 'premium' ? '프리미엄' :
                                member.membershipLevel === 'sponsor' ? '후원' : '정회원'}
                             </Badge>
                           </div>
+                        </div>
+                        {member.website && (
+                          <div className="text-xs text-muted-foreground pl-15">
+                            {member.website}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-end space-x-2 pt-2">
                           {member.membershipStatus !== 'active' && (
                             <Button 
                               size="sm" 
@@ -1598,10 +1604,10 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
 // Create Inquiry Form
 function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
+  const [category, setCategory] = useState('');
   const form = useForm({
     defaultValues: {
       subject: '',
-      category: '',
       message: '',
       name: '',
       email: '',
@@ -1614,7 +1620,7 @@ function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
       const response = await fetch('/api/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ ...data, category })
       });
       if (!response.ok) throw new Error('Failed to create inquiry');
       return response.json();
@@ -1622,6 +1628,7 @@ function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
     onSuccess: () => {
       toast({ title: "문의가 접수되었습니다" });
       form.reset();
+      setCategory('');
       onSuccess();
     },
     onError: () => {
@@ -1635,7 +1642,7 @@ function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
       <Input placeholder="이름" {...form.register('name', { required: true })} data-testid="input-inquiry-name" />
       <Input placeholder="이메일" type="email" {...form.register('email', { required: true })} data-testid="input-inquiry-email" />
       <Input placeholder="전화번호" {...form.register('phone')} data-testid="input-inquiry-phone" />
-      <Select onValueChange={(value) => form.setValue('category', value)}>
+      <Select value={category} onValueChange={setCategory}>
         <SelectTrigger data-testid="select-inquiry-category">
           <SelectValue placeholder="카테고리 선택" />
         </SelectTrigger>
@@ -1647,7 +1654,7 @@ function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
         </SelectContent>
       </Select>
       <Textarea placeholder="문의 내용" {...form.register('message', { required: true })} data-testid="textarea-inquiry-message" />
-      <Button type="submit" disabled={submitMutation.isPending} data-testid="button-submit-inquiry" className="w-full">
+      <Button type="submit" disabled={submitMutation.isPending || !category} data-testid="button-submit-inquiry" className="w-full">
         {submitMutation.isPending ? '접수 중...' : '문의 접수'}
       </Button>
     </form>
