@@ -39,10 +39,10 @@ function getTranslationSafe(post: PostWithTranslations, locale: string) {
 // Helper to extract event meta safely
 function getEventMeta(post: PostWithTranslations) {
   const getValue = (key: string) => 
-    post.meta.find(m => m.metaKey === key)?.valueText || null;
+    post.meta.find(m => m.key === key)?.valueText || null;
   
   const getMetaTimestamp = (key: string): Date | null => {
-    const meta = post.meta.find(m => m.metaKey === key);
+    const meta = post.meta.find(m => m.key === key);
     return meta?.valueTimestamp || null;
   };
 
@@ -50,7 +50,7 @@ function getEventMeta(post: PostWithTranslations) {
     eventDate: getMetaTimestamp('eventDate'),
     endDate: getMetaTimestamp('endDate'),
     location: getValue('location'),
-    capacity: post.meta.find(m => m.metaKey === 'capacity')?.valueNumber || null,
+    capacity: post.meta.find(m => m.key === 'capacity')?.valueNumber || null,
     fee: getValue('fee'),
     registrationDeadline: getMetaTimestamp('registrationDeadline'),
     contactEmail: getValue('contactEmail'),
@@ -290,7 +290,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">회원등급</label>
-                      <p className="text-foreground">
+                      <div className="mt-1">
                         <Badge variant="secondary" className={
                           memberInfo.membershipLevel === 'premium' ? 'badge-primary' :
                           memberInfo.membershipLevel === 'sponsor' ? 'badge-accent' :
@@ -299,16 +299,16 @@ export default function Dashboard() {
                           {memberInfo.membershipLevel === 'premium' ? '프리미엄' :
                            memberInfo.membershipLevel === 'sponsor' ? '후원회원' : '정회원'}
                         </Badge>
-                      </p>
+                      </div>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-muted-foreground">상태</label>
-                      <p className="text-foreground">
+                      <div className="mt-1">
                         <Badge variant={memberInfo.membershipStatus === 'active' ? 'default' : 'secondary'}>
                           {memberInfo.membershipStatus === 'active' ? '활성' :
                            memberInfo.membershipStatus === 'pending' ? '승인대기' : '비활성'}
                         </Badge>
-                      </p>
+                      </div>
                     </div>
                   </div>
                 ) : (
