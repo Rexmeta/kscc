@@ -314,6 +314,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { role, userType, membershipTier, isActive } = req.body;
+      const updateData: any = {};
+      
+      if (role) updateData.role = role;
+      if (userType) updateData.userType = userType;
+      if (membershipTier) updateData.membershipTier = membershipTier;
+      if (typeof isActive === 'boolean') updateData.isActive = isActive;
+      
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No fields to update" });
+      }
+      
+      const updatedUser = await storage.updateUser(req.params.id, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({ ...updatedUser, password: undefined });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.put("/api/users/:id/membership", authenticateToken, requireAdmin, async (req, res) => {
     try {
       // Validate request body with Zod

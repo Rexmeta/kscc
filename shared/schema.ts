@@ -15,8 +15,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
-  role: text("role").notNull().default("member"), // member, admin
-  userType: text("user_type").notNull().default("staff"), // staff, company
+  role: text("role").notNull().default("user"), // admin, operator, user
+  userType: text("user_type").notNull().default("user"), // admin, operator, company, user
+  membershipTier: text("membership_tier").notNull().default("free"), // free, bronze, silver, gold, platinum
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

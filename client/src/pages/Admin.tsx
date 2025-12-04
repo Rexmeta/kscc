@@ -468,18 +468,22 @@ export default function AdminPage() {
                             <p className="text-sm text-muted-foreground">{user.email}</p>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge variant={user.role === 'admin' ? 'default' : 'secondary'} data-testid={`badge-user-role-${user.id}`}>
-                            {user.role === 'admin' ? '관리자' : '일반 사용자'}
+                        <div className="flex items-center gap-2">
+                          <Badge variant={user.role === 'admin' ? 'default' : user.role === 'operator' ? 'secondary' : 'outline'} data-testid={`badge-user-role-${user.id}`}>
+                            {user.role === 'admin' ? '관리자' : user.role === 'operator' ? '운영자' : '사용자'}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs" data-testid={`badge-user-type-${user.id}`}>
+                            {user.userType === 'admin' ? '관리자' : user.userType === 'operator' ? '운영자' : user.userType === 'company' ? '회원사' : '일반'}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs" data-testid={`badge-user-tier-${user.id}`}>
+                            {user.membershipTier === 'bronze' ? '브론즈' : user.membershipTier === 'silver' ? '실버' : user.membershipTier === 'gold' ? '골드' : user.membershipTier === 'platinum' ? '플래티넘' : '무료'}
                           </Badge>
                           <Button 
                             size="sm" 
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => {
-                              toast({ 
-                                title: "권한 편집 기능은 곧 추가될 예정입니다.",
-                                description: `사용자: ${user.name}`
-                              });
+                              setSelectedItem(user);
+                              setEditDialogOpen(true);
                             }}
                             data-testid={`button-edit-user-${user.id}`}
                           >
@@ -1128,6 +1132,87 @@ export default function AdminPage() {
                     queryClient.invalidateQueries({ queryKey: ['/api/members', { admin: true }] });
                   }}
                 />
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* User Edit Dialog */}
+          {selectedItem && activeTab === 'users' && (
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>사용자 정보 수정</DialogTitle>
+                  <DialogDescription>{selectedItem.name} 사용자의 권한을 관리합니다</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">역할</label>
+                    <Select defaultValue={selectedItem.role} onValueChange={async (value) => {
+                      try {
+                        await apiRequest('PUT', `/api/users/${selectedItem.id}`, { role: value });
+                        toast({ title: "역할이 변경되었습니다" });
+                        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+                      } catch (error) {
+                        toast({ title: "변경 실패", variant: "destructive" });
+                      }
+                    }}>
+                      <SelectTrigger className="mt-1" data-testid={`select-user-role-${selectedItem.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">관리자</SelectItem>
+                        <SelectItem value="operator">운영자</SelectItem>
+                        <SelectItem value="user">사용자</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">계정 유형</label>
+                    <Select defaultValue={selectedItem.userType} onValueChange={async (value) => {
+                      try {
+                        await apiRequest('PUT', `/api/users/${selectedItem.id}`, { userType: value });
+                        toast({ title: "계정 유형이 변경되었습니다" });
+                        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+                      } catch (error) {
+                        toast({ title: "변경 실패", variant: "destructive" });
+                      }
+                    }}>
+                      <SelectTrigger className="mt-1" data-testid={`select-user-type-${selectedItem.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">관리자</SelectItem>
+                        <SelectItem value="operator">운영자</SelectItem>
+                        <SelectItem value="company">회원사</SelectItem>
+                        <SelectItem value="user">일반 사용자</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">회원등급</label>
+                    <Select defaultValue={selectedItem.membershipTier} onValueChange={async (value) => {
+                      try {
+                        await apiRequest('PUT', `/api/users/${selectedItem.id}`, { membershipTier: value });
+                        toast({ title: "회원등급이 변경되었습니다" });
+                        queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+                      } catch (error) {
+                        toast({ title: "변경 실패", variant: "destructive" });
+                      }
+                    }}>
+                      <SelectTrigger className="mt-1" data-testid={`select-user-tier-${selectedItem.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free">무료</SelectItem>
+                        <SelectItem value="bronze">브론즈</SelectItem>
+                        <SelectItem value="silver">실버</SelectItem>
+                        <SelectItem value="gold">골드</SelectItem>
+                        <SelectItem value="platinum">플래티넘</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={() => setEditDialogOpen(false)} className="w-full">완료</Button>
+                </div>
               </DialogContent>
             </Dialog>
           )}
