@@ -17,7 +17,7 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 // Validation schemas
 const postQuerySchema = z.object({
-  postType: z.enum(['news', 'event', 'resource']).optional(),
+  postType: z.enum(['news', 'event', 'resource', 'page']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
   visibility: z.enum(['public', 'members', 'staff']).optional(),
   tags: z.string().optional(), // Comma-separated tags
@@ -62,6 +62,25 @@ router.get("/", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid query parameters", errors: error.errors });
     }
     console.error("[Posts API] Error fetching posts:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/posts/slug/:slug - Get single post by slug with translations
+router.get("/slug/:slug", async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const locale = req.query.locale as 'ko' | 'en' | 'zh' | undefined;
+    
+    const post = await storage.getPostBySlug(slug);
+    
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    
+    res.json(post);
+  } catch (error) {
+    console.error("[Posts API] Error fetching post by slug:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
