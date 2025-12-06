@@ -386,7 +386,7 @@ export default function AdminPage() {
 
         <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-8 w-full">
+            <TabsList className={`grid w-full ${(user?.role === 'admin' || user?.role === 'operator') ? 'grid-cols-9' : 'grid-cols-8'}`}>
               <TabsTrigger value="dashboard" data-testid="tab-dashboard">대시보드</TabsTrigger>
               <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
               <TabsTrigger value="members" data-testid="tab-members">회원</TabsTrigger>
@@ -395,6 +395,9 @@ export default function AdminPage() {
               <TabsTrigger value="resources" data-testid="tab-resources">자료</TabsTrigger>
               <TabsTrigger value="pages" data-testid="tab-pages">페이지</TabsTrigger>
               <TabsTrigger value="inquiries" data-testid="tab-inquiries">문의</TabsTrigger>
+              {(user?.role === 'admin' || user?.role === 'operator') && (
+                <TabsTrigger value="manual" data-testid="tab-manual">운영 매뉴얼</TabsTrigger>
+              )}
             </TabsList>
 
             {/* Dashboard Tab */}
@@ -1115,6 +1118,397 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Operations Manual Tab - Operator and Admin only */}
+            {(user?.role === 'admin' || user?.role === 'operator') && (
+              <TabsContent value="manual" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold">KSCC 운영 매뉴얼</h2>
+                  <Badge variant="secondary">운영자 전용</Badge>
+                </div>
+                
+                <div className="grid gap-6">
+                  {/* 목적 정의 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">0. 목적 정의</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>한국-현지 기업 네트워킹</li>
+                        <li>투자/거래/협력 정보 제공</li>
+                        <li>현지 정부/기관 연결</li>
+                        <li>교민 비즈니스 지원</li>
+                      </ul>
+                      <p className="mt-3 text-sm font-medium text-destructive">이 목적에서 벗어나는 일은 하지 않는다.</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* 조직 구조 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">1. 조직 구조</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <p className="font-medium">법적 형태: 비영리 사단법인</p>
+                        <p className="text-sm text-muted-foreground">회원구조: 개인·기업·기관</p>
+                      </div>
+                      <div>
+                        <p className="font-medium mb-2">핵심 인력:</p>
+                        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+                          <span>• 회장 1</span>
+                          <span>• 부회장(재무) 1</span>
+                          <span>• 부회장(행사/프로그램) 1</span>
+                          <span>• 사무국장 1 (실무 책임)</span>
+                          <span>• 이사 3~7</span>
+                          <span>• 감사 1</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 재정 구조 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">2. 재정 구조</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                          <p className="font-medium mb-2">수입원:</p>
+                          <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                            <li>연회비</li>
+                            <li>행사 참가비</li>
+                            <li>스폰서십/광고</li>
+                            <li>정부·기관 협력금(가능시)</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="font-medium mb-2">지출:</p>
+                          <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                            <li>사무국비</li>
+                            <li>회계/법률</li>
+                            <li>행사비</li>
+                            <li>웹/CRM 운영비</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 bg-muted rounded-lg">
+                        <p className="font-medium text-sm">원칙:</p>
+                        <ul className="list-disc list-inside text-sm text-muted-foreground">
+                          <li>이사회 승인 없이 지출 불가</li>
+                          <li>분기별 재무보고 공개</li>
+                        </ul>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 정관 주요 조항 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">3. 규정(정관) 주요 조항</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+                        <li>목적</li>
+                        <li>회원자격/권리/의무</li>
+                        <li>회비 규정</li>
+                        <li>임원 구성 및 임기(2년)</li>
+                        <li>이사회 운영</li>
+                        <li>사무국 운영</li>
+                        <li>재무규정</li>
+                        <li>총회 소집</li>
+                        <li>해산 및 잔여재산 처리(공익 조직에 귀속)</li>
+                      </ol>
+                    </CardContent>
+                  </Card>
+
+                  {/* 회원 서비스 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">4. 회원 서비스 핵심</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-3">회원이 얻는 실제 가치가 명확해야 한다.</p>
+                      <div className="grid md:grid-cols-2 gap-2">
+                        <div className="p-2 bg-muted rounded text-sm">1. 정기 네트워킹</div>
+                        <div className="p-2 bg-muted rounded text-sm">2. 시장 정보 브리핑</div>
+                        <div className="p-2 bg-muted rounded text-sm">3. 정부·기관 연결</div>
+                        <div className="p-2 bg-muted rounded text-sm">4. 전문가 세미나</div>
+                        <div className="p-2 bg-muted rounded text-sm">5. 기업 방문 투어</div>
+                        <div className="p-2 bg-muted rounded text-sm">6. 투자·파트너 매칭</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 3개월 준비 로드맵 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">5. 3개월 준비 로드맵</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="border-l-4 border-blue-500 pl-4">
+                        <p className="font-medium">1개월차: 정관·조직·법적 준비</p>
+                        <ul className="list-disc list-inside text-sm text-muted-foreground mt-1">
+                          <li>설립 목적 완성</li>
+                          <li>정관 1차 초안 작성</li>
+                          <li>이사진·감사 구성 확정</li>
+                          <li>회비 구조 확정</li>
+                          <li>사무국 임명</li>
+                          <li>웹사이트 기본 페이지 생성</li>
+                        </ul>
+                        <p className="text-xs mt-2 font-medium text-blue-600">Outcome: 핵심 조직 + 법적 골격</p>
+                      </div>
+                      <div className="border-l-4 border-green-500 pl-4">
+                        <p className="font-medium">2개월차: 브랜딩·제도·재무 준비</p>
+                        <ul className="list-disc list-inside text-sm text-muted-foreground mt-1">
+                          <li>비영리 등록 절차 진행</li>
+                          <li>회비 납부 방식 설정(Stripe/PayPal/계좌)</li>
+                          <li>회계 기준 문서화</li>
+                          <li>브랜드 CI, 문서 템플릿</li>
+                          <li>노동·법률 자문 계약</li>
+                        </ul>
+                        <p className="text-xs mt-2 font-medium text-green-600">Outcome: 투명성·신뢰 기반 확보</p>
+                      </div>
+                      <div className="border-l-4 border-purple-500 pl-4">
+                        <p className="font-medium">3개월차: 회원 모집·첫 행사</p>
+                        <ul className="list-disc list-inside text-sm text-muted-foreground mt-1">
+                          <li>회원 모집 시작(목표 20~50)</li>
+                          <li>첫 네트워킹 행사 개최</li>
+                          <li>정부/대사관 기관 소개 미팅</li>
+                          <li>뉴스레터 발행 시작</li>
+                          <li>CRM(회원관리) 시스템 오픈</li>
+                        </ul>
+                        <p className="text-xs mt-2 font-medium text-purple-600">Outcome: 조직 실체 확보</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 월별 운영 계획 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">6. 월별 운영 계획 (설립 1년차)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="p-3 border rounded-lg">
+                          <p className="font-medium text-sm mb-2">Q1 (정착기)</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground">
+                            <li>월 1회 네트워킹</li>
+                            <li>1회 세미나(세금/법률/시장)</li>
+                            <li>분기 재무보고</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <p className="font-medium text-sm mb-2">Q2 (확장기)</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground">
+                            <li>현지기관 공동 세미나</li>
+                            <li>한국기관(KOTRA/KITA) 협력</li>
+                            <li>기업 투어 1회</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <p className="font-medium text-sm mb-2">Q3 (가속기)</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground">
+                            <li>주제별 포럼(수출/투자/스타트업)</li>
+                            <li>정부 정책사절단 대응</li>
+                            <li>스폰서십 확대</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 border rounded-lg">
+                          <p className="font-medium text-sm mb-2">Q4 (평가·성숙기)</p>
+                          <ul className="list-disc list-inside text-xs text-muted-foreground">
+                            <li>연차총회 + 재무보고</li>
+                            <li>회원 설문조사</li>
+                            <li>차기전략 수립</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 행사 운영 표준 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">7. 행사 운영 표준</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                          <p className="font-medium text-sm">A타입: 조찬 포럼</p>
+                          <p className="text-xs text-muted-foreground">1시간 발표 + 1시간 네트워킹</p>
+                        </div>
+                        <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                          <p className="font-medium text-sm">B타입: 기업 방문</p>
+                          <p className="text-xs text-muted-foreground">공장/사무실/센터 투어</p>
+                        </div>
+                        <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg">
+                          <p className="font-medium text-sm">C타입: 정부·기관 세션</p>
+                          <p className="text-xs text-muted-foreground">규제/법률/세제 안내</p>
+                        </div>
+                        <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg">
+                          <p className="font-medium text-sm">D타입: 교민 비즈니스 DAY</p>
+                          <p className="text-xs text-muted-foreground">소규모 B2B 매칭</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* KPI */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">8. KPI (1년 검증 지표)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-3">측정 가능한 지표만.</p>
+                      <div className="grid grid-cols-5 gap-3">
+                        <div className="text-center p-3 bg-muted rounded-lg">
+                          <p className="text-2xl font-bold">40+</p>
+                          <p className="text-xs text-muted-foreground">유료 회원</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted rounded-lg">
+                          <p className="text-2xl font-bold">12+</p>
+                          <p className="text-xs text-muted-foreground">행사 횟수</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted rounded-lg">
+                          <p className="text-2xl font-bold">5+</p>
+                          <p className="text-xs text-muted-foreground">기관 협력</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted rounded-lg">
+                          <p className="text-2xl font-bold">4</p>
+                          <p className="text-xs text-muted-foreground">재무 보고</p>
+                        </div>
+                        <div className="text-center p-3 bg-muted rounded-lg">
+                          <p className="text-2xl font-bold">10+</p>
+                          <p className="text-xs text-muted-foreground">기업 매칭</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 회계·투명성 체계 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">9. 회계·투명성 체계</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        <li className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>은행 계좌 단일(회계분리)</span>
+                        </li>
+                        <li className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>지출 결재 2인 승인</span>
+                        </li>
+                        <li className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>회계 보고서 분기 공개</span>
+                        </li>
+                        <li className="flex items-center gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>연말 외부 회계 검토</span>
+                        </li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+
+                  {/* 디지털 운영 체계 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">10. 디지털 운영 체계</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-3 gap-2 text-sm">
+                        <div className="p-2 border rounded">Web + CRM</div>
+                        <div className="p-2 border rounded">Stripe/PayPal</div>
+                        <div className="p-2 border rounded">Notion 사무국 매뉴얼</div>
+                        <div className="p-2 border rounded">Google Workspace</div>
+                        <div className="p-2 border rounded">Mailchimp 뉴스레터</div>
+                        <div className="p-2 border rounded">Zoom/Hybrid 세미나</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 성공조건 & 실패 방지 */}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-green-600">11. 성공조건 5가지</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ol className="list-decimal list-inside text-sm space-y-1">
+                          <li>행사 콘텐츠 품질</li>
+                          <li>기관 연결 능력</li>
+                          <li>회계 투명성</li>
+                          <li>회원 혜택 명확성</li>
+                          <li>사무국의 실행력</li>
+                        </ol>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-destructive">12. 실패 방지 원칙</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          <li className="flex items-center gap-2 text-sm">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            <span>회장 개인 이슈로 운영하지 않는다</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-sm">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            <span>정치 종교와 완전 분리</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-sm">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            <span>사적 이익 추구 금지</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-sm">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            <span>회원 이익 우선</span>
+                          </li>
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* 문서 세트 */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">13. 문서 세트(템플릿)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid md:grid-cols-4 gap-2">
+                        <Badge variant="outline" className="justify-center py-2">정관 템플릿</Badge>
+                        <Badge variant="outline" className="justify-center py-2">사무국 매뉴얼</Badge>
+                        <Badge variant="outline" className="justify-center py-2">재무규정</Badge>
+                        <Badge variant="outline" className="justify-center py-2">회비운영규정</Badge>
+                        <Badge variant="outline" className="justify-center py-2">회원가입 양식</Badge>
+                        <Badge variant="outline" className="justify-center py-2">행사 운영 매뉴얼</Badge>
+                        <Badge variant="outline" className="justify-center py-2">연차보고 템플릿</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* 결론 */}
+                  <Card className="border-2 border-primary">
+                    <CardContent className="pt-6">
+                      <blockquote className="text-center">
+                        <p className="text-lg font-medium mb-2">
+                          비영리는 <span className="text-primary">돈 버는 조직이 아니라 신뢰를 축적하는 조직</span>이다.
+                        </p>
+                        <p className="text-muted-foreground">
+                          신뢰가 쌓이면 <strong>비즈니스·협력은 자연스럽게 따라온다.</strong>
+                        </p>
+                      </blockquote>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
 
           {/* Member View Dialog */}
