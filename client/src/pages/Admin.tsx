@@ -43,6 +43,7 @@ import {
   mapResourceFormToPost, mapPostToResourceForm, type ResourceFormData
 } from '@/lib/adminPostMappers';
 import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
+import PageEditModal from '@/components/PageEditModal';
 
 // Form schemas
 const newsSchema = z.object({
@@ -250,6 +251,8 @@ export default function AdminPage() {
   const [createNewsDialogOpen, setCreateNewsDialogOpen] = useState(false);
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const [createResourceDialogOpen, setCreateResourceDialogOpen] = useState(false);
+  const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
+  const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1014,8 +1017,8 @@ export default function AdminPage() {
                               size="sm" 
                               variant="outline"
                               onClick={() => {
-                                setSelectedItem(page);
-                                setEditDialogOpen(true);
+                                setSelectedPage(page);
+                                setPageEditModalOpen(true);
                               }}
                               data-testid={`button-edit-page-${page.id}`}
                             >
@@ -1033,6 +1036,17 @@ export default function AdminPage() {
                   </div>
                 </CardContent>
               </Card>
+
+              {selectedPage && (
+                <PageEditModal
+                  isOpen={pageEditModalOpen}
+                  onClose={() => {
+                    setPageEditModalOpen(false);
+                    setSelectedPage(null);
+                  }}
+                  page={selectedPage}
+                />
+              )}
             </TabsContent>
 
             {/* Partners Tab */}
