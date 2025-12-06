@@ -1,18 +1,22 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Phone, Mail, Clock, MessageSquare, Youtube, Linkedin, Send } from 'lucide-react';
+import { Building2, Phone, Mail, Clock, MessageSquare, Linkedin, Send, Edit } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
+import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
+import PageEditModal from '@/components/PageEditModal';
+import type { PostWithTranslations } from '@shared/schema';
 
 const inquirySchema = z.object({
   category: z.string().min(1, '문의 분류를 선택해주세요'),
@@ -27,8 +31,58 @@ const inquirySchema = z.object({
 
 type InquiryForm = z.infer<typeof inquirySchema>;
 
+interface ContactContent {
+  office: {
+    title: string;
+    address: string;
+    phone: string;
+    email: string;
+    hours: {
+      weekdays: string;
+      lunch: string;
+      weekend: string;
+    };
+  };
+  categories: {
+    membership: string;
+    event: string;
+    partnership: string;
+    other: string;
+  };
+}
+
 export default function ContactPage() {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
+  const { language } = useLanguage();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  const { data: page } = useQuery<PostWithTranslations>({
+    queryKey: ['/api/posts/slug', 'contact'],
+    queryFn: async () => {
+      const response = await fetch('/api/posts/slug/contact');
+      if (!response.ok) throw new Error('Page not found');
+      return response.json();
+    },
+  });
+
+  const getTranslation = () => {
+    if (!page?.translations) return null;
+    return page.translations.find(t => t.locale === language) || page.translations[0];
+  };
+
+  const translation = getTranslation();
+  
+  const parseContent = (): ContactContent | null => {
+    if (!translation?.content) return null;
+    try {
+      return JSON.parse(translation.content);
+    } catch {
+      return null;
+    }
+  };
+
+  const content = parseContent();
   
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<InquiryForm>({
     resolver: zodResolver(inquirySchema),
@@ -64,7 +118,27 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative">
+      {isAdmin && page && (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            className="fixed bottom-6 right-6 z-50 shadow-lg"
+            onClick={() => setIsEditModalOpen(true)}
+            data-testid="button-edit-page"
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            페이지 편집
+          </Button>
+          <PageEditModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            page={page}
+          />
+        </>
+      )}
+
       {/* Header */}
       <section className="bg-muted py-16">
         <div className="container">
