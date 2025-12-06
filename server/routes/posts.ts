@@ -70,9 +70,8 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/slug/:slug", async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
-    const locale = req.query.locale as 'ko' | 'en' | 'zh' | undefined;
     
-    const post = await storage.getPostBySlug(slug);
+    const post = await storage.getPostBySlugWithTranslations(slug);
     
     if (!post) {
       return res.status(404).json({ message: "Post not found" });

@@ -74,6 +74,7 @@ export interface IStorage {
   // Posts
   getPost(id: string): Promise<Post | undefined>;
   getPostBySlug(slug: string): Promise<Post | undefined>;
+  getPostBySlugWithTranslations(slug: string): Promise<PostWithTranslations | undefined>;
   getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined>;
   getPosts(filters?: {
     postType?: string;
@@ -527,6 +528,24 @@ export class DatabaseStorage implements IStorage {
   async getPostBySlug(slug: string): Promise<Post | undefined> {
     const [post] = await db.select().from(posts).where(eq(posts.slug, slug));
     return post || undefined;
+  }
+
+  async getPostBySlugWithTranslations(slug: string): Promise<PostWithTranslations | undefined> {
+    const post = await this.getPostBySlug(slug);
+    if (!post) return undefined;
+
+    const translations = await db
+      .select()
+      .from(postTranslations)
+      .where(eq(postTranslations.postId, post.id));
+
+    const meta = await this.getPostMetaAll(post.id);
+
+    return {
+      ...post,
+      translations,
+      meta,
+    };
   }
 
   async getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined> {
