@@ -2,158 +2,48 @@
 
 ## Overview
 
-This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of Commerce (한국 사천-충칭 총상회), a business association facilitating economic, trade, and cultural exchanges between Korea and the Sichuan-Chongqing regions of China. The platform serves as a hub for member management, event coordination, news distribution, and business networking. The application supports multilingual content (Korean, English, Chinese) and provides public-facing pages alongside authenticated member areas.
+This is a full-stack web application for the Korea Sichuan-Chongqing Chamber of Commerce (한국 사천-충칭 총상회). Its purpose is to facilitate economic, trade, and cultural exchanges between Korea and the Sichuan-Chongqing regions of China. The platform functions as a central hub for member management, event coordination, news distribution, and business networking. It supports multilingual content (Korean, English, Chinese) and offers both public-facing content and authenticated member-specific areas. The project aims to serve as a vital tool for the chamber's operations and outreach.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes
-
-### Unified Posts System Migration - COMPLETED (November 15, 2025)
-
-#### Backend Hydration Implementation
-- **storage.getPosts()** now returns `PostWithTranslations[]` instead of `Post[]`, with all translations hydrated using batch fetching (3 queries total) to prevent N+1 queries
-- **Search functionality** added to Posts API: EXISTS subquery matches title/content/excerpt in post_translations table, plus slug in posts table (case-insensitive ILIKE)
-- **Removed meta/locale filtering** from getPosts due to type incompatibility; all translations now returned for multi-locale support
-
-#### News Pages Migration
-- **NewsCard.tsx** refactored to consume `PostWithTranslations` directly instead of legacy `News` type
-- **convertToNews adapter removed** from News.tsx; all components now use PostWithTranslations natively
-- **Home.tsx** updated to use `/api/posts?postType=news&status=published` instead of `/api/news`
-- **NewsDetail.tsx** refactored to use `/api/posts/:id` instead of `/api/news/:id`, fixing 404 error
-- **Locale-aware helpers**: `getTranslationSafe()` and `getMetaValue()` added to each component for consistent data extraction
-
-#### Event Pages Migration
-- **EventCard.tsx** refactored to use `PostWithTranslations` with `getEventMeta()` for type-safe event meta extraction; Date fields (eventDate, endDate, registrationDeadline) automatically converted from ISO strings to Date objects via `getMetaTimestamp()`
-- **Events.tsx** migrated to `/api/posts?postType=event&status=published&upcoming=true` endpoint with SQL-level upcoming filter
-- **EventDetail.tsx** fully refactored to use PostWithTranslations: GET `/api/posts/:id` for data fetch, POST `/api/posts/:id/register` for event registration
-- **Backend registration endpoint**: POST `/api/posts/:id/register` added with authentication, post existence check (using getPostWithTranslations), postType validation, duplicate registration check
-- **Upcoming filter**: SQL EXISTS subquery on post_meta.value_timestamp > NOW() with IS NOT NULL guard for accurate pagination
-- **Event sorting**: Upcoming events now ordered by eventDate ASC (earliest first) using application-layer sorting (in-memory) after batch fetch; other posts ordered by publishedAt DESC (Drizzle-safe implementation)
-- **Shared helpers**: `getTranslationSafe()` and `getEventMeta()` provide consistent data access across all event components
-- **E2E testing**: Full Events flow verified via Playwright - event listing, sorting, detail pages, and navigation all working correctly
-
-#### Admin Content Management Migration (November 15, 2025)
-- **API Orchestration Helpers** (`adminPostApi.ts`): 3-step create/update/delete operations for Posts API (post → translations → meta) with centralized auth/error handling via `apiRequest()`
-- **Form Mappers** (`adminPostMappers.ts`): Bidirectional converters for News/Events/Resources between legacy form data and Posts API
-  - News: `mapNewsFormToPost`, `mapPostToNewsForm` (preserves `publishedAt` timestamps)
-  - Events: `mapEventFormToPost`, `mapPostToEventForm`
-  - Resources: `mapResourceFormToPost`, `mapPostToResourceForm`
-- **Admin.tsx Complete Migration**:
-  - **News Section**: `GET /api/posts?postType=news` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'news', admin: true }]`
-  - **Events Section**: `GET /api/posts?postType=event` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'event', admin: true }]`
-  - **Resources Section**: `GET /api/posts?postType=resource` | All mutations use Posts API | Query key: `['/api/posts', { postType: 'resource', admin: true }]`
-  - CreateNews/Event/ResourceDialog + Edit forms all refactored
-  - All API calls use `apiRequest()` for consistent authentication and error handling
-- **ACL Migration**: Replaced `requirePermission('posts:*')` with `requireAdmin` middleware in Posts API (posts:create/update/delete not in ACL PERMS)
-  - All mutating endpoints (POST, PATCH, DELETE) now use `requireAdmin` (checks `req.user?.role === 'admin'`)
-  - Local `requireAdmin` function defined in `server/routes/posts.ts` to avoid circular dependency
-- **HTTP Method Alignment**: Fixed adminPostApi.ts to use correct HTTP methods matching actual API endpoints
-  - Update: Changed PUT → PATCH for /api/posts/:id
-  - Translation/Meta: Removed PUT fallback logic, using POST exclusively (endpoints support upsert)
-  - Delete: Removed empty body from DELETE request
-- **Event Registrations Endpoint**: Added GET /api/posts/:id/registrations to Posts API
-  - Requires authentication + admin role
-  - Validates post exists and is an event
-  - Admin.tsx registrations query migrated to use new endpoint
-- **Legacy Endpoints Cleanup**: Removed all legacy /api/events and /api/news routes from server/routes.ts
-  - Deleted 12 legacy routes (GET, POST, PUT, DELETE for events/news)
-  - Retained /api/user/registrations (used by User Dashboard)
-  - Updated API Structure documentation to reflect unified Posts API
-- **E2E Testing**: Full CRUD flow verified end-to-end via Playwright
-  - Create: POST /api/posts → 201, success toast, dialog closes, item appears in list
-  - Edit: PATCH /api/posts/:id → 200, success toast, updated item reflects changes
-  - Delete: DELETE /api/posts/:id → 204, success toast, item removed from list
-  - Registrations: GET /api/posts/:id/registrations → 200, dialog displays correctly
-
-#### Legacy Code Complete Removal (November 15, 2025)
-- **Database Migration**: Executed `npm run db:push --force` to physically remove legacy tables (events, news, resources) from database
-  - 3 events, 3 news, 1 resource migrated to unified posts system before deletion
-  - Database schema now 100% aligned with code
-- **Schema Cleanup**: 
-  - Removed events, news, resources table definitions from shared/schema.ts
-  - Removed Event, News, Resource, InsertEvent, InsertNews, InsertResource types
-  - Removed eventsRelations, newsRelations, resourcesRelations
-  - Cleaned usersRelations: removed eventsCreated, newsArticles, resourcesCreated references
-- **Admin.tsx Type Safety**:
-  - Removed legacy News, Event, Resource type imports
-  - Added explicit queryFn to usersData query for proper type inference
-  - Updated type annotations to use NewsFormData & { id: string }, ResourceFormData & { id: string }
-  - LSP diagnostics: 0 errors in Admin.tsx
-- **Storage Interface**: Removed all legacy CRUD methods (getEvent*, createEvent*, getNews*, createNews*, getResource*, createResource*)
-- **E2E Verification**: Public pages test passed
-  - News list & detail pages: PostWithTranslations correctly displayed
-  - Events list & detail pages: Event meta properly extracted
-  - Resources list & detail: File metadata correctly shown
-  - API endpoints: All /api/posts?postType={type} return proper PostWithTranslations structure
-  - No legacy endpoint calls detected
-
-#### Inquiry Reply System (November 15, 2025)
-- **Database Schema**: Created inquiry_replies table for board-style threaded replies
-  - Removed single-response fields (response, respondedBy, respondedAt) from inquiries table
-  - New table tracks: inquiryId, message, respondedBy, emailSent, emailSentAt, createdAt
-  - Cascade delete: replies auto-deleted when inquiry is deleted
-- **Email Service**: Implemented email notification system (server/email.ts)
-  - Resend API integration with fallback logging when RESEND_API_KEY not configured
-  - Professional HTML email template with Korean localization
-  - Includes original inquiry context + reply message
-  - Environment variables: RESEND_API_KEY (optional), EMAIL_FROM (default: noreply@example.com)
-- **Storage Methods**: Added inquiry reply operations
-  - getInquiryWithReplies(): Fetches inquiry with all replies + responder details (InquiryWithReplies type)
-  - createInquiryReply(): Creates new reply
-  - updateInquiryReplyEmailStatus(): Tracks email delivery status
-- **API Endpoints**:
-  - GET /api/inquiries/:id: Returns InquiryWithReplies (inquiry + replies array with responder info)
-  - POST /api/inquiries/:id/reply: Creates reply with optional email notification (body: { message, sendEmail })
-  - Email sent asynchronously, emailSent flag updated after delivery
-- **Admin UI Enhancements**:
-  - Inquiry list: Added full contact info display (phone, company), improved date formatting
-  - InquiryDetailView component (client/src/components/InquiryDetailView.tsx):
-    - Original inquiry details with full contact information
-    - Reply history with responder name, timestamp, email sent badge
-    - New reply form with Textarea input
-    - Email notification checkbox (default: checked)
-    - Real-time refetch after reply submission
-  - Integrated into Admin.tsx View Dialog for seamless UX
-
 ## System Architecture
 
 ### Frontend Architecture
 
-**Framework & Tooling:** React 18 with TypeScript, Vite, Wouter for routing, TanStack Query for server state, React Hook Form with Zod for form validation.
+**Framework & Tooling:** React 18 with TypeScript, Vite, Wouter for routing, TanStack Query for server state management, and React Hook Form with Zod for form validation.
 
-**UI Components:** shadcn/ui built on Radix UI, Tailwind CSS with custom design tokens, dark mode support, and responsive mobile-first design.
+**UI Components:** Built with shadcn/ui (based on Radix UI) and styled using Tailwind CSS, including custom design tokens, dark mode support, and a responsive mobile-first approach.
 
-**State Management:** React Context for authentication, TanStack Query for server state, React Hook Form for form state.
+**State Management:** Utilizes React Context for authentication, TanStack Query for server-side data, and React Hook Form for managing form states.
 
-**Internationalization:** Custom i18n system supporting Korean (ko), English (en), and Chinese (zh) with runtime language switching and multilingual content stored in the database.
+**Internationalization:** Features a custom i18n system that supports Korean (ko), English (en), and Chinese (zh). It allows for runtime language switching and stores multilingual content directly in the database.
 
 ### Backend Architecture
 
-**Server Framework:** Express.js with TypeScript for RESTful API endpoints, JWT-based authentication, and middleware for logging and error handling.
+**Server Framework:** Express.js with TypeScript, providing RESTful API endpoints, JWT-based authentication, and middleware for logging and error handling.
 
-**Authentication & Authorization:** JWT for stateless authentication, bcrypt for password hashing, and a comprehensive 5-tier, 5-role, 27-permission ACL system with wildcard support.
+**Authentication & Authorization:** Implements JWT for stateless authentication, bcrypt for secure password hashing, and a comprehensive 5-tier, 5-role, 27-permission ACL system with wildcard support.
 
-**API Structure:** RESTful conventions with endpoints for authentication (`/api/auth`), users (`/api/users`), members (`/api/members`), unified posts (`/api/posts`), resources (`/api/resources`), inquiries (`/api/inquiries`), and partners (`/api/partners`).
+**API Structure:** Adheres to RESTful conventions, offering dedicated endpoints for authentication, users, members, a unified posts system (for news, events, pages), resources, inquiries, and partners.
 
-**Data Access Layer:** Storage abstraction pattern, type-safe database queries using Drizzle ORM, connection pooling via Neon, and transaction support.
+**Data Access Layer:** Employs a storage abstraction pattern with type-safe database queries using Drizzle ORM, connection pooling via Neon, and full transaction support.
 
 ### Database Architecture
 
-**ORM & Migrations:** Drizzle ORM for type-safe database access, Drizzle Kit for schema migrations, and Zod schemas generated from Drizzle for validation.
+**ORM & Migrations:** Drizzle ORM for type-safe data access and Drizzle Kit for managing schema migrations. Zod schemas are generated from Drizzle for robust validation.
 
-**Schema Design:** PostgreSQL database with key tables including `users`, `members`, `events`, `eventRegistrations`, `news`, `resources`, `inquiries`, and `partners`.
+**Schema Design:** PostgreSQL database featuring key tables such as `users`, `members`, `posts` (unified for news, events, pages), `post_translations`, `post_meta`, `eventRegistrations`, `inquiries`, `inquiry_replies`, and `partners`.
 
 ### System Design Choices
 
-*   **User Type System**: Two distinct user types: 'staff' (운영진) for internal chamber staff and 'company' (회원사) for member organizations. Company users are atomically created with associated member profiles using database transactions. Server-side enforcement prevents client-side privilege escalation. Registration flow supports both user types with dynamic form validation.
-*   **Language System**: Global language state managed via React Context (`LanguageContext.tsx`) with `localStorage` persistence and Router key-based remounting, enabling instant, no-reload language switching. Uses `useLanguage()` hook for accessing/updating language state. Router remounts on language change via `key={language}` prop, ensuring all components re-render with new translations. Supports Korean, English, and Simplified Chinese (简体中文 - using 总 not 總, 国 not 國).
-*   **Access Control List (ACL)**: Comprehensive 5-tier, 5-role, 27-permission hierarchical system implemented on both frontend and backend, securing routes and conditionally rendering UI elements.
-*   **Dashboard Features**: Full user profile management (name, email, password) and event registration management (view, cancel registrations) with robust validation and ownership checks.
-*   **Content Management**: Detailed content fields for events and news. Image management features for news and events, supporting multiple images via URL input or Replit Object Storage uploads, stored as JSONB arrays.
-*   **About Page**: Updated with official chamber information, including Mission, Vision, Core Functions, Organization Structure, and Future Vision, with a professional design and responsive layouts.
-*   **Image Storage**: Normalized image storage paths to use relative paths (`/objects/uploads/{file-id}`) from `PRIVATE_OBJECT_DIR`, ensuring correct image serving and compatibility.
+*   **User Type System**: Supports 'staff' (운영진) and 'company' (회원사) user types, with atomic creation of company users and associated member profiles. Server-side logic prevents privilege escalation.
+*   **Language System**: Global language state managed via React Context with `localStorage` persistence and router key-based remounting for instant, no-reload language switching.
+*   **Access Control List (ACL)**: A hierarchical 5-tier, 5-role, 27-permission system is enforced on both frontend and backend for security and UI rendering.
+*   **Content Management**: Features detailed content fields for news and events, including image management that supports multiple images via URLs or Replit Object Storage uploads, stored as JSONB arrays. Static page content (About, Contact) is database-driven and multilingual.
+*   **Unified Posts System**: A core architectural decision to unify news, events, and static pages (`postType='page'`) under a single `posts` table with associated `post_translations` and `post_meta` tables, optimizing data management and multilingual support.
+*   **Inquiry Reply System**: Implemented with a dedicated `inquiry_replies` table for threaded conversations and an integrated email notification system using Resend API for sending replies to users.
 
 ## External Dependencies
 
@@ -189,5 +79,8 @@ Preferred communication style: Simple, everyday language.
 **Date Handling:**
 - date-fns
 
+**Email Service:**
+- Resend API
+
 **Session Management:**
-- connect-pg-simple (configured, but JWT is primary)
+- connect-pg-simple
