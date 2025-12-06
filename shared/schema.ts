@@ -5,7 +5,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Enums for unified post system
-export const postTypeEnum = pgEnum("post_type", ["news", "event", "resource"]);
+export const postTypeEnum = pgEnum("post_type", ["news", "event", "resource", "page"]);
 export const postStatusEnum = pgEnum("post_status", ["draft", "published", "archived"]);
 export const postVisibilityEnum = pgEnum("post_visibility", ["public", "members", "premium", "internal"]);
 export const localeEnum = pgEnum("locale", ["ko", "en", "zh"]);
