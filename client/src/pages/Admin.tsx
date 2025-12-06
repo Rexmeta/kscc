@@ -360,6 +360,15 @@ export default function AdminPage() {
     enabled: activeTab === 'partners',
   });
 
+  const { data: pagesData } = useQuery({
+    queryKey: ['/api/posts', { postType: 'page', admin: true }],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/posts?postType=page&admin=true');
+      return response.json();
+    },
+    enabled: isAdmin && activeTab === 'pages',
+  });
+
   if (!isAdmin) {
     return <div className="p-8 text-center text-red-600">관리자만 접근할 수 있습니다</div>;
   }
@@ -374,13 +383,14 @@ export default function AdminPage() {
 
         <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-7 w-full">
+            <TabsList className="grid grid-cols-8 w-full">
               <TabsTrigger value="dashboard" data-testid="tab-dashboard">대시보드</TabsTrigger>
               <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
               <TabsTrigger value="members" data-testid="tab-members">회원</TabsTrigger>
               <TabsTrigger value="articles" data-testid="tab-articles">뉴스</TabsTrigger>
               <TabsTrigger value="events" data-testid="tab-events">행사</TabsTrigger>
               <TabsTrigger value="resources" data-testid="tab-resources">자료</TabsTrigger>
+              <TabsTrigger value="pages" data-testid="tab-pages">페이지</TabsTrigger>
               <TabsTrigger value="inquiries" data-testid="tab-inquiries">문의</TabsTrigger>
             </TabsList>
 
@@ -972,6 +982,54 @@ export default function AdminPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Pages Tab */}
+            <TabsContent value="pages" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">페이지 관리</h2>
+              </div>
+              
+              <Card>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {pagesData?.posts?.map((page: PostWithTranslations) => {
+                      const translation = page.translations?.find(t => t.locale === 'ko') || page.translations?.[0];
+                      return (
+                        <div key={page.id} className="p-4 flex items-center justify-between" data-testid={`page-row-${page.id}`}>
+                          <div className="flex-1">
+                            <h4 className="font-medium">{translation?.title || page.slug}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              /{page.slug} • {page.status}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                              {translation?.excerpt || '페이지 설명 없음'}
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedItem(page);
+                                setEditDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-page-${page.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(!pagesData?.posts || pagesData.posts.length === 0) && (
+                      <div className="p-8 text-center text-muted-foreground">
+                        페이지가 없습니다
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
