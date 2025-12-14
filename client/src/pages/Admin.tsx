@@ -44,6 +44,7 @@ import {
 import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 import PageEditModal from '@/components/PageEditModal';
 import UserEditDialog from '@/components/UserEditDialog';
+import RichTextEditor from '@/components/RichTextEditor';
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -1465,7 +1466,11 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
 
       <div>
         <label className="form-label">내용</label>
-        <Textarea {...register('content')} rows={5} data-testid="textarea-news-content-edit" />
+        <RichTextEditor
+          value={watch('content') || ''}
+          onChange={(value) => setValue('content', value)}
+          data-testid="editor-news-content-edit"
+        />
         {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
       </div>
 
@@ -1618,6 +1623,14 @@ function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSu
         <Textarea {...register('description')} />
         {errors.description && <p className="text-sm text-destructive">{String(errors.description.message)}</p>}
       </div>
+      <div>
+        <label className="form-label">상세 내용</label>
+        <RichTextEditor
+          value={watch('content') || ''}
+          onChange={(value) => setValue('content', value)}
+          data-testid="editor-event-content-edit"
+        />
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">시작 날짜</label>
@@ -1763,7 +1776,11 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
       </div>
       <div>
         <label className="form-label">내용</label>
-        <Textarea {...register('content')} rows={5} />
+        <RichTextEditor
+          value={watch('content') || ''}
+          onChange={(value) => setValue('content', value)}
+          data-testid="editor-resource-content-edit"
+        />
       </div>
       <div>
         <label className="form-label">첨부파일</label>
@@ -1945,7 +1962,11 @@ function CreateNewsDialog({
 
           <div>
             <label className="form-label">내용</label>
-            <Textarea {...register('content')} rows={5} data-testid="textarea-news-content" />
+            <RichTextEditor
+              value={watch('content') || ''}
+              onChange={(value) => setValue('content', value)}
+              data-testid="editor-news-content"
+            />
             {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
           </div>
 
@@ -2158,7 +2179,11 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
 
           <div>
             <label className="form-label">상세 내용</label>
-            <Textarea {...register('content')} rows={4} data-testid="textarea-event-content" />
+            <RichTextEditor
+              value={watch('content') || ''}
+              onChange={(value) => setValue('content', value)}
+              data-testid="editor-event-content"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -2347,7 +2372,11 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
 
           <div>
             <label className="form-label">상세 내용</label>
-            <Textarea {...register('content')} rows={4} data-testid="textarea-resource-content" />
+            <RichTextEditor
+              value={watch('content') || ''}
+              onChange={(value) => setValue('content', value)}
+              data-testid="editor-resource-content"
+            />
           </div>
 
           <div>
