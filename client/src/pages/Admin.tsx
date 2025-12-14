@@ -1068,6 +1068,42 @@ export default function AdminPage() {
             </Dialog>
           )}
 
+          {/* Event Edit Dialog */}
+          {selectedItem && activeTab === 'events' && editDialogOpen && (
+            <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>행사 수정</DialogTitle>
+                </DialogHeader>
+                <EditEventForm 
+                  event={selectedItem} 
+                  onSuccess={() => {
+                    setEditDialogOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Resource Edit Dialog */}
+          {selectedItem && activeTab === 'resources' && editDialogOpen && (
+            <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>자료 수정</DialogTitle>
+                </DialogHeader>
+                <EditResourceForm 
+                  resource={selectedItem} 
+                  onSuccess={() => {
+                    setEditDialogOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
+                  }}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
+
           {/* Inquiry View Dialog */}
           {selectedItem && activeTab === 'inquiries' && (
             <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
@@ -1401,7 +1437,215 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   );
 }
 
-// ... (나머지 컴포넌트들 - CreateNewsDialog, CreateEventDialog, CreateResourceDialog 등)
+// EditEventForm Component
+function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  const translation = event.translations?.[0];
+  const eventMeta = event.meta || [];
+  const getMetaVal = (key: string) => String(eventMeta.find(m => m.key === key)?.value || '');
+  
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      title: translation?.title || '',
+      description: translation?.excerpt || '',
+      content: translation?.content || '',
+      eventDate: getMetaVal('event.date'),
+      endDate: getMetaVal('event.endDate'),
+      location: getMetaVal('event.location'),
+      category: getMetaVal('event.category') || 'networking',
+      eventType: getMetaVal('event.eventType') || 'offline',
+      capacity: parseInt(getMetaVal('event.capacity')) || undefined,
+      fee: parseInt(getMetaVal('event.fee')) || 0,
+      registrationDeadline: getMetaVal('event.registrationDeadline'),
+      isPublic: true,
+      isPublished: event.status === 'published',
+    }
+  });
+  
+  const isPublished = watch('isPublished');
+
+  const updateMutation = useMutation({
+    mutationFn: async (formData: any) => {
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      return await updatePost({
+        postId: event.id,
+        post: {
+          status: (formData.isPublished ? 'published' : 'draft') as any,
+          publishedAt: formData.isPublished ? new Date() : null,
+        },
+        translation: {
+          locale: 'ko' as any,
+          title: formData.title,
+          excerpt: formData.description,
+          subtitle: formData.description,
+          content: formData.content || '',
+        },
+        meta: [
+          { key: 'event.date', value: formData.eventDate },
+          { key: 'event.endDate', value: formData.endDate || '' },
+          { key: 'event.location', value: formData.location },
+          { key: 'event.category', value: formData.category },
+          { key: 'event.eventType', value: formData.eventType },
+          { key: 'event.capacity', value: String(formData.capacity || '') },
+          { key: 'event.fee', value: String(formData.fee || 0) },
+          { key: 'event.registrationDeadline', value: formData.registrationDeadline || '' },
+        ],
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "행사가 수정되었습니다" });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast({ title: "행사 수정 실패", description: error instanceof Error ? error.message : "알 수 없는 오류", variant: "destructive" });
+    },
+  });
+
+  return (
+    <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
+      <div>
+        <label className="form-label">제목</label>
+        <Input {...register('title')} />
+        {errors.title && <p className="text-sm text-destructive">{String(errors.title.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">설명</label>
+        <Textarea {...register('description')} />
+        {errors.description && <p className="text-sm text-destructive">{String(errors.description.message)}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="form-label">시작 날짜</label>
+          <Input type="datetime-local" {...register('eventDate')} />
+        </div>
+        <div>
+          <label className="form-label">종료 날짜</label>
+          <Input type="datetime-local" {...register('endDate')} />
+        </div>
+      </div>
+      <div>
+        <label className="form-label">장소</label>
+        <Input {...register('location')} />
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="form-label">카테고리</label>
+          <Select defaultValue={getMetaVal('event.category') || 'networking'} onValueChange={(v) => setValue('category', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="networking">네트워킹</SelectItem>
+              <SelectItem value="seminar">세미나</SelectItem>
+              <SelectItem value="conference">컨퍼런스</SelectItem>
+              <SelectItem value="workshop">워크샵</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="form-label">정원</label>
+          <Input type="number" {...register('capacity', { valueAsNumber: true })} />
+        </div>
+        <div>
+          <label className="form-label">참가비</label>
+          <Input type="number" {...register('fee', { valueAsNumber: true })} />
+        </div>
+      </div>
+      <div className="flex items-center space-x-2">
+        <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} />
+        <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>{updateMutation.isPending ? '수정 중...' : '수정'}</Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>취소</Button>
+      </div>
+    </form>
+  );
+}
+
+// EditResourceForm Component
+function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslations; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  const translation = resource.translations?.[0];
+  
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
+    resolver: zodResolver(resourceSchema),
+    defaultValues: {
+      title: translation?.title || '',
+      excerpt: translation?.excerpt || '',
+      content: translation?.content || '',
+      tags: (resource.tags as string[]) || [],
+      fileUrl: '',
+      isPublished: resource.status === 'published',
+    }
+  });
+  
+  const isPublished = watch('isPublished');
+
+  const updateMutation = useMutation({
+    mutationFn: async (formData: any) => {
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      return await updatePost({
+        postId: resource.id,
+        post: {
+          status: (formData.isPublished ? 'published' : 'draft') as any,
+          publishedAt: formData.isPublished ? new Date() : null,
+          tags: formData.tags,
+        },
+        translation: {
+          locale: 'ko' as any,
+          title: formData.title,
+          excerpt: formData.excerpt,
+          subtitle: formData.excerpt,
+          content: formData.content || '',
+        },
+        meta: formData.fileUrl ? [{ key: 'resource.fileUrl', value: formData.fileUrl }] : [],
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "자료가 수정되었습니다" });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
+      onSuccess();
+    },
+    onError: (error) => {
+      toast({ title: "자료 수정 실패", description: error instanceof Error ? error.message : "알 수 없는 오류", variant: "destructive" });
+    },
+  });
+
+  return (
+    <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
+      <div>
+        <label className="form-label">제목</label>
+        <Input {...register('title')} />
+        {errors.title && <p className="text-sm text-destructive">{String(errors.title.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">설명</label>
+        <Textarea {...register('excerpt')} />
+        {errors.excerpt && <p className="text-sm text-destructive">{String(errors.excerpt.message)}</p>}
+      </div>
+      <div>
+        <label className="form-label">내용</label>
+        <Textarea {...register('content')} rows={5} />
+      </div>
+      <div className="flex items-center space-x-2">
+        <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} />
+        <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={updateMutation.isPending}>{updateMutation.isPending ? '수정 중...' : '수정'}</Button>
+        <Button type="button" variant="outline" onClick={onSuccess}>취소</Button>
+      </div>
+    </form>
+  );
+}
+
 function CreateNewsDialog({ 
   onSuccess, 
   open, 
