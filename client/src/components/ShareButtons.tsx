@@ -102,8 +102,11 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
               </p>
             </div>
             <div className="w-full">
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                <span className="text-xs text-muted-foreground truncate flex-1">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg overflow-hidden">
+                <span 
+                  className="text-xs text-muted-foreground truncate flex-1 break-all"
+                  title={fullUrl}
+                >
                   {fullUrl}
                 </span>
                 <Button
