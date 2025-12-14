@@ -668,10 +668,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Organization Members routes
   app.get("/api/organization-members", async (req, res) => {
     try {
-      const { category } = req.query;
+      const { category, isActive } = req.query;
       const members = await storage.getOrganizationMembers({
         category: category as string,
-        isActive: true,
+        isActive: isActive === 'false' ? undefined : true,
       });
       res.json(members);
     } catch (error) {
@@ -711,9 +711,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Organization member not found" });
       }
       
-      const updatedMember = await storage.updateOrganizationMember(req.params.id, req.body);
+      const updateData = insertOrganizationMemberSchema.partial().parse(req.body);
+      const updatedMember = await storage.updateOrganizationMember(req.params.id, updateData);
       res.json(updatedMember);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });

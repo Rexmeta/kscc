@@ -9,6 +9,7 @@ export interface TranslationKeys {
   'nav.members': string;
   'nav.resources': string;
   'nav.contact': string;
+  'nav.organization': string;
   'nav.login': string;
   'nav.register': string;
   'nav.dashboard': string;
@@ -216,6 +217,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.members': '회원사',
     'nav.resources': '자료센터',
     'nav.contact': '문의하기',
+    'nav.organization': '조직',
     'nav.login': '로그인',
     'nav.register': '회원가입',
     'nav.dashboard': 'My Page',
@@ -421,6 +423,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.members': 'Members',
     'nav.resources': 'Resources',
     'nav.contact': 'Contact Us',
+    'nav.organization': 'Organization',
     'nav.login': 'Login',
     'nav.register': 'Register',
     'nav.dashboard': 'My Page',
@@ -626,6 +629,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.members': '会员',
     'nav.resources': '资料中心',
     'nav.contact': '联系我们',
+    'nav.organization': '组织',
     'nav.login': '登录',
     'nav.register': '注册',
     'nav.dashboard': 'My Page',

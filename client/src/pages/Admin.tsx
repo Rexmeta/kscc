@@ -26,13 +26,14 @@ import {
   CheckCircle,
   XCircle,
   X,
-  Upload
+  Upload,
+  Network
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
-import { Member, Inquiry, Partner, type PostWithTranslations, type InquiryWithReplies, type InquiryReply } from '@shared/schema';
+import { Member, Inquiry, Partner, type PostWithTranslations, type InquiryWithReplies, type InquiryReply, type OrganizationMember } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { UploadResult } from '@uppy/core';
@@ -99,6 +100,33 @@ const memberSchema = z.object({
   contactPerson: z.string(),
   contactEmail: z.string().email(),
 });
+
+const organizationMemberSchema = z.object({
+  name: z.string().min(1, '이름을 입력해주세요'),
+  nameEn: z.string().optional(),
+  nameZh: z.string().optional(),
+  position: z.string().min(1, '직책을 입력해주세요'),
+  positionEn: z.string().optional(),
+  positionZh: z.string().optional(),
+  category: z.string().min(1, '카테고리를 선택해주세요'),
+  photo: z.string().optional(),
+  description: z.string().optional(),
+  descriptionEn: z.string().optional(),
+  descriptionZh: z.string().optional(),
+  sortOrder: z.number().default(0),
+  isActive: z.boolean().default(true),
+});
+
+const ORGANIZATION_CATEGORIES = [
+  { value: 'executives', label: '임원진' },
+  { value: 'honorary', label: '명예직' },
+  { value: 'vicepresidents', label: '부회장' },
+  { value: 'directors', label: '이사' },
+  { value: 'advisors', label: '고문' },
+  { value: 'secretariat', label: '사무국' },
+  { value: 'committees', label: '위원회' },
+  { value: 'organizations', label: '단체회원' },
+];
 
 // Location search component
 function LocationSearch({ onSelect }: { onSelect: (location: string) => void }) {
@@ -172,6 +200,10 @@ export default function AdminPage() {
   const [createResourceDialogOpen, setCreateResourceDialogOpen] = useState(false);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
+  const [createOrgMemberDialogOpen, setCreateOrgMemberDialogOpen] = useState(false);
+  const [editOrgMemberDialogOpen, setEditOrgMemberDialogOpen] = useState(false);
+  const [selectedOrgMember, setSelectedOrgMember] = useState<OrganizationMember | null>(null);
+  const [orgCategoryFilter, setOrgCategoryFilter] = useState<string>('all');
   const { user, isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -323,6 +355,25 @@ export default function AdminPage() {
     enabled: isAdmin && activeTab === 'partners',
   });
 
+  // Organization Members query
+  const { data: orgMembersData } = useQuery({
+    queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('isActive', 'false');
+      if (orgCategoryFilter && orgCategoryFilter !== 'all') {
+        params.append('category', orgCategoryFilter);
+      }
+      const response = await fetch(`/api/organization-members?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      return response.json();
+    },
+    enabled: isAdmin && activeTab === 'organization',
+  });
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -336,7 +387,7 @@ export default function AdminPage() {
       <main className="container py-8">
         <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className={`grid w-full ${(user?.role === 'admin' || user?.role === 'operator') ? 'grid-cols-9' : 'grid-cols-8'}`}>
+            <TabsList className={`grid w-full ${(user?.role === 'admin' || user?.role === 'operator') ? 'grid-cols-10' : 'grid-cols-9'}`}>
               <TabsTrigger value="dashboard" data-testid="tab-dashboard">대시보드</TabsTrigger>
               <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
               <TabsTrigger value="members" data-testid="tab-members">회원</TabsTrigger>
@@ -345,6 +396,7 @@ export default function AdminPage() {
               <TabsTrigger value="resources" data-testid="tab-resources">자료</TabsTrigger>
               <TabsTrigger value="pages" data-testid="tab-pages">페이지</TabsTrigger>
               <TabsTrigger value="inquiries" data-testid="tab-inquiries">문의</TabsTrigger>
+              <TabsTrigger value="organization" data-testid="tab-organization">조직</TabsTrigger>
               {(user?.role === 'admin' || user?.role === 'operator') && (
                 <TabsTrigger value="manual" data-testid="tab-manual">운영 매뉴얼</TabsTrigger>
               )}
@@ -778,6 +830,122 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
+            </TabsContent>
+
+            {/* Organization Tab */}
+            <TabsContent value="organization" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold">조직 구조 관리</h2>
+                <Button onClick={() => setCreateOrgMemberDialogOpen(true)} data-testid="button-create-org-member">
+                  <Plus className="h-4 w-4 mr-2" />
+                  구성원 추가
+                </Button>
+              </div>
+
+              <div className="flex items-center space-x-4 mb-4">
+                <span className="text-sm font-medium">카테고리:</span>
+                <Select value={orgCategoryFilter} onValueChange={setOrgCategoryFilter}>
+                  <SelectTrigger className="w-48" data-testid="select-org-category-filter">
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {ORGANIZATION_CATEGORIES.map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                {orgMembersData?.map((member: OrganizationMember) => (
+                  <div key={member.id} className="flex justify-between items-center p-4 border rounded" data-testid={`row-org-member-${member.id}`}>
+                    <div className="flex items-center space-x-4">
+                      {member.photo && (
+                        <img 
+                          src={member.photo} 
+                          alt={member.name} 
+                          className="w-12 h-12 rounded-full object-cover"
+                          onError={(e) => e.currentTarget.style.display = 'none'}
+                        />
+                      )}
+                      <div>
+                        <p className="font-medium">{member.name}</p>
+                        <p className="text-sm text-muted-foreground">{member.position}</p>
+                        <Badge variant="outline" className="mt-1">
+                          {ORGANIZATION_CATEGORIES.find(c => c.value === member.category)?.label || member.category}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-muted-foreground">순서: {member.sortOrder}</span>
+                      <Badge variant={member.isActive ? 'default' : 'secondary'}>
+                        {member.isActive ? '활성' : '비활성'}
+                      </Badge>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedOrgMember(member);
+                          setEditOrgMemberDialogOpen(true);
+                        }}
+                        data-testid={`button-edit-org-member-${member.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={async () => {
+                          if (confirm('정말 이 구성원을 삭제하시겠습니까?')) {
+                            try {
+                              const response = await apiRequest('DELETE', `/api/organization-members/${member.id}`, null);
+                              if (response.ok) {
+                                toast({ title: "구성원이 삭제되었습니다" });
+                                queryClient.invalidateQueries({ queryKey: ['/api/organization-members'] });
+                              }
+                            } catch (error) {
+                              toast({ title: "삭제 실패", variant: "destructive" });
+                            }
+                          }
+                        }}
+                        data-testid={`button-delete-org-member-${member.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {(!orgMembersData || orgMembersData.length === 0) && (
+                  <div className="p-8 text-center text-muted-foreground">
+                    등록된 조직 구성원이 없습니다
+                  </div>
+                )}
+              </div>
+
+              {/* Create Organization Member Dialog */}
+              <CreateOrganizationMemberDialog 
+                open={createOrgMemberDialogOpen} 
+                onOpenChange={setCreateOrgMemberDialogOpen}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: ['/api/organization-members'] });
+                  setCreateOrgMemberDialogOpen(false);
+                }}
+              />
+
+              {/* Edit Organization Member Dialog */}
+              {selectedOrgMember && (
+                <EditOrganizationMemberDialog 
+                  open={editOrgMemberDialogOpen} 
+                  onOpenChange={setEditOrgMemberDialogOpen}
+                  member={selectedOrgMember}
+                  onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members'] });
+                    setEditOrgMemberDialogOpen(false);
+                    setSelectedOrgMember(null);
+                  }}
+                />
+              )}
             </TabsContent>
 
             {/* Operations Manual Tab - Operator and Admin only */}
@@ -2484,6 +2652,403 @@ function EventRegistrationsDialog({ open, onOpenChange, event }: any) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>행사 신청자 목록</DialogContent>
+    </Dialog>
+  );
+}
+
+// Create Organization Member Dialog
+function CreateOrganizationMemberDialog({ 
+  open, 
+  onOpenChange, 
+  onSuccess 
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [category, setCategory] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [photo, setPhoto] = useState('');
+  
+  const form = useForm({
+    resolver: zodResolver(organizationMemberSchema),
+    defaultValues: {
+      name: '',
+      nameEn: '',
+      nameZh: '',
+      position: '',
+      positionEn: '',
+      positionZh: '',
+      category: '',
+      photo: '',
+      description: '',
+      descriptionEn: '',
+      descriptionZh: '',
+      sortOrder: 0,
+      isActive: true,
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof organizationMemberSchema>) => {
+      const response = await fetch('/api/organization-members', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          ...data,
+          category,
+          photo,
+          isActive,
+        })
+      });
+      if (!response.ok) throw new Error('Failed to create');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "구성원이 추가되었습니다" });
+      form.reset();
+      setCategory('');
+      setPhoto('');
+      setIsActive(true);
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "추가 실패", variant: "destructive" });
+    }
+  });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
+    return { method: 'PUT' as const, url: data.signedUrl };
+  };
+
+  const handlePhotoUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setPhoto(objectPath);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>조직 구성원 추가</DialogTitle>
+          <DialogDescription>새로운 조직 구성원 정보를 입력하세요.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(data => createMutation.mutate(data))} className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium">이름 (한국어) *</label>
+              <Input {...form.register('name')} data-testid="input-org-name" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">이름 (영어)</label>
+              <Input {...form.register('nameEn')} data-testid="input-org-name-en" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">이름 (중국어)</label>
+              <Input {...form.register('nameZh')} data-testid="input-org-name-zh" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium">직책 (한국어) *</label>
+              <Input {...form.register('position')} data-testid="input-org-position" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">직책 (영어)</label>
+              <Input {...form.register('positionEn')} data-testid="input-org-position-en" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">직책 (중국어)</label>
+              <Input {...form.register('positionZh')} data-testid="input-org-position-zh" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">카테고리 *</label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger data-testid="select-org-category">
+                  <SelectValue placeholder="카테고리 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORGANIZATION_CATEGORIES.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">정렬 순서</label>
+              <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-sort-order" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">사진</label>
+            <div className="flex gap-2 items-center">
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handlePhotoUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                사진 업로드
+              </ObjectUploader>
+              {photo && (
+                <img src={photo} alt="미리보기" className="w-12 h-12 rounded-full object-cover" />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">설명 (한국어)</label>
+            <Textarea {...form.register('description')} data-testid="textarea-org-description" />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-org-active" />
+            <span className="text-sm">{isActive ? '활성' : '비활성'}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={createMutation.isPending || !category} data-testid="button-submit-org-member">
+              {createMutation.isPending ? '추가 중...' : '추가'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              취소
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit Organization Member Dialog
+function EditOrganizationMemberDialog({ 
+  open, 
+  onOpenChange, 
+  member,
+  onSuccess 
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  member: OrganizationMember;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [category, setCategory] = useState(member.category);
+  const [isActive, setIsActive] = useState(member.isActive);
+  const [photo, setPhoto] = useState(member.photo || '');
+  
+  const form = useForm({
+    resolver: zodResolver(organizationMemberSchema),
+    defaultValues: {
+      name: member.name,
+      nameEn: member.nameEn || '',
+      nameZh: member.nameZh || '',
+      position: member.position,
+      positionEn: member.positionEn || '',
+      positionZh: member.positionZh || '',
+      category: member.category,
+      photo: member.photo || '',
+      description: member.description || '',
+      descriptionEn: member.descriptionEn || '',
+      descriptionZh: member.descriptionZh || '',
+      sortOrder: member.sortOrder,
+      isActive: member.isActive,
+    }
+  });
+
+  useEffect(() => {
+    setCategory(member.category);
+    setIsActive(member.isActive);
+    setPhoto(member.photo || '');
+    form.reset({
+      name: member.name,
+      nameEn: member.nameEn || '',
+      nameZh: member.nameZh || '',
+      position: member.position,
+      positionEn: member.positionEn || '',
+      positionZh: member.positionZh || '',
+      category: member.category,
+      photo: member.photo || '',
+      description: member.description || '',
+      descriptionEn: member.descriptionEn || '',
+      descriptionZh: member.descriptionZh || '',
+      sortOrder: member.sortOrder,
+      isActive: member.isActive,
+    });
+  }, [member, form]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof organizationMemberSchema>) => {
+      const response = await fetch(`/api/organization-members/${member.id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          ...data,
+          category,
+          photo,
+          isActive,
+        })
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "구성원 정보가 수정되었습니다" });
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "수정 실패", variant: "destructive" });
+    }
+  });
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
+    return { method: 'PUT' as const, url: data.signedUrl };
+  };
+
+  const handlePhotoUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setPhoto(objectPath);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>조직 구성원 수정</DialogTitle>
+          <DialogDescription>조직 구성원 정보를 수정하세요.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(data => updateMutation.mutate(data))} className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium">이름 (한국어) *</label>
+              <Input {...form.register('name')} data-testid="input-org-edit-name" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">이름 (영어)</label>
+              <Input {...form.register('nameEn')} data-testid="input-org-edit-name-en" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">이름 (중국어)</label>
+              <Input {...form.register('nameZh')} data-testid="input-org-edit-name-zh" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium">직책 (한국어) *</label>
+              <Input {...form.register('position')} data-testid="input-org-edit-position" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">직책 (영어)</label>
+              <Input {...form.register('positionEn')} data-testid="input-org-edit-position-en" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">직책 (중국어)</label>
+              <Input {...form.register('positionZh')} data-testid="input-org-edit-position-zh" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium">카테고리 *</label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger data-testid="select-org-edit-category">
+                  <SelectValue placeholder="카테고리 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORGANIZATION_CATEGORIES.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">정렬 순서</label>
+              <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-edit-sort-order" />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">사진</label>
+            <div className="flex gap-2 items-center">
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handlePhotoUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                사진 변경
+              </ObjectUploader>
+              {photo && (
+                <img src={photo} alt="미리보기" className="w-12 h-12 rounded-full object-cover" />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">설명 (한국어)</label>
+            <Textarea {...form.register('description')} data-testid="textarea-org-edit-description" />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={isActive} onCheckedChange={setIsActive} data-testid="switch-org-edit-active" />
+            <span className="text-sm">{isActive ? '활성' : '비활성'}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={updateMutation.isPending || !category} data-testid="button-submit-org-edit">
+              {updateMutation.isPending ? '수정 중...' : '수정'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              취소
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }
