@@ -836,7 +836,13 @@ export default function AdminPage() {
             <TabsContent value="organization" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">조직 구조 관리</h2>
-                <Button onClick={() => setCreateOrgMemberDialogOpen(true)} data-testid="button-create-org-member">
+                <Button 
+                  onClick={() => {
+                    console.log('Adding org member...');
+                    setCreateOrgMemberDialogOpen(true);
+                  }} 
+                  data-testid="button-create-org-member"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   구성원 추가
                 </Button>
@@ -924,14 +930,16 @@ export default function AdminPage() {
               </div>
 
               {/* Create Organization Member Dialog */}
-              <CreateOrganizationMemberDialog 
-                open={createOrgMemberDialogOpen} 
-                onOpenChange={setCreateOrgMemberDialogOpen}
-                onSuccess={() => {
-                  queryClient.invalidateQueries({ queryKey: ['/api/organization-members'] });
-                  setCreateOrgMemberDialogOpen(false);
-                }}
-              />
+              {createOrgMemberDialogOpen && (
+                <CreateOrganizationMemberDialog 
+                  open={createOrgMemberDialogOpen} 
+                  onOpenChange={setCreateOrgMemberDialogOpen}
+                  onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }] });
+                    setCreateOrgMemberDialogOpen(false);
+                  }}
+                />
+              )}
 
               {/* Edit Organization Member Dialog */}
               {selectedOrgMember && (
