@@ -24,6 +24,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ObjectUploader } from '@/components/ObjectUploader';
+import type { UploadResult } from '@uppy/core';
 
 interface RichTextEditorProps {
   value: string;
@@ -37,6 +39,35 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (!editor) return;
+    
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        editor.chain().focus().setImage({ src: objectPath }).run();
+        setImageDialogOpen(false);
+      }
+    }
+  };
 
   const editor = useEditor({
     extensions: [
@@ -303,6 +334,27 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label>이미지 업로드</Label>
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleImageUpload}
+                buttonClassName="w-full"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                이미지 선택
+              </ObjectUploader>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">또는</span>
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="image-url">이미지 URL</Label>
               <Input
                 id="image-url"
@@ -312,7 +364,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
                 data-testid="input-image-url"
               />
               <p className="text-xs text-muted-foreground">
-                이미지 URL을 입력하세요. 이미 업로드된 이미지의 URL을 사용할 수 있습니다.
+                이미지 URL을 입력하세요.
               </p>
             </div>
           </div>
@@ -321,7 +373,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
               취소
             </Button>
             <Button type="button" onClick={addImage} disabled={!imageUrl} data-testid="button-add-image">
-              추가
+              URL로 추가
             </Button>
           </DialogFooter>
         </DialogContent>
