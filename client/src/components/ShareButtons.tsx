@@ -75,7 +75,7 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
       </Button>
 
       <Dialog open={wechatDialogOpen} onOpenChange={setWechatDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-full max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <SiWechat className="h-5 w-5" />
@@ -102,19 +102,19 @@ export default function ShareButtons({ url, title, description }: ShareButtonsPr
               </p>
             </div>
             <div className="w-full">
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg overflow-hidden">
-                <span 
-                  className="text-xs text-muted-foreground truncate flex-1 break-all"
-                  title={fullUrl}
-                >
-                  {fullUrl}
-                </span>
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-muted-foreground overflow-auto max-h-12 break-words p-1">
+                    {fullUrl}
+                  </div>
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleCopyLink}
                   className="shrink-0"
                   data-testid="button-copy-link-dialog"
+                  title="링크 복사"
                 >
                   {copied ? (
                     <Check className="h-4 w-4 text-green-600" />
