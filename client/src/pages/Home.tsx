@@ -94,16 +94,6 @@ export default function Home() {
         
         <div className="container relative z-10 py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center text-white">
-            {/* Tiger & Panda Symbol */}
-            <div className="mb-8 flex justify-center gap-8">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                <span className="text-3xl">🐅</span>
-              </div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-                <span className="text-3xl">🐼</span>
-              </div>
-            </div>
-            
             <h1 className="mb-6 text-4xl font-bold leading-tight md:text-6xl fade-in-up">
               {t('hero.title')}
             </h1>
@@ -134,26 +124,6 @@ export default function Home() {
                   {t('hero.cta.contact')}
                 </Button>
               </Link>
-            </div>
-            
-            {/* Stats */}
-            <div className="mx-auto grid max-w-3xl grid-cols-2 gap-6 md:grid-cols-4">
-              <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                <div className="mb-1 text-3xl font-bold" data-testid="stat-members">{memberCount}+</div>
-                <div className="text-sm opacity-90">{t('hero.stats.members')}</div>
-              </div>
-              <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                <div className="mb-1 text-3xl font-bold" data-testid="stat-events">50+</div>
-                <div className="text-sm opacity-90">{t('hero.stats.events')}</div>
-              </div>
-              <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                <div className="mb-1 text-3xl font-bold" data-testid="stat-partnerships">100+</div>
-                <div className="text-sm opacity-90">{t('hero.stats.partnerships')}</div>
-              </div>
-              <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                <div className="mb-1 text-3xl font-bold" data-testid="stat-years">5+</div>
-                <div className="text-sm opacity-90">{t('hero.stats.years')}</div>
-              </div>
             </div>
 
             {latestNews && (
