@@ -173,19 +173,31 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor={`content-${locale}`}>콘텐츠 (JSON)</Label>
-                <Textarea
-                  id={`content-${locale}`}
-                  value={formData[locale]?.content || ''}
-                  onChange={(e) => handleInputChange(locale, 'content', e.target.value)}
-                  placeholder='{"section": "value"}'
-                  rows={15}
-                  className="font-mono text-sm"
-                  data-testid={`input-content-${locale}`}
-                />
-                <p className="text-xs text-muted-foreground">
-                  JSON 형식으로 구조화된 콘텐츠를 입력하세요.
-                </p>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`content-${locale}`} className="font-semibold">
+                    콘텐츠 (JSON 형식)
+                  </Label>
+                  <span className="text-xs text-muted-foreground">구조화된 데이터</span>
+                </div>
+                <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-4">
+                  <Textarea
+                    id={`content-${locale}`}
+                    value={formData[locale]?.content || ''}
+                    onChange={(e) => handleInputChange(locale, 'content', e.target.value)}
+                    placeholder={`{\n  "section1": "내용을 입력하세요",\n  "section2": "이렇게 구조화된 형식으로"\n}`}
+                    rows={18}
+                    className="font-mono text-sm bg-white dark:bg-slate-950 rounded border-0 resize-none"
+                    data-testid={`input-content-${locale}`}
+                  />
+                </div>
+                <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+                    💡 JSON 형식 가이드
+                  </p>
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    객체 형식으로 섹션을 구성하세요: {"{"}"key": "value"{"}"} 또는 배열 형식도 사용 가능합니다.
+                  </p>
+                </div>
               </div>
             </TabsContent>
           ))}
