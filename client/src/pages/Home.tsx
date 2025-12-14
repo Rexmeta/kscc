@@ -153,7 +153,7 @@ export default function Home() {
                     )}
                     <div className="flex flex-wrap gap-3">
                       <Link href={`/news/${latestNews.id}`}>
-                        <Button size="lg" className="bg-accent text-black hover:bg-accent/90 shadow-sm" data-testid="hero-latest-news">
+                        <Button size="lg" className="btn-accent" data-testid="hero-latest-news">
                           {t('news.readMore')}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
@@ -162,7 +162,7 @@ export default function Home() {
                         <Button
                           size="lg"
                           variant="outline"
-                          className="border-white text-black bg-white/90 hover:bg-white"
+                          className="border-white text-white hover:bg-white/10"
                           data-testid="hero-view-all-news"
                         >
                           {t('news.viewAll')}
