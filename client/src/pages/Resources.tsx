@@ -529,9 +529,10 @@ export default function ResourcesPage() {
                     <FileText className="h-4 w-4" />
                     설명
                   </h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {getTranslation(selectedResource, language)?.content}
-                  </p>
+                  <div 
+                    className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground"
+                    dangerouslySetInnerHTML={{ __html: getTranslation(selectedResource, language)?.content || '' }}
+                  />
                 </div>
               )}
 

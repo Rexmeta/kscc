@@ -244,9 +244,11 @@ export default function NewsDetail() {
               </p>
 
               {/* Content */}
-              <div className="prose prose-lg max-w-none" data-testid="news-content">
-                {translation.content || ''}
-              </div>
+              <div 
+                className="prose prose-lg dark:prose-invert max-w-none" 
+                data-testid="news-content"
+                dangerouslySetInnerHTML={{ __html: translation.content || '' }}
+              />
 
               {/* Image Gallery */}
               {images.length > 0 && (

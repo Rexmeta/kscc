@@ -353,11 +353,11 @@ export default function EventDetailPage() {
             <Card className="mb-8">
               <CardContent className="p-6">
                 <h3 className="text-xl font-semibold mb-4">상세 내용</h3>
-                <div className="prose dark:prose-invert max-w-none">
-                  <p className="whitespace-pre-wrap text-muted-foreground" data-testid="text-event-content">
-                    {translation.content}
-                  </p>
-                </div>
+                <div 
+                  className="prose dark:prose-invert max-w-none" 
+                  data-testid="text-event-content"
+                  dangerouslySetInnerHTML={{ __html: translation.content }}
+                />
               </CardContent>
             </Card>
           )}
