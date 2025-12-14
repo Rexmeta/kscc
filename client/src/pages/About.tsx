@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
+import ksccLogoPath from '../assets/kscc_logo.png';
 
 interface AboutContent {
   hero: { title: string; intro: string };
@@ -92,13 +93,21 @@ export default function AboutPage() {
       {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-blue-600 to-blue-800 text-white py-20">
         <div className="container">
-          <div className="max-w-3xl">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              {content.hero.title}
-            </h1>
-            <p className="text-xl text-blue-100 leading-relaxed">
-              {content.hero.intro}
-            </p>
+          <div className="flex items-center gap-8">
+            <img 
+              src={ksccLogoPath} 
+              alt="KSCC Logo" 
+              className="w-32 h-32 md:w-40 md:h-40 flex-shrink-0"
+              data-testid="img-kscc-logo"
+            />
+            <div className="max-w-3xl flex-1">
+              <h1 className="text-4xl md:text-5xl font-bold mb-6">
+                {content.hero.title}
+              </h1>
+              <p className="text-xl text-blue-100 leading-relaxed">
+                {content.hero.intro}
+              </p>
+            </div>
           </div>
         </div>
       </section>
