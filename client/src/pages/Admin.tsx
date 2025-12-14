@@ -200,8 +200,6 @@ export default function AdminPage() {
   const [createResourceDialogOpen, setCreateResourceDialogOpen] = useState(false);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
-  const [createOrgMemberDialogOpen, setCreateOrgMemberDialogOpen] = useState(false);
-  const [editOrgMemberDialogOpen, setEditOrgMemberDialogOpen] = useState(false);
   const [selectedOrgMember, setSelectedOrgMember] = useState<OrganizationMember | null>(null);
   const [orgCategoryFilter, setOrgCategoryFilter] = useState<string>('all');
   const { user, isAuthenticated, isAdmin } = useAuth();
@@ -888,7 +886,6 @@ export default function AdminPage() {
                         variant="outline"
                         onClick={() => {
                           setSelectedOrgMember(member);
-                          setEditOrgMemberDialogOpen(true);
                         }}
                         data-testid={`button-edit-org-member-${member.id}`}
                       >
@@ -930,8 +927,8 @@ export default function AdminPage() {
                   member={selectedOrgMember}
                   onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }] });
-                    setSelectedOrgMember(null);
                   }}
+                  onClose={() => setSelectedOrgMember(null)}
                 />
               )}
             </TabsContent>
@@ -2840,12 +2837,14 @@ function CreateOrganizationMemberDialog({
 // Edit Organization Member Dialog
 function EditOrganizationMemberDialog({ 
   member,
-  onSuccess 
+  onSuccess,
+  onClose
 }: { 
   member: OrganizationMember;
   onSuccess: () => void;
+  onClose: () => void;
 }) {
-  const [internalOpen, setInternalOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(true);
   const { toast } = useToast();
   const [category, setCategory] = useState(member.category);
   const [isActive, setIsActive] = useState(member.isActive);
@@ -2891,6 +2890,13 @@ function EditOrganizationMemberDialog({
     });
   }, [member, form]);
 
+  const handleOpenChange = (open: boolean) => {
+    setInternalOpen(open);
+    if (!open) {
+      onClose();
+    }
+  };
+
   const updateMutation = useMutation({
     mutationFn: async (data: z.infer<typeof organizationMemberSchema>) => {
       const response = await fetch(`/api/organization-members/${member.id}`, {
@@ -2911,7 +2917,7 @@ function EditOrganizationMemberDialog({
     },
     onSuccess: () => {
       toast({ title: "구성원 정보가 수정되었습니다" });
-      setInternalOpen(false);
+      handleOpenChange(false);
       onSuccess();
     },
     onError: () => {
@@ -2943,7 +2949,7 @@ function EditOrganizationMemberDialog({
   };
 
   return (
-    <Dialog open={internalOpen} onOpenChange={setInternalOpen}>
+    <Dialog open={internalOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>조직 구성원 수정</DialogTitle>
@@ -3033,7 +3039,7 @@ function EditOrganizationMemberDialog({
             <Button type="submit" disabled={updateMutation.isPending || !category} data-testid="button-submit-org-edit">
               {updateMutation.isPending ? '수정 중...' : '수정'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setInternalOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               취소
             </Button>
           </div>
