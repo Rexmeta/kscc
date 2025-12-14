@@ -50,11 +50,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 const newsSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요'),
   excerpt: z.string().min(1, '요약을 입력해주세요'),
-  content: z.string().min(1, '내용을 입력해주세요'),
+  content: z.string().optional(),
   category: z.string().optional(),
-  featuredImage: z.string().url('유효한 URL을 입력해주세요').optional().or(z.literal('')),
-  images: z.array(z.string().url()).optional(),
-  isPublished: z.boolean().default(false),
+  featuredImage: z.string().optional(),
+  images: z.array(z.string()).optional(),
+  isPublished: z.boolean().optional().default(false),
 });
 
 const eventSchema = z.object({
@@ -1351,7 +1351,11 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
         <div>
           <label className="form-label">발행</label>
           <div className="flex items-center space-x-2 mt-2">
-            <Switch {...register('isPublished')} data-testid="switch-news-published-edit" />
+            <Switch 
+              checked={isPublished} 
+              onCheckedChange={(checked) => setValue('isPublished', checked)}
+              data-testid="switch-news-published-edit" 
+            />
             <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
           </div>
         </div>
