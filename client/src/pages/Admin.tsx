@@ -76,10 +76,10 @@ const eventSchema = z.object({
 
 const resourceSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요'),
-  excerpt: z.string().min(1, '설명을 입력해주세요'),
+  excerpt: z.string().optional(),
   content: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  fileUrl: z.string().url().optional(),
+  fileUrl: z.string().optional(),
   isPublished: z.boolean().default(false),
 });
 
