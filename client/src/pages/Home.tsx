@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Member, Partner, PostWithTranslations } from '@shared/schema';
+import { Member, PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import EventCard from '@/components/EventCard';
@@ -46,12 +46,13 @@ export default function Home() {
     },
   });
 
-  // Fetch partners
-  const { data: partners } = useQuery({
-    queryKey: ['/api/partners'],
+  // Fetch members to display as partners
+  const { data: membersPartners } = useQuery({
+    queryKey: ['/api/members', { isPublic: true, limit: 12 }],
     queryFn: async () => {
-      const response = await fetch('/api/partners');
-      return response.json();
+      const response = await fetch('/api/members?limit=100');
+      const data = await response.json();
+      return data.members || [];
     },
   });
 
@@ -248,30 +249,42 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-6">
-            {partners && partners.length > 0 ? (
-              partners.slice(0, 12).map((partner: Partner) => (
-                <Card key={partner.id} className="card-hover p-6 flex items-center justify-center h-32">
+            {membersPartners && membersPartners.length > 0 ? (
+              membersPartners.slice(0, 12).map((member: Member) => (
+                <Card key={member.id} className="card-hover p-6 flex items-center justify-center h-32">
                   <div className="text-center">
-                    {partner.logo ? (
-                      <img src={partner.logo} alt={partner.name} className="h-12 w-auto mx-auto" />
-                    ) : (
+                    {member.logo ? (
+                      <img 
+                        src={member.logo} 
+                        alt={member.companyName} 
+                        className="h-12 w-auto mx-auto object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    {!member.logo && (
                       <div className="flex flex-col items-center">
                         <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                        <span className="text-xs text-muted-foreground font-medium">{partner.name}</span>
+                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{member.companyName}</span>
+                      </div>
+                    )}
+                    {member.logo && (
+                      <div className="hidden flex-col items-center">
+                        <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
+                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{member.companyName}</span>
                       </div>
                     )}
                   </div>
                 </Card>
               ))
             ) : (
-              Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i} className="p-6 flex items-center justify-center h-32">
-                  <div className="text-center">
-                    <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                    <span className="text-xs text-muted-foreground font-medium">파트너 {i + 1}</span>
-                  </div>
-                </Card>
-              ))
+              <div className="col-span-full text-center py-12">
+                <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">협력 파트너를 준비 중입니다.</p>
+              </div>
             )}
           </div>
           
