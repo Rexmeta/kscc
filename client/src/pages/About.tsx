@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
-import ksccLogoPath from '@assets/kscc_logo991_1765719750819.png';
+import ksccLogoPath from '@/assets/kscc_logo.png';
 
 interface AboutContent {
   hero: { title: string; intro: string };
