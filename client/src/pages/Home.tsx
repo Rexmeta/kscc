@@ -6,10 +6,28 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { Member, Partner, PostWithTranslations } from '@shared/schema';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 
 export default function Home() {
+  const { language } = useLanguage();
+
+  const formatDate = (date?: string | Date | null) => {
+    if (!date) return '';
+    const value = typeof date === 'string' ? new Date(date) : date;
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  };
+
+  const fallbackHeroImage =
+    'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080';
+
   // Fetch upcoming events
   const { data: eventsData } = useQuery({
     queryKey: ['/api/posts', 'event', { upcoming: true, limit: 3 }],
@@ -49,6 +67,16 @@ export default function Home() {
   const events = eventsData?.posts || [];
   const news = newsData?.posts || [];
   const memberCount = membersData?.total || 0;
+  const latestNews = news[0];
+  const latestNewsTranslation = latestNews ? getTranslationSafe(latestNews, language) : null;
+  const latestNewsImages = latestNews ? getMetaValue(latestNews.meta || [], 'news.images') : null;
+  const latestNewsImage = latestNews
+    ? latestNews.coverImage ||
+      (Array.isArray(latestNewsImages) && latestNewsImages.length > 0 ? latestNewsImages[0] : null)
+    : null;
+  const latestNewsSummary = latestNewsTranslation?.excerpt || latestNewsTranslation?.subtitle || '';
+  const heroBackgroundImage = latestNewsImage || fallbackHeroImage;
+  const latestNewsDate = latestNews?.publishedAt || latestNews?.createdAt;
 
   return (
     <div className="min-h-screen">
@@ -58,7 +86,7 @@ export default function Home() {
         <div 
           className="absolute inset-0 opacity-20"
           style={{
-            backgroundImage: 'url("https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080")',
+            backgroundImage: `url("${heroBackgroundImage}")`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -127,6 +155,54 @@ export default function Home() {
                 <div className="text-sm opacity-90">{t('hero.stats.years')}</div>
               </div>
             </div>
+
+            {latestNews && (
+              <div className="mt-12 rounded-2xl border border-white/15 bg-white/5 p-6 text-left shadow-2xl backdrop-blur-lg">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center">
+                  {latestNewsImage && (
+                    <div className="w-full overflow-hidden rounded-xl shadow-lg md:w-5/12">
+                      <img
+                        src={latestNewsImage}
+                        alt={latestNewsTranslation?.title || latestNews.slug}
+                        className="h-48 w-full object-cover md:h-56"
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-white/80">
+                      <Badge variant="secondary" className="bg-white/20 text-white">
+                        {t('news.latest')}
+                      </Badge>
+                      {latestNewsDate && <span className="text-white/70">{formatDate(latestNewsDate)}</span>}
+                    </div>
+                    <h3 className="text-2xl font-semibold leading-snug text-white">
+                      {latestNewsTranslation?.title || latestNews.slug}
+                    </h3>
+                    {latestNewsSummary && (
+                      <p className="text-white/80 line-clamp-3 md:line-clamp-2">{latestNewsSummary}</p>
+                    )}
+                    <div className="flex flex-wrap gap-3">
+                      <Link href={`/news/${latestNews.id}`}>
+                        <Button size="lg" className="btn-accent" data-testid="hero-latest-news">
+                          {t('news.readMore')}
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Link href="/news">
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="border-white text-white hover:bg-white/10"
+                          data-testid="hero-view-all-news"
+                        >
+                          {t('news.viewAll')}
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
