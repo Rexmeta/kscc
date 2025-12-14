@@ -47,14 +47,14 @@ export default function Header() {
           {/* Logo */}
           <Link href="/">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
-                <span className="text-xl font-bold text-white">KSCC</span>
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent flex-shrink-0">
+                <span className="text-lg font-bold text-white leading-none">KSCC</span>
               </div>
-              <div className="hidden md:block">
-                <div className="font-bold leading-tight text-foreground">
+              <div className="hidden md:flex flex-col justify-center gap-0.5">
+                <div className="font-bold leading-tight text-foreground text-sm w-36">
                   한국 사천-충칭 총상회
                 </div>
-                <div className="text-xs text-muted-foreground lang-en">
+                <div className="text-xs text-muted-foreground lang-en w-36">
                   Korea Sichuan-Chongqing Chamber
                 </div>
               </div>
