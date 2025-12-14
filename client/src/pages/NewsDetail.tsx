@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
+import ShareButtons from '@/components/ShareButtons';
 
 export default function NewsDetail() {
   // ALL HOOKS MUST BE AT THE TOP (Rules of Hooks)
@@ -211,16 +212,11 @@ export default function NewsDetail() {
                   )}
                 </div>
                 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleShare}
-                  className="text-muted-foreground hover:text-primary"
-                  data-testid="button-share"
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  공유하기
-                </Button>
+                <ShareButtons 
+                  url={`/news/${id}`}
+                  title={translation.title || post.slug}
+                  description={translation.excerpt || ''}
+                />
               </div>
 
               {/* Title */}

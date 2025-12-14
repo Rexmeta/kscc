@@ -12,6 +12,7 @@ import { PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
+import ShareButtons from '@/components/ShareButtons';
 
 export default function EventDetailPage() {
   const { id } = useParams();
@@ -211,6 +212,13 @@ export default function EventDetailPage() {
                   {isPastEvent && <Badge variant="secondary">종료된 행사</Badge>}
                   {isRegistrationClosed && !isPastEvent && <Badge variant="destructive">신청 마감</Badge>}
                 </div>
+              </div>
+              <div className="ml-4">
+                <ShareButtons 
+                  url={`/events/${id}`}
+                  title={translation.title || post.slug}
+                  description={translation.excerpt || translation.subtitle || ''}
+                />
               </div>
             </div>
             <p className="text-xl text-muted-foreground" data-testid="text-event-description">{translation.excerpt || translation.subtitle || ''}</p>
