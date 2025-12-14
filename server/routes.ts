@@ -316,13 +316,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { role, userType, membershipTier, isActive } = req.body;
+      const { role, userType, membershipTier, isActive, name, email } = req.body;
       const updateData: any = {};
       
       if (role) updateData.role = role;
       if (userType) updateData.userType = userType;
       if (membershipTier) updateData.membershipTier = membershipTier;
       if (typeof isActive === 'boolean') updateData.isActive = isActive;
+      if (name) updateData.name = name;
+      if (email) {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ message: "Invalid email format" });
+        }
+        updateData.email = email;
+      }
       
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ message: "No fields to update" });
