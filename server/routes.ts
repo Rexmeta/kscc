@@ -12,7 +12,10 @@ import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
 
-const JWT_SECRET = process.env.SESSION_SECRET || "your-secret-key";
+const JWT_SECRET = process.env.SESSION_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
+}
 
 // Auth middleware
 export function authenticateToken(req: Request, res: Response, next: NextFunction) {
@@ -123,7 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
       
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
@@ -147,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
