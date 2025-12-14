@@ -836,16 +836,11 @@ export default function AdminPage() {
             <TabsContent value="organization" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">조직 구조 관리</h2>
-                <Button 
-                  onClick={() => {
-                    console.log('Adding org member...');
-                    setCreateOrgMemberDialogOpen(true);
-                  }} 
-                  data-testid="button-create-org-member"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  구성원 추가
-                </Button>
+                <CreateOrganizationMemberDialog 
+                  onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }] });
+                  }}
+                />
               </div>
 
               <div className="flex items-center space-x-4 mb-4">
@@ -929,27 +924,12 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Create Organization Member Dialog */}
-              {createOrgMemberDialogOpen && (
-                <CreateOrganizationMemberDialog 
-                  open={createOrgMemberDialogOpen} 
-                  onOpenChange={setCreateOrgMemberDialogOpen}
-                  onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }] });
-                    setCreateOrgMemberDialogOpen(false);
-                  }}
-                />
-              )}
-
               {/* Edit Organization Member Dialog */}
               {selectedOrgMember && (
                 <EditOrganizationMemberDialog 
-                  open={editOrgMemberDialogOpen} 
-                  onOpenChange={setEditOrgMemberDialogOpen}
                   member={selectedOrgMember}
                   onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members'] });
-                    setEditOrgMemberDialogOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['/api/organization-members', { category: orgCategoryFilter, admin: true }] });
                     setSelectedOrgMember(null);
                   }}
                 />
@@ -2666,14 +2646,11 @@ function EventRegistrationsDialog({ open, onOpenChange, event }: any) {
 
 // Create Organization Member Dialog
 function CreateOrganizationMemberDialog({ 
-  open, 
-  onOpenChange, 
   onSuccess 
 }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
   onSuccess: () => void;
 }) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
   const [category, setCategory] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -2722,6 +2699,7 @@ function CreateOrganizationMemberDialog({
       setCategory('');
       setPhoto('');
       setIsActive(true);
+      setInternalOpen(false);
       onSuccess();
     },
     onError: () => {
@@ -2753,7 +2731,13 @@ function CreateOrganizationMemberDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={internalOpen} onOpenChange={setInternalOpen}>
+      <DialogTrigger asChild>
+        <Button onClick={() => setInternalOpen(true)} data-testid="button-create-org-member">
+          <Plus className="h-4 w-4 mr-2" />
+          구성원 추가
+        </Button>
+      </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>조직 구성원 추가</DialogTitle>
@@ -2843,7 +2827,7 @@ function CreateOrganizationMemberDialog({
             <Button type="submit" disabled={createMutation.isPending || !category} data-testid="button-submit-org-member">
               {createMutation.isPending ? '추가 중...' : '추가'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => setInternalOpen(false)}>
               취소
             </Button>
           </div>
@@ -2855,16 +2839,13 @@ function CreateOrganizationMemberDialog({
 
 // Edit Organization Member Dialog
 function EditOrganizationMemberDialog({ 
-  open, 
-  onOpenChange, 
   member,
   onSuccess 
 }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
   member: OrganizationMember;
   onSuccess: () => void;
 }) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
   const [category, setCategory] = useState(member.category);
   const [isActive, setIsActive] = useState(member.isActive);
@@ -2930,6 +2911,7 @@ function EditOrganizationMemberDialog({
     },
     onSuccess: () => {
       toast({ title: "구성원 정보가 수정되었습니다" });
+      setInternalOpen(false);
       onSuccess();
     },
     onError: () => {
@@ -2961,7 +2943,7 @@ function EditOrganizationMemberDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={internalOpen} onOpenChange={setInternalOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>조직 구성원 수정</DialogTitle>
@@ -3051,7 +3033,7 @@ function EditOrganizationMemberDialog({
             <Button type="submit" disabled={updateMutation.isPending || !category} data-testid="button-submit-org-edit">
               {updateMutation.isPending ? '수정 중...' : '수정'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => setInternalOpen(false)}>
               취소
             </Button>
           </div>
