@@ -1225,13 +1225,17 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  
+  // Extract category from meta
+  const categoryFromMeta = String(news.meta?.find(m => m.key === 'category')?.value || '');
+  
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(newsSchema),
     defaultValues: {
       title: news.translations?.[0]?.title || '',
       excerpt: news.translations?.[0]?.excerpt || '',
       content: news.translations?.[0]?.content || '',
-      category: (news.category as string) || '',
+      category: categoryFromMeta,
       featuredImage: news.coverImage || '',
       images: imageUrls,
       isPublished: news.status === 'published',
@@ -1271,27 +1275,26 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   const updateMutation = useMutation({
     mutationFn: async (formData: any) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
-      const post = {
-        id: news.id,
-        slug: news.slug,
-        postType: 'news',
-        coverImage: featuredImageUrl || formData.featuredImage,
-        status: formData.isPublished ? 'published' : 'draft',
-        publishedAt: formData.isPublished ? new Date() : null,
-      };
-      const translation = {
+      return await updatePost({
         postId: news.id,
-        locale: 'ko',
-        title: formData.title,
-        excerpt: formData.excerpt,
-        subtitle: formData.excerpt,
-        content: formData.content,
-      };
-      const meta = [{ key: 'category', value: formData.category }];
-      return await updatePost(news.id, { post, translation, meta });
+        post: {
+          coverImage: featuredImageUrl || formData.featuredImage,
+          status: (formData.isPublished ? 'published' : 'draft') as any,
+          publishedAt: formData.isPublished ? new Date() : null,
+        },
+        translation: {
+          locale: 'ko' as any,
+          title: formData.title,
+          excerpt: formData.excerpt,
+          subtitle: formData.excerpt,
+          content: formData.content,
+        },
+        meta: [{ key: 'category', value: formData.category }],
+      });
     },
     onSuccess: () => {
       toast({ title: "뉴스가 수정되었습니다" });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       onSuccess();
     },
     onError: (error) => {
@@ -1331,9 +1334,9 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">카테고리</label>
-          <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
+          <Select defaultValue={categoryFromMeta || ''} onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
             <SelectTrigger data-testid="select-news-category-edit">
-              <SelectValue placeholder={news.category || "카테고리 선택"} />
+              <SelectValue placeholder="카테고리 선택" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="notice">공지</SelectItem>
