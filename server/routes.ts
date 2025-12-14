@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, userMemberships, type User } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, userMemberships, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
@@ -660,6 +660,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.deletePartner(req.params.id);
       res.json({ message: "Partner deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Organization Members routes
+  app.get("/api/organization-members", async (req, res) => {
+    try {
+      const { category } = req.query;
+      const members = await storage.getOrganizationMembers({
+        category: category as string,
+        isActive: true,
+      });
+      res.json(members);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/organization-members/:id", async (req, res) => {
+    try {
+      const member = await storage.getOrganizationMember(req.params.id);
+      if (!member) {
+        return res.status(404).json({ message: "Organization member not found" });
+      }
+      res.json(member);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/organization-members", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const memberData = insertOrganizationMemberSchema.parse(req.body);
+      const member = await storage.createOrganizationMember(memberData);
+      res.status(201).json(member);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.put("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const member = await storage.getOrganizationMember(req.params.id);
+      if (!member) {
+        return res.status(404).json({ message: "Organization member not found" });
+      }
+      
+      const updatedMember = await storage.updateOrganizationMember(req.params.id, req.body);
+      res.json(updatedMember);
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.delete("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const member = await storage.getOrganizationMember(req.params.id);
+      if (!member) {
+        return res.status(404).json({ message: "Organization member not found" });
+      }
+      
+      await storage.deleteOrganizationMember(req.params.id);
+      res.json({ message: "Organization member deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

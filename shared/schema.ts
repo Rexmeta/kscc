@@ -471,3 +471,32 @@ export type PostWithTranslations = Post & {
   translations: PostTranslation[];
   meta: PostMeta[];
 };
+
+// Organization Structure - for managing chamber executives and members
+export const organizationMembers = pgTable("organization_members", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // Korean name
+  nameEn: text("name_en"), // English name
+  nameZh: text("name_zh"), // Chinese name
+  position: text("position").notNull(), // 회장, 부회장, 이사 등
+  positionEn: text("position_en"),
+  positionZh: text("position_zh"),
+  category: text("category").notNull(), // executives, honorary, vicepresidents, directors, advisors, secretariat, committees, organizations
+  photo: text("photo"), // photo URL
+  description: text("description"), // additional info like committee role
+  descriptionEn: text("description_en"),
+  descriptionZh: text("description_zh"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;

@@ -1,13 +1,14 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
-  posts, postTranslations, postMeta,
+  posts, postTranslations, postMeta, organizationMembers,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
   type InquiryWithReplies,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
-  type PostMeta, type InsertPostMeta, type PostWithTranslations
+  type PostMeta, type InsertPostMeta, type PostWithTranslations,
+  type OrganizationMember, type InsertOrganizationMember
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, gte, lte, count, sql, inArray } from "drizzle-orm";
@@ -107,6 +108,13 @@ export interface IStorage {
   setPostMeta(postId: string, key: string, value: any): Promise<PostMeta>;
   deletePostMeta(postId: string, key: string): Promise<void>;
   incrementPostMetaNumber(postId: string, key: string, amount?: number): Promise<void>;
+
+  // Organization Members
+  getOrganizationMember(id: string): Promise<OrganizationMember | undefined>;
+  getOrganizationMembers(filters?: { category?: string; isActive?: boolean }): Promise<OrganizationMember[]>;
+  createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember>;
+  updateOrganizationMember(id: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember | undefined>;
+  deleteOrganizationMember(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -869,6 +877,55 @@ export class DatabaseStorage implements IStorage {
     } else {
       await this.setPostMeta(postId, key, amount);
     }
+  }
+
+  // Organization Members
+  async getOrganizationMember(id: string): Promise<OrganizationMember | undefined> {
+    const [member] = await db.select().from(organizationMembers).where(eq(organizationMembers.id, id));
+    return member || undefined;
+  }
+
+  async getOrganizationMembers(filters?: { category?: string; isActive?: boolean }): Promise<OrganizationMember[]> {
+    let query = db.select().from(organizationMembers);
+    const conditions = [];
+
+    if (filters?.category) {
+      conditions.push(eq(organizationMembers.category, filters.category));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(organizationMembers.isActive, filters.isActive));
+    }
+
+    if (conditions.length > 0) {
+      const whereCondition = and(...conditions);
+      if (whereCondition) {
+        // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
+        query = query.where(whereCondition);
+      }
+    }
+
+    return query.orderBy(organizationMembers.category, organizationMembers.sortOrder, organizationMembers.name);
+  }
+
+  async createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember> {
+    const [newMember] = await db
+      .insert(organizationMembers)
+      .values(member)
+      .returning();
+    return newMember;
+  }
+
+  async updateOrganizationMember(id: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember | undefined> {
+    const [member] = await db
+      .update(organizationMembers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(organizationMembers.id, id))
+      .returning();
+    return member || undefined;
+  }
+
+  async deleteOrganizationMember(id: string): Promise<void> {
+    await db.delete(organizationMembers).where(eq(organizationMembers.id, id));
   }
 }
 
