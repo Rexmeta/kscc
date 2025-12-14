@@ -271,29 +271,20 @@ export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
 
 export interface ResourceFormData {
   title: string;
-  description?: string;
-  category: string;
-  fileUrl: string;
-  fileName: string;
-  fileType: string;
-  accessLevel: string;
-  isActive: boolean;
+  excerpt: string;
+  content?: string;
+  tags?: string[];
+  fileUrl?: string;
+  isPublished: boolean;
 }
 
-export function mapResourceFormToPost(formData: ResourceFormData, authorId: string): {
+export function mapResourceFormToPost(formData: ResourceFormData, authorId: string, fileUrl?: string): {
   post: Omit<InsertPost, 'id'>;
   translation: Omit<InsertPostTranslation, 'id' | 'postId'>;
   meta: Omit<InsertPostMeta, 'id' | 'postId'>[];
 } {
   const slug = createSlug(formData.title);
-  
-  // Map accessLevel to visibility
-  const visibilityMap: Record<string, 'public' | 'members' | 'premium' | 'internal'> = {
-    'public': 'public',
-    'members': 'members',
-    'premium': 'premium',
-    'private': 'internal',
-  };
+  const finalFileUrl = fileUrl || formData.fileUrl || '';
   
   return {
     post: {
@@ -301,81 +292,38 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
       slug,
       primaryLocale: 'ko',
       authorId,
-      status: formData.isActive ? 'published' : 'draft',
-      visibility: visibilityMap[formData.accessLevel] || 'public',
+      status: formData.isPublished ? 'published' : 'draft',
+      visibility: 'public',
       isFeatured: false,
-      tags: [formData.category],
-      publishedAt: formData.isActive ? new Date() : null,
+      tags: formData.tags || [],
+      publishedAt: formData.isPublished ? new Date() : null,
     },
     translation: {
       locale: 'ko',
       title: formData.title,
-      excerpt: formData.description || '',
-      content: '',
+      excerpt: formData.excerpt,
+      content: formData.content || '',
     },
-    meta: [
-      {
-        key: RESOURCE_META_KEYS.category,
-        valueText: formData.category,
-        valueNumber: null,
-        valueBoolean: null,
-        valueTimestamp: null,
-        value: null,
-      },
-      {
-        key: RESOURCE_META_KEYS.fileUrl,
-        valueText: formData.fileUrl,
-        valueNumber: null,
-        valueBoolean: null,
-        valueTimestamp: null,
-        value: null,
-      },
-      {
-        key: RESOURCE_META_KEYS.fileName,
-        valueText: formData.fileName,
-        valueNumber: null,
-        valueBoolean: null,
-        valueTimestamp: null,
-        value: null,
-      },
-      {
-        key: RESOURCE_META_KEYS.fileType,
-        valueText: formData.fileType,
-        valueNumber: null,
-        valueBoolean: null,
-        valueTimestamp: null,
-        value: null,
-      },
-      {
-        key: RESOURCE_META_KEYS.accessLevel,
-        valueText: formData.accessLevel,
-        valueNumber: null,
-        valueBoolean: null,
-        valueTimestamp: null,
-        value: null,
-      },
-    ],
+    meta: finalFileUrl ? [{
+      key: 'resource.fileUrl',
+      valueText: finalFileUrl,
+      valueNumber: null,
+      valueBoolean: null,
+      valueTimestamp: null,
+      value: null,
+    }] : [],
   };
 }
 
 export function mapPostToResourceForm(post: PostWithTranslations): ResourceFormData {
   const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
-  const meta = post.meta || [];
-  
-  const getMetaValue = (key: string): any => {
-    const item = meta.find(m => m.key === key);
-    if (!item) return null;
-    return item.valueText || item.valueNumber || item.valueBoolean || item.valueTimestamp || item.value || null;
-  };
   
   return {
     title: translation?.title || post.slug,
-    description: translation?.excerpt || '',
-    category: getMetaValue(RESOURCE_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
-    fileUrl: getMetaValue(RESOURCE_META_KEYS.fileUrl) || '',
-    fileName: getMetaValue(RESOURCE_META_KEYS.fileName) || '',
-    fileType: getMetaValue(RESOURCE_META_KEYS.fileType) || '',
-    accessLevel: getMetaValue(RESOURCE_META_KEYS.accessLevel) || 'public',
-    isActive: post.status === 'published',
+    excerpt: translation?.excerpt || '',
+    content: translation?.content || '',
+    tags: (Array.isArray(post.tags) ? post.tags : []) || [],
+    fileUrl: '',
+    isPublished: post.status === 'published',
   };
 }

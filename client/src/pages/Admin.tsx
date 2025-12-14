@@ -1571,8 +1571,10 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [fileUrl, setFileUrl] = useState('');
   
   const translation = resource.translations?.[0];
+  const fileUrlMeta = resource.meta?.find((m: any) => m.key === 'resource.fileUrl') as any;
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(resourceSchema),
@@ -1581,16 +1583,45 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
       excerpt: translation?.excerpt || '',
       content: translation?.content || '',
       tags: (resource.tags as string[]) || [],
-      fileUrl: '',
+      fileUrl: fileUrlMeta?.value || '',
       isPublished: resource.status === 'published',
     }
   });
   
   const isPublished = watch('isPublished');
 
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setFileUrl(objectPath);
+        setValue('fileUrl', objectPath);
+        toast({ title: '파일 업로드 완료!' });
+      }
+    }
+  };
+
   const updateMutation = useMutation({
     mutationFn: async (formData: any) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const finalFileUrl = fileUrl || formData.fileUrl;
       return await updatePost({
         postId: resource.id,
         post: {
@@ -1605,7 +1636,7 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
           subtitle: formData.excerpt,
           content: formData.content || '',
         },
-        meta: formData.fileUrl ? [{ key: 'resource.fileUrl', value: formData.fileUrl }] : [],
+        meta: finalFileUrl ? [{ key: 'resource.fileUrl', value: finalFileUrl }] : [],
       });
     },
     onSuccess: () => {
@@ -1633,6 +1664,26 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
       <div>
         <label className="form-label">내용</label>
         <Textarea {...register('content')} rows={5} />
+      </div>
+      <div>
+        <label className="form-label">첨부파일</label>
+        <div className="flex gap-2 mb-4">
+          <ObjectUploader
+            maxNumberOfFiles={1}
+            maxFileSize={104857600}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleFileUpload}
+            buttonClassName="whitespace-nowrap"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            파일 선택
+          </ObjectUploader>
+        </div>
+        {(fileUrl || fileUrlMeta?.value) && (
+          <p className="text-sm text-muted-foreground">
+            현재 파일: <a href={fileUrl || fileUrlMeta?.value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{fileUrl || fileUrlMeta?.value}</a>
+          </p>
+        )}
       </div>
       <div className="flex items-center space-x-2">
         <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} />
@@ -1922,28 +1973,319 @@ function CreateNewsDialog({
   );
 }
 
-// Create Event Dialog - stub for now
+// Create Event Dialog
 function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      content: '',
+      eventDate: '',
+      endDate: '',
+      location: '',
+      category: 'networking',
+      eventType: 'offline',
+      capacity: undefined,
+      fee: 0,
+      registrationDeadline: '',
+      images: [] as string[],
+      isPublic: true,
+      isPublished: true,
+    }
+  });
+  
+  const isPublished = watch('isPublished');
+
+  const createMutation = useMutation({
+    mutationFn: async (formData: EventFormData) => {
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const { post, translation, meta } = mapEventFormToPost(formData, user.id);
+      return await createPost({ post, translation, meta });
+    },
+    onSuccess: () => {
+      toast({ title: "행사가 생성되었습니다" });
+      reset();
+      setInternalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
+      onSuccess();
+    },
+    onError: (error) => {
+      console.error('[CreateEventDialog] Create failed:', error);
+      toast({ 
+        title: "행사 생성 실패", 
+        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const onSubmit = (data: any) => {
+    console.log('[Event Form] Submitting:', data);
+    console.log('[Event Form] Errors:', errors);
+    createMutation.mutate(data);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={internalOpen} onOpenChange={setInternalOpen}>
       <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4" />행사 생성</Button>
+        <Button data-testid="button-create-event">
+          <Plus className="h-4 w-4" />
+          행사 생성
+        </Button>
       </DialogTrigger>
-      <DialogContent>행사 생성 폼</DialogContent>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>새 행사 생성</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="form-label">제목</label>
+            <Input {...register('title')} data-testid="input-event-title" />
+            {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">설명</label>
+            <Textarea {...register('description')} data-testid="textarea-event-description" />
+            {errors.description && <p className="text-sm text-destructive mt-1">{String(errors.description.message)}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">상세 내용</label>
+            <Textarea {...register('content')} rows={4} data-testid="textarea-event-content" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">시작 날짜</label>
+              <Input type="datetime-local" {...register('eventDate')} data-testid="input-event-date" />
+              {errors.eventDate && <p className="text-sm text-destructive mt-1">{String(errors.eventDate.message)}</p>}
+            </div>
+            <div>
+              <label className="form-label">종료 날짜</label>
+              <Input type="datetime-local" {...register('endDate')} data-testid="input-event-endDate" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">장소</label>
+              <Input {...register('location')} data-testid="input-event-location" />
+              {errors.location && <p className="text-sm text-destructive mt-1">{String(errors.location.message)}</p>}
+            </div>
+            <div>
+              <label className="form-label">카테고리</label>
+              <Select defaultValue="networking" onValueChange={(v) => setValue('category', v)}>
+                <SelectTrigger data-testid="select-event-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="networking">네트워킹</SelectItem>
+                  <SelectItem value="seminar">세미나</SelectItem>
+                  <SelectItem value="conference">컨퍼런스</SelectItem>
+                  <SelectItem value="workshop">워크샵</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="form-label">형식</label>
+              <Select defaultValue="offline" onValueChange={(v) => setValue('eventType', v)}>
+                <SelectTrigger data-testid="select-event-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="offline">오프라인</SelectItem>
+                  <SelectItem value="online">온라인</SelectItem>
+                  <SelectItem value="hybrid">하이브리드</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="form-label">정원</label>
+              <Input type="number" {...register('capacity', { valueAsNumber: true })} data-testid="input-event-capacity" />
+            </div>
+            <div>
+              <label className="form-label">참가비</label>
+              <Input type="number" {...register('fee', { valueAsNumber: true })} data-testid="input-event-fee" />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} data-testid="switch-event-published" />
+            <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-event">
+              {createMutation.isPending ? '생성 중...' : '생성'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setInternalOpen(false)}>
+              취소
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }
 
-// Create Resource Dialog - stub for now
+// Create Resource Dialog
 function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [fileUrl, setFileUrl] = useState('');
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
+    resolver: zodResolver(resourceSchema),
+    defaultValues: {
+      title: '',
+      excerpt: '',
+      content: '',
+      tags: [] as string[],
+      fileUrl: '',
+      isPublished: false,
+    }
+  });
+  
+  const isPublished = watch('isPublished');
+
+  const handleGetUploadParameters = async () => {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/api/objects/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const data = await response.json();
+    (window as any).__lastUploadObjectPath = data.objectPath;
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+    };
+  };
+
+  const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        setFileUrl(objectPath);
+        setValue('fileUrl', objectPath);
+        toast({ title: '파일 업로드 완료!' });
+      }
+    }
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (formData: ResourceFormData) => {
+      if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
+      const finalFileUrl = fileUrl || formData.fileUrl;
+      const { post, translation, meta } = mapResourceFormToPost(formData, user.id, finalFileUrl);
+      return await createPost({ post, translation, meta });
+    },
+    onSuccess: () => {
+      toast({ title: "자료가 생성되었습니다" });
+      reset();
+      setFileUrl('');
+      setInternalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
+      onSuccess();
+    },
+    onError: (error) => {
+      console.error('[CreateResourceDialog] Create failed:', error);
+      toast({ 
+        title: "자료 생성 실패", 
+        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const onSubmit = (data: any) => {
+    console.log('[Resource Form] Submitting:', data);
+    console.log('[Resource Form] Errors:', errors);
+    createMutation.mutate(data);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={internalOpen} onOpenChange={setInternalOpen}>
       <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4" />자료 생성</Button>
+        <Button data-testid="button-create-resource">
+          <Plus className="h-4 w-4" />
+          자료 생성
+        </Button>
       </DialogTrigger>
-      <DialogContent>자료 생성 폼</DialogContent>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>새 자료 생성</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="form-label">제목</label>
+            <Input {...register('title')} data-testid="input-resource-title" />
+            {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">설명</label>
+            <Textarea {...register('excerpt')} data-testid="textarea-resource-excerpt" />
+            {errors.excerpt && <p className="text-sm text-destructive mt-1">{String(errors.excerpt.message)}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">상세 내용</label>
+            <Textarea {...register('content')} rows={4} data-testid="textarea-resource-content" />
+          </div>
+
+          <div>
+            <label className="form-label">첨부파일</label>
+            <div className="flex gap-2 mb-4">
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={104857600}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleFileUpload}
+                buttonClassName="whitespace-nowrap"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 선택
+              </ObjectUploader>
+            </div>
+            {fileUrl && (
+              <p className="text-sm text-muted-foreground">
+                선택된 파일: <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{fileUrl}</a>
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} data-testid="switch-resource-published" />
+            <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-resource">
+              {createMutation.isPending ? '생성 중...' : '생성'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setInternalOpen(false)}>
+              취소
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }
