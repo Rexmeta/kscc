@@ -2774,7 +2774,10 @@ function CreateOrganizationMemberDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">카테고리 *</label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={(value) => {
+                setCategory(value);
+                form.setValue('category', value);
+              }}>
                 <SelectTrigger data-testid="select-org-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
@@ -2989,7 +2992,10 @@ function EditOrganizationMemberDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">카테고리 *</label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={(value) => {
+                setCategory(value);
+                form.setValue('category', value);
+              }}>
                 <SelectTrigger data-testid="select-org-edit-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
