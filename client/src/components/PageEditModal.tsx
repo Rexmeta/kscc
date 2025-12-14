@@ -40,6 +40,17 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
     zh: { title: '', subtitle: '', excerpt: '', content: '' },
   });
 
+  // JSON 포매팅 함수
+  const formatJSON = (jsonStr: string) => {
+    if (!jsonStr || !jsonStr.trim()) return '';
+    try {
+      const parsed = JSON.parse(jsonStr);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return jsonStr;
+    }
+  };
+
   useEffect(() => {
     if (page) {
       const newFormData: Record<string, TranslationFormData> = {};
@@ -49,7 +60,7 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
           title: translation?.title || '',
           subtitle: translation?.subtitle || '',
           excerpt: translation?.excerpt || '',
-          content: translation?.content || '',
+          content: formatJSON(translation?.content || ''),
         };
       });
       setFormData(newFormData);
