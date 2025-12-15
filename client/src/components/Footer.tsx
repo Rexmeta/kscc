@@ -10,8 +10,8 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
-                <span className="text-xl font-bold text-white">KSCC</span>
+              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent flex-shrink-0">
+                <span className="text-lg font-bold text-white leading-none">KSCC</span>
               </div>
               <div>
                 <div className="font-bold">한국 사천-충칭 총상회</div>
