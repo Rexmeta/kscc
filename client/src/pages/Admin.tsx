@@ -385,19 +385,43 @@ export default function AdminPage() {
       <main className="container py-8">
         <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-              <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9 lg:grid-cols-10 gap-1">
-                <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="whitespace-nowrap px-3 text-xs md:text-sm">대시보드</TabsTrigger>
-                <TabsTrigger value="users" data-testid="tab-users" className="whitespace-nowrap px-3 text-xs md:text-sm">사용자</TabsTrigger>
-                <TabsTrigger value="members" data-testid="tab-members" className="whitespace-nowrap px-3 text-xs md:text-sm">회원</TabsTrigger>
-                <TabsTrigger value="articles" data-testid="tab-articles" className="whitespace-nowrap px-3 text-xs md:text-sm">뉴스</TabsTrigger>
-                <TabsTrigger value="events" data-testid="tab-events" className="whitespace-nowrap px-3 text-xs md:text-sm">행사</TabsTrigger>
-                <TabsTrigger value="resources" data-testid="tab-resources" className="whitespace-nowrap px-3 text-xs md:text-sm">자료</TabsTrigger>
-                <TabsTrigger value="pages" data-testid="tab-pages" className="whitespace-nowrap px-3 text-xs md:text-sm">페이지</TabsTrigger>
-                <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="whitespace-nowrap px-3 text-xs md:text-sm">문의</TabsTrigger>
-                <TabsTrigger value="organization" data-testid="tab-organization" className="whitespace-nowrap px-3 text-xs md:text-sm">조직</TabsTrigger>
+            {/* Mobile: Dropdown Select */}
+            <div className="md:hidden">
+              <Select value={activeTab} onValueChange={setActiveTab}>
+                <SelectTrigger className="w-full" data-testid="mobile-tab-select">
+                  <SelectValue placeholder="메뉴 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dashboard" data-testid="option-tab-dashboard">대시보드</SelectItem>
+                  <SelectItem value="users" data-testid="option-tab-users">사용자</SelectItem>
+                  <SelectItem value="members" data-testid="option-tab-members">회원</SelectItem>
+                  <SelectItem value="articles" data-testid="option-tab-articles">뉴스</SelectItem>
+                  <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>
+                  <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>
+                  <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>
+                  <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>
+                  <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>
+                  {(user?.role === 'admin' || user?.role === 'operator') && (
+                    <SelectItem value="manual" data-testid="option-tab-manual">매뉴얼</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Desktop: Tab List */}
+            <div className="hidden md:block">
+              <TabsList className="grid w-full grid-cols-9 lg:grid-cols-10 gap-1">
+                <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm">대시보드</TabsTrigger>
+                <TabsTrigger value="users" data-testid="tab-users" className="text-sm">사용자</TabsTrigger>
+                <TabsTrigger value="members" data-testid="tab-members" className="text-sm">회원</TabsTrigger>
+                <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm">뉴스</TabsTrigger>
+                <TabsTrigger value="events" data-testid="tab-events" className="text-sm">행사</TabsTrigger>
+                <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm">자료</TabsTrigger>
+                <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm">페이지</TabsTrigger>
+                <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm">문의</TabsTrigger>
+                <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm">조직</TabsTrigger>
                 {(user?.role === 'admin' || user?.role === 'operator') && (
-                  <TabsTrigger value="manual" data-testid="tab-manual" className="whitespace-nowrap px-3 text-xs md:text-sm">매뉴얼</TabsTrigger>
+                  <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm">매뉴얼</TabsTrigger>
                 )}
               </TabsList>
             </div>
