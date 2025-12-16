@@ -385,24 +385,26 @@ export default function AdminPage() {
       <main className="container py-8">
         <div>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className={`grid w-full ${(user?.role === 'admin' || user?.role === 'operator') ? 'grid-cols-10' : 'grid-cols-9'}`}>
-              <TabsTrigger value="dashboard" data-testid="tab-dashboard">대시보드</TabsTrigger>
-              <TabsTrigger value="users" data-testid="tab-users">사용자</TabsTrigger>
-              <TabsTrigger value="members" data-testid="tab-members">회원</TabsTrigger>
-              <TabsTrigger value="articles" data-testid="tab-articles">뉴스</TabsTrigger>
-              <TabsTrigger value="events" data-testid="tab-events">행사</TabsTrigger>
-              <TabsTrigger value="resources" data-testid="tab-resources">자료</TabsTrigger>
-              <TabsTrigger value="pages" data-testid="tab-pages">페이지</TabsTrigger>
-              <TabsTrigger value="inquiries" data-testid="tab-inquiries">문의</TabsTrigger>
-              <TabsTrigger value="organization" data-testid="tab-organization">조직</TabsTrigger>
-              {(user?.role === 'admin' || user?.role === 'operator') && (
-                <TabsTrigger value="manual" data-testid="tab-manual">운영 매뉴얼</TabsTrigger>
-              )}
-            </TabsList>
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9 lg:grid-cols-10 gap-1">
+                <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="whitespace-nowrap px-3 text-xs md:text-sm">대시보드</TabsTrigger>
+                <TabsTrigger value="users" data-testid="tab-users" className="whitespace-nowrap px-3 text-xs md:text-sm">사용자</TabsTrigger>
+                <TabsTrigger value="members" data-testid="tab-members" className="whitespace-nowrap px-3 text-xs md:text-sm">회원</TabsTrigger>
+                <TabsTrigger value="articles" data-testid="tab-articles" className="whitespace-nowrap px-3 text-xs md:text-sm">뉴스</TabsTrigger>
+                <TabsTrigger value="events" data-testid="tab-events" className="whitespace-nowrap px-3 text-xs md:text-sm">행사</TabsTrigger>
+                <TabsTrigger value="resources" data-testid="tab-resources" className="whitespace-nowrap px-3 text-xs md:text-sm">자료</TabsTrigger>
+                <TabsTrigger value="pages" data-testid="tab-pages" className="whitespace-nowrap px-3 text-xs md:text-sm">페이지</TabsTrigger>
+                <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="whitespace-nowrap px-3 text-xs md:text-sm">문의</TabsTrigger>
+                <TabsTrigger value="organization" data-testid="tab-organization" className="whitespace-nowrap px-3 text-xs md:text-sm">조직</TabsTrigger>
+                {(user?.role === 'admin' || user?.role === 'operator') && (
+                  <TabsTrigger value="manual" data-testid="tab-manual" className="whitespace-nowrap px-3 text-xs md:text-sm">매뉴얼</TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
             {/* Dashboard Tab */}
             <TabsContent value="dashboard" className="space-y-6">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-6 border rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1204,7 +1206,7 @@ export default function AdminPage() {
           {/* Member View Dialog */}
           {selectedItem && activeTab === 'members' && (
             <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-              <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{selectedItem.companyName} 상세 정보</DialogTitle>
                   <DialogDescription>회원사 정보를 확인하고 관리할 수 있습니다</DialogDescription>
@@ -1215,7 +1217,7 @@ export default function AdminPage() {
                       <img src={selectedItem.logo} alt={selectedItem.companyName} className="h-20 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">회사명</p>
                       <p className="font-medium">{selectedItem.companyName}</p>
@@ -1277,7 +1279,7 @@ export default function AdminPage() {
           {/* Member Edit Dialog */}
           {selectedItem && activeTab === 'members' && (
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-              <DialogContent className="max-w-2xl max-h-[600px] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{selectedItem.companyName} 편집</DialogTitle>
                 </DialogHeader>
@@ -1307,7 +1309,7 @@ export default function AdminPage() {
           {/* News Edit Dialog */}
           {selectedItem && activeTab === 'articles' && editDialogOpen && (
             <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>뉴스 수정</DialogTitle>
                 </DialogHeader>
@@ -1325,7 +1327,7 @@ export default function AdminPage() {
           {/* Event Edit Dialog */}
           {selectedItem && activeTab === 'events' && editDialogOpen && (
             <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>행사 수정</DialogTitle>
                 </DialogHeader>
@@ -1343,7 +1345,7 @@ export default function AdminPage() {
           {/* Resource Edit Dialog */}
           {selectedItem && activeTab === 'resources' && editDialogOpen && (
             <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>자료 수정</DialogTitle>
                 </DialogHeader>
@@ -2096,7 +2098,7 @@ function CreateNewsDialog({
           뉴스 생성
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>새 뉴스 생성</DialogTitle>
         </DialogHeader>
@@ -2123,7 +2125,7 @@ function CreateNewsDialog({
             {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="form-label">카테고리</label>
               <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
@@ -2313,7 +2315,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
           행사 생성
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>새 행사 생성</DialogTitle>
         </DialogHeader>
@@ -2339,7 +2341,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="form-label">시작 날짜</label>
               <Input type="datetime-local" {...register('eventDate')} data-testid="input-event-date" />
@@ -2351,7 +2353,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="form-label">장소</label>
               <Input {...register('location')} data-testid="input-event-location" />
@@ -2374,7 +2376,7 @@ function CreateEventDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="form-label">형식</label>
               <Select defaultValue="offline" onValueChange={(v) => setValue('eventType', v)}>
@@ -2506,7 +2508,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
           자료 생성
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>새 자료 생성</DialogTitle>
         </DialogHeader>
@@ -2735,13 +2737,13 @@ function CreateOrganizationMemberDialog({
           구성원 추가
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>조직 구성원 추가</DialogTitle>
           <DialogDescription>새로운 조직 구성원 정보를 입력하세요.</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(data => createMutation.mutate(data))} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium">이름 (한국어) *</label>
               <Input {...form.register('name')} data-testid="input-org-name" />
@@ -2756,7 +2758,7 @@ function CreateOrganizationMemberDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium">직책 (한국어) *</label>
               <Input {...form.register('position')} data-testid="input-org-position" />
@@ -2771,7 +2773,7 @@ function CreateOrganizationMemberDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">카테고리 *</label>
               <Select value={category} onValueChange={(value) => {
@@ -2953,13 +2955,13 @@ function EditOrganizationMemberDialog({
 
   return (
     <Dialog open={internalOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>조직 구성원 수정</DialogTitle>
           <DialogDescription>조직 구성원 정보를 수정하세요.</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(data => updateMutation.mutate(data))} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium">이름 (한국어) *</label>
               <Input {...form.register('name')} data-testid="input-org-edit-name" />
@@ -2974,7 +2976,7 @@ function EditOrganizationMemberDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium">직책 (한국어) *</label>
               <Input {...form.register('position')} data-testid="input-org-edit-position" />
@@ -2989,7 +2991,7 @@ function EditOrganizationMemberDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">카테고리 *</label>
               <Select value={category} onValueChange={(value) => {
