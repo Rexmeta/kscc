@@ -18,6 +18,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"), // admin, operator, user
   userType: text("user_type").notNull().default("user"), // admin, operator, company, user
   membershipTier: text("membership_tier").notNull().default("free"), // free, bronze, silver, gold, platinum
+  weixin: text("weixin"), // WeChat ID
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

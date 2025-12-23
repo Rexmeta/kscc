@@ -64,6 +64,7 @@ const profileUpdateSchema = z.object({
     val => !val || z.string().email().safeParse(val).success,
     '유효한 이메일을 입력해주세요'
   ),
+  weixin: z.string().optional(),
   currentPassword: z.string().optional(),
   newPassword: z.string().optional().refine(
     val => !val || val.length >= 6,
@@ -119,6 +120,7 @@ export default function Dashboard() {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
+      weixin: user?.weixin || '',
       currentPassword: '',
       newPassword: '',
     },
@@ -130,6 +132,7 @@ export default function Dashboard() {
       profileForm.reset({
         name: user.name || '',
         email: user.email || '',
+        weixin: user.weixin || '',
         currentPassword: '',
         newPassword: '',
       });
@@ -142,6 +145,7 @@ export default function Dashboard() {
       const updates: any = {};
       if (data.name && data.name.trim() !== '' && data.name !== user?.name) updates.name = data.name;
       if (data.email && data.email.trim() !== '' && data.email !== user?.email) updates.email = data.email;
+      if (data.weixin !== undefined && data.weixin !== user?.weixin) updates.weixin = data.weixin;
       
       // Only include password fields if they are not empty
       if (data.currentPassword && data.currentPassword.trim() !== '') {
@@ -557,6 +561,23 @@ export default function Dashboard() {
                         placeholder={user?.email || '이메일'} 
                         {...field} 
                         data-testid="input-profile-email"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={profileForm.control}
+                name="weixin"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>WeChat ID</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder={user?.weixin || 'WeChat ID'} 
+                        {...field} 
+                        data-testid="input-profile-weixin"
                       />
                     </FormControl>
                     <FormMessage />

@@ -183,6 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const profileUpdateSchema = z.object({
     name: z.string().min(1).optional(),
     email: z.string().email().optional(),
+    weixin: z.string().optional(),
     currentPassword: z.string().optional(),
     newPassword: z.string().min(6).optional(),
   }).refine(
@@ -225,6 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: Partial<typeof user> = {};
       if (updates.name) updateData.name = updates.name;
       if (updates.email) updateData.email = updates.email;
+      if (updates.weixin !== undefined) updateData.weixin = updates.weixin;
       if (updates.newPassword) {
         const bcrypt = await import('bcrypt');
         updateData.password = await bcrypt.hash(updates.newPassword, 10);

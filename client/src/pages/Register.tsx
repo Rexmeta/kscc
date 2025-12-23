@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Eye, EyeOff, User, Mail, Lock, Building, Briefcase, Phone } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Lock, Building, Briefcase, Phone, MessageCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -18,6 +18,7 @@ const baseFields = {
   email: z.string().email('올바른 이메일을 입력해주세요'),
   password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
   confirmPassword: z.string(),
+  weixin: z.string().optional(),
 };
 
 const staffSchema = z.object(baseFields).refine((data) => data.password === data.confirmPassword, {
@@ -69,10 +70,11 @@ function RegistrationForm({ userType, onSuccess }: RegistrationFormProps) {
             business: companyData.business,
             contactEmail: companyData.contactEmail || undefined,
             contactPhone: companyData.contactPhone || undefined,
-          }
+          },
+          companyData.weixin || undefined
         );
       } else {
-        await registerUser(data.name, data.email, data.password, 'staff');
+        await registerUser(data.name, data.email, data.password, 'staff', undefined, data.weixin || undefined);
       }
 
       toast({
@@ -176,6 +178,20 @@ function RegistrationForm({ userType, onSuccess }: RegistrationFormProps) {
         {errors.confirmPassword && (
           <p className="text-sm text-destructive mt-1">{errors.confirmPassword.message}</p>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="weixin">WeChat ID (선택)</Label>
+        <div className="relative">
+          <MessageCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="weixin"
+            placeholder="WeChat ID"
+            className="pl-10"
+            {...register('weixin')}
+            data-testid="input-weixin"
+          />
+        </div>
       </div>
 
       {userType === 'company' && (
