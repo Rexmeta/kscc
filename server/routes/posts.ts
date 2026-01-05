@@ -270,17 +270,12 @@ router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Re
     }
     
     const translationData = insertPostTranslationSchema.omit({ postId: true }).parse(req.body);
-    
-    console.log("[Posts API] Upserting translation for post:", id);
-    console.log("[Posts API] Translation data:", translationData);
-    
+
     const translation = await storage.upsertPostTranslation({
       postId: id,
       ...translationData,
     });
-    
-    console.log("[Posts API] Upserted translation result:", translation);
-    
+
     res.json(translation);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -372,19 +367,6 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
       return res.status(400).json({ message: "Invalid increment data", errors: error.errors });
     }
     console.error("[Posts API] Error incrementing post meta:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-// DEBUG ENDPOINT - Get raw meta for a post
-router.get("/:id/debug-meta", async (req: Request, res: Response) => {
-  try {
-    const { id } = postIdSchema.parse(req.params);
-    const meta = await storage.getPostMetaAll(id);
-    console.log("[DEBUG] Raw meta from storage:", JSON.stringify(meta, null, 2));
-    res.json({ meta, count: meta.length });
-  } catch (error) {
-    console.error("[Posts API] Error getting debug meta:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
