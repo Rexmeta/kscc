@@ -1538,15 +1538,17 @@ function EditMemberForm({ member, onSuccess }: any) {
 
 // EditNewsForm Component
 function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSuccess: () => void }) {
+  // Extract existing data from news
+  const categoryFromMeta = String(news.meta?.find(m => m.key === 'category')?.value || news.tags?.[0] || '');
+  const existingImages = (news.meta?.find(m => m.key === 'news.images')?.value as string[]) || [];
+  
   const [featuredImageUrl, setFeaturedImageUrl] = useState(news.coverImage || '');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
-  // Extract category from meta
-  const categoryFromMeta = String(news.meta?.find(m => m.key === 'category')?.value || '');
   
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(newsSchema),
@@ -1556,7 +1558,7 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       content: news.translations?.[0]?.content || '',
       category: categoryFromMeta,
       featuredImage: news.coverImage || '',
-      images: imageUrls,
+      images: existingImages,
       isPublished: news.status === 'published',
       publishedAt: news.publishedAt ? new Date(news.publishedAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
     }
@@ -1564,6 +1566,7 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   
   const isPublished = watch('isPublished');
   const publishedAt = watch('publishedAt');
+  const selectedCategory = watch('category');
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -1588,9 +1591,45 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       if (objectPath) {
         setFeaturedImageUrl(objectPath);
         setValue('featuredImage', objectPath);
-        toast({ title: '대표 이미지 업로드 완료!' });
+        toast({ title: '대표 이미지가 업로드되었습니다' });
       }
     }
+  };
+
+  const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const objectPath = (window as any).__lastUploadObjectPath || '';
+      if (objectPath) {
+        const updated = [...imageUrls, objectPath];
+        setImageUrls(updated);
+        setValue('images', updated);
+        toast({ title: '이미지가 추가되었습니다' });
+      }
+    }
+  };
+
+  const addImageUrl = () => {
+    if (newImageUrl.trim() && (newImageUrl.startsWith('http://') || newImageUrl.startsWith('https://'))) {
+      const updated = [...imageUrls, newImageUrl.trim()];
+      setImageUrls(updated);
+      setValue('images', updated);
+      setNewImageUrl('');
+      setShowUrlInput(false);
+      toast({ title: '이미지 URL이 추가되었습니다' });
+    } else {
+      toast({ title: '올바른 URL을 입력해주세요', variant: 'destructive' });
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const updated = imageUrls.filter((_, i) => i !== index);
+    setImageUrls(updated);
+    setValue('images', updated);
+  };
+
+  const removeFeaturedImage = () => {
+    setFeaturedImageUrl('');
+    setValue('featuredImage', '');
   };
 
   const updateMutation = useMutation({
@@ -1599,9 +1638,10 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       return await updatePost({
         postId: news.id,
         post: {
-          coverImage: featuredImageUrl || formData.featuredImage,
+          coverImage: featuredImageUrl || formData.featuredImage || null,
           status: (formData.isPublished ? 'published' : 'draft') as any,
           publishedAt: formData.isPublished ? (formData.publishedAt ? new Date(formData.publishedAt) : new Date()) : null,
+          tags: [formData.category],
         },
         translation: {
           locale: 'ko' as any,
@@ -1610,7 +1650,10 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
           subtitle: formData.excerpt,
           content: formData.content,
         },
-        meta: [{ key: 'category', value: formData.category }],
+        meta: [
+          { key: 'category', value: formData.category },
+          ...(imageUrls.length > 0 ? [{ key: 'news.images', value: imageUrls }] : []),
+        ],
       });
     },
     onSuccess: () => {
@@ -1635,65 +1678,96 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div>
-        <label className="form-label">제목</label>
-        <Input {...register('title')} data-testid="input-news-title-edit" />
-        {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
-      </div>
-
-      <div>
-        <label className="form-label">요약</label>
-        <Textarea {...register('excerpt')} data-testid="textarea-news-excerpt-edit" />
-        {errors.excerpt && <p className="text-sm text-destructive mt-1">{String(errors.excerpt.message)}</p>}
-      </div>
-
-      <div>
-        <label className="form-label">내용</label>
-        <RichTextEditor
-          value={watch('content') || ''}
-          onChange={(value) => setValue('content', value)}
-          data-testid="editor-news-content-edit"
-        />
-        {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="space-y-4">
         <div>
-          <label className="form-label">카테고리</label>
-          <Select defaultValue={categoryFromMeta || ''} onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
-            <SelectTrigger data-testid="select-news-category-edit">
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            제목 <span className="text-destructive">*</span>
+          </label>
+          <Input 
+            {...register('title')} 
+            placeholder="뉴스 제목을 입력하세요"
+            className="h-11"
+            data-testid="input-news-title-edit" 
+          />
+          {errors.title && <p className="text-sm text-destructive mt-1.5">{String(errors.title.message)}</p>}
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            요약 <span className="text-destructive">*</span>
+          </label>
+          <Textarea 
+            {...register('excerpt')} 
+            placeholder="뉴스 내용을 간략하게 요약해주세요 (목록에 표시됩니다)"
+            className="min-h-[80px] resize-none"
+            data-testid="textarea-news-excerpt-edit" 
+          />
+          {errors.excerpt && <p className="text-sm text-destructive mt-1.5">{String(errors.excerpt.message)}</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            카테고리 <span className="text-destructive">*</span>
+          </label>
+          <Select 
+            value={selectedCategory}
+            onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}
+          >
+            <SelectTrigger className="h-11" data-testid="select-news-category-edit">
               <SelectValue placeholder="카테고리 선택" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="notice">공지</SelectItem>
-              <SelectItem value="news">뉴스</SelectItem>
-              <SelectItem value="column">칼럼</SelectItem>
+              <SelectItem value="notice">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  공지사항
+                </div>
+              </SelectItem>
+              <SelectItem value="news">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  뉴스
+                </div>
+              </SelectItem>
+              <SelectItem value="column">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                  칼럼
+                </div>
+              </SelectItem>
             </SelectContent>
           </Select>
-          {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
+          {errors.category && <p className="text-sm text-destructive mt-1.5">{String(errors.category.message)}</p>}
         </div>
+        
         <div>
-          <label className="form-label">발행</label>
-          <div className="flex items-center space-x-2 mt-2">
+          <label className="text-sm font-medium text-foreground mb-1.5 block">발행 상태</label>
+          <div className="h-11 flex items-center gap-3 px-3 rounded-md border bg-muted/30">
             <Switch 
-              checked={isPublished} 
+              checked={isPublished}
               onCheckedChange={(checked) => setValue('isPublished', checked)}
               data-testid="switch-news-published-edit" 
             />
-            <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+            <span className={`text-sm font-medium ${isPublished ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {isPublished ? '발행됨' : '초안'}
+            </span>
           </div>
         </div>
       </div>
 
       {isPublished && (
         <div>
-          <label className="form-label">발행일</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            발행일
+          </label>
           <Input 
             type="datetime-local"
             value={publishedAt || ''}
             onChange={(e) => setValue('publishedAt', e.target.value)}
-            className="mt-1"
+            className="h-11"
             data-testid="input-news-published-at-edit" 
           />
           <p className="text-xs text-muted-foreground mt-1">발행일을 수정할 수 있습니다.</p>
@@ -1701,39 +1775,206 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       )}
 
       <div>
-        <label className="form-label">대표 이미지</label>
-        <div className="flex gap-2 mb-4">
-          <ObjectUploader
-            maxNumberOfFiles={1}
-            maxFileSize={10485760}
-            onGetUploadParameters={handleGetUploadParameters}
-            onComplete={handleFeaturedImageUpload}
-            buttonClassName="whitespace-nowrap"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            대표 이미지 선택
-          </ObjectUploader>
-        </div>
-        {featuredImageUrl && (
-          <img 
-            src={featuredImageUrl} 
-            alt="대표 이미지" 
-            className="max-w-sm h-40 object-cover rounded border"
-            data-testid="img-featured-preview-edit"
-            onError={(e) => {
-              e.currentTarget.style.borderColor = '#ef4444';
-              e.currentTarget.style.opacity = '0.5';
-            }}
-          />
+        <label className="text-sm font-medium text-foreground mb-1.5 block">
+          본문 내용 <span className="text-destructive">*</span>
+        </label>
+        <RichTextEditor
+          value={watch('content') || ''}
+          onChange={(value) => setValue('content', value)}
+          data-testid="editor-news-content-edit"
+        />
+        {errors.content && <p className="text-sm text-destructive mt-1.5">{String(errors.content.message)}</p>}
+      </div>
+
+      <div className="border rounded-lg p-4 bg-muted/20">
+        <label className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+          <ImageIcon className="h-4 w-4 text-muted-foreground" />
+          대표 이미지
+        </label>
+        
+        {!featuredImageUrl ? (
+          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 sm:p-8 text-center hover:border-primary/50 transition-colors bg-background">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <Upload className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">이미지를 업로드하세요</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG, GIF (최대 10MB)</p>
+              </div>
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleFeaturedImageUpload}
+                buttonClassName="mt-2"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                파일 선택
+              </ObjectUploader>
+            </div>
+          </div>
+        ) : (
+          <div className="relative group">
+            <img 
+              src={featuredImageUrl} 
+              alt="대표 이미지" 
+              className="w-full h-48 sm:h-56 object-cover rounded-lg border"
+              data-testid="img-featured-preview-edit"
+              onError={(e) => {
+                e.currentTarget.style.borderColor = '#ef4444';
+                e.currentTarget.style.opacity = '0.5';
+              }}
+            />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+              <ObjectUploader
+                maxNumberOfFiles={1}
+                maxFileSize={10485760}
+                onGetUploadParameters={handleGetUploadParameters}
+                onComplete={handleFeaturedImageUpload}
+                buttonClassName="bg-white text-black hover:bg-gray-100"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                변경
+              </ObjectUploader>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={removeFeaturedImage}
+                data-testid="button-remove-featured-edit"
+              >
+                <X className="h-4 w-4 mr-1" />
+                삭제
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit" disabled={updateMutation.isPending} data-testid="button-submit-news-edit">
-          {updateMutation.isPending ? '수정 중...' : '수정'}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => onSuccess()}>
+      <div className="border rounded-lg p-4 bg-muted/20">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-medium text-foreground flex items-center gap-2">
+            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+            추가 이미지
+            {imageUrls.length > 0 && (
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {imageUrls.length}개
+              </span>
+            )}
+          </label>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowUrlInput(!showUrlInput)}
+              className="text-xs"
+            >
+              <LinkIcon className="h-3.5 w-3.5 mr-1" />
+              URL
+            </Button>
+            <ObjectUploader
+              maxNumberOfFiles={10}
+              maxFileSize={10485760}
+              onGetUploadParameters={handleGetUploadParameters}
+              onComplete={handleAdditionalImageUpload}
+              buttonClassName="h-8 text-xs"
+            >
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              업로드
+            </ObjectUploader>
+          </div>
+        </div>
+
+        {showUrlInput && (
+          <div className="flex gap-2 mb-4">
+            <Input
+              value={newImageUrl}
+              onChange={(e) => setNewImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+              className="flex-1"
+              data-testid="input-image-url-edit"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addImageUrl();
+                }
+              }}
+            />
+            <Button type="button" onClick={addImageUrl} size="sm">
+              추가
+            </Button>
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setShowUrlInput(false);
+                setNewImageUrl('');
+              }}
+            >
+              취소
+            </Button>
+          </div>
+        )}
+        
+        {imageUrls.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {imageUrls.map((url, index) => (
+              <div key={index} className="relative group aspect-square">
+                <img 
+                  src={url} 
+                  alt={`추가 이미지 ${index + 1}`}
+                  className="w-full h-full object-cover rounded-lg border"
+                  data-testid={`img-preview-edit-${index}`}
+                  onError={(e) => {
+                    e.currentTarget.style.borderColor = '#ef4444';
+                    e.currentTarget.style.opacity = '0.5';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImageUrl(index)}
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                  data-testid={`button-remove-image-edit-${index}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p>추가 이미지가 없습니다</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4 border-t">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => onSuccess()}
+          className="flex-1 sm:flex-none"
+        >
           취소
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={updateMutation.isPending} 
+          className="flex-1 sm:flex-none sm:min-w-[120px]"
+          data-testid="button-submit-news-edit"
+        >
+          {updateMutation.isPending ? (
+            <>
+              <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+              수정 중...
+            </>
+          ) : (
+            '수정 완료'
+          )}
         </Button>
       </div>
     </form>
