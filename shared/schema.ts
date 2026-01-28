@@ -393,6 +393,8 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
+  // Make slug optional - backend will auto-generate if not provided
+  slug: z.string().optional(),
   // Allow date fields to accept ISO strings from JSON and coerce to Date
   publishedAt: z.coerce.date().nullable().optional(),
   scheduledAt: z.coerce.date().nullable().optional(),

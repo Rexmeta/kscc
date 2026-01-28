@@ -182,6 +182,13 @@ router.get("/:id/registrations", authenticateToken, requireAdmin, async (req: Re
   }
 });
 
+// Helper function to generate unique slug
+function generateSlug(postType: string): string {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substring(2, 8);
+  return `${postType}-${timestamp}-${randomPart}`;
+}
+
 // POST /api/posts - Create new post
 router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -193,8 +200,14 @@ router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Resp
       return res.status(400).json({ message: "Author ID is required" });
     }
     
+    // Auto-generate slug if not provided or empty
+    const slug = postData.slug && postData.slug.trim() !== '' 
+      ? postData.slug 
+      : generateSlug(postData.postType);
+    
     const post = await storage.createPost({
       ...postData,
+      slug,
       authorId,
     });
     
