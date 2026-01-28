@@ -60,6 +60,7 @@ const newsSchema = z.object({
   featuredImage: z.string().optional(),
   images: z.array(z.string()).optional(),
   isPublished: z.boolean().optional().default(false),
+  publishedAt: z.string().optional(),
 });
 
 const eventSchema = z.object({
@@ -1557,10 +1558,12 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       featuredImage: news.coverImage || '',
       images: imageUrls,
       isPublished: news.status === 'published',
+      publishedAt: news.publishedAt ? new Date(news.publishedAt).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
     }
   });
   
   const isPublished = watch('isPublished');
+  const publishedAt = watch('publishedAt');
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -1598,7 +1601,7 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
         post: {
           coverImage: featuredImageUrl || formData.featuredImage,
           status: (formData.isPublished ? 'published' : 'draft') as any,
-          publishedAt: formData.isPublished ? new Date() : null,
+          publishedAt: formData.isPublished ? (formData.publishedAt ? new Date(formData.publishedAt) : new Date()) : null,
         },
         translation: {
           locale: 'ko' as any,
@@ -1682,6 +1685,20 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
           </div>
         </div>
       </div>
+
+      {isPublished && (
+        <div>
+          <label className="form-label">발행일</label>
+          <Input 
+            type="datetime-local"
+            value={publishedAt || ''}
+            onChange={(e) => setValue('publishedAt', e.target.value)}
+            className="mt-1"
+            data-testid="input-news-published-at-edit" 
+          />
+          <p className="text-xs text-muted-foreground mt-1">발행일을 수정할 수 있습니다.</p>
+        </div>
+      )}
 
       <div>
         <label className="form-label">대표 이미지</label>
@@ -2026,11 +2043,13 @@ function CreateNewsDialog({
       featuredImage: '',
       images: [] as string[],
       isPublished: false,
+      publishedAt: new Date().toISOString().slice(0, 16),
     }
   });
   
   const isPublished = watch('isPublished');
   const selectedCategory = watch('category');
+  const publishedAt = watch('publishedAt');
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -2223,6 +2242,22 @@ function CreateNewsDialog({
                 </div>
               </div>
             </div>
+
+            {isPublished && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">
+                  발행일
+                </label>
+                <Input 
+                  type="datetime-local"
+                  value={publishedAt || ''}
+                  onChange={(e) => setValue('publishedAt', e.target.value)}
+                  className="h-11"
+                  data-testid="input-news-published-at" 
+                />
+                <p className="text-xs text-muted-foreground mt-1">발행일을 지정할 수 있습니다. 비워두면 현재 시간으로 설정됩니다.</p>
+              </div>
+            )}
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">
