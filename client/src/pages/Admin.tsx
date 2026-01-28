@@ -27,7 +27,9 @@ import {
   XCircle,
   X,
   Upload,
-  Network
+  Network,
+  Image as ImageIcon,
+  Link as LinkIcon
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -2005,6 +2007,7 @@ function CreateNewsDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
@@ -2027,6 +2030,7 @@ function CreateNewsDialog({
   });
   
   const isPublished = watch('isPublished');
+  const selectedCategory = watch('category');
 
   const handleGetUploadParameters = async () => {
     const token = localStorage.getItem('token');
@@ -2051,7 +2055,7 @@ function CreateNewsDialog({
       if (objectPath) {
         setFeaturedImageUrl(objectPath);
         setValue('featuredImage', objectPath);
-        toast({ title: '대표 이미지 업로드 완료!' });
+        toast({ title: '대표 이미지가 업로드되었습니다' });
       }
     }
   };
@@ -2063,17 +2067,21 @@ function CreateNewsDialog({
         const updated = [...imageUrls, objectPath];
         setImageUrls(updated);
         setValue('images', updated);
-        toast({ title: '이미지 업로드 완료!' });
+        toast({ title: '이미지가 추가되었습니다' });
       }
     }
   };
 
   const addImageUrl = () => {
-    if (newImageUrl.trim() && newImageUrl.startsWith('http')) {
+    if (newImageUrl.trim() && (newImageUrl.startsWith('http://') || newImageUrl.startsWith('https://'))) {
       const updated = [...imageUrls, newImageUrl.trim()];
       setImageUrls(updated);
       setValue('images', updated);
       setNewImageUrl('');
+      setShowUrlInput(false);
+      toast({ title: '이미지 URL이 추가되었습니다' });
+    } else {
+      toast({ title: '올바른 URL을 입력해주세요', variant: 'destructive' });
     }
   };
 
@@ -2083,6 +2091,11 @@ function CreateNewsDialog({
     setValue('images', updated);
   };
 
+  const removeFeaturedImage = () => {
+    setFeaturedImageUrl('');
+    setValue('featuredImage', '');
+  };
+
   const createMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
@@ -2090,10 +2103,12 @@ function CreateNewsDialog({
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
-      toast({ title: "뉴스가 생성되었습니다" });
+      toast({ title: "뉴스가 성공적으로 생성되었습니다" });
       reset();
       setFeaturedImageUrl('');
       setImageUrls([]);
+      setShowUrlInput(false);
+      setNewImageUrl('');
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       onSuccess();
@@ -2102,7 +2117,7 @@ function CreateNewsDialog({
       console.error('[CreateNewsDialog] Create failed:', error);
       toast({ 
         title: "뉴스 생성 실패", 
-        description: error instanceof Error ? error.message : "알 수 없는 오류",
+        description: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다",
         variant: "destructive" 
       });
     },
@@ -2118,153 +2133,302 @@ function CreateNewsDialog({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button data-testid="button-create-news">
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 mr-1" />
           뉴스 생성
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>새 뉴스 생성</DialogTitle>
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
+          <DialogTitle className="text-xl font-semibold">새 뉴스 작성</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">새로운 뉴스 또는 공지사항을 작성합니다</p>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="form-label">제목</label>
-            <Input {...register('title')} data-testid="input-news-title" />
-            {errors.title && <p className="text-sm text-destructive mt-1">{String(errors.title.message)}</p>}
-          </div>
+        
+        <form onSubmit={handleSubmit(onSubmit)} className="px-4 sm:px-6 pb-4 sm:pb-6">
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">
+                  제목 <span className="text-destructive">*</span>
+                </label>
+                <Input 
+                  {...register('title')} 
+                  placeholder="뉴스 제목을 입력하세요"
+                  className="h-11"
+                  data-testid="input-news-title" 
+                />
+                {errors.title && <p className="text-sm text-destructive mt-1.5">{String(errors.title.message)}</p>}
+              </div>
 
-          <div>
-            <label className="form-label">요약</label>
-            <Textarea {...register('excerpt')} data-testid="textarea-news-excerpt" />
-            {errors.excerpt && <p className="text-sm text-destructive mt-1">{String(errors.excerpt.message)}</p>}
-          </div>
-
-          <div>
-            <label className="form-label">내용</label>
-            <RichTextEditor
-              value={watch('content') || ''}
-              onChange={(value) => setValue('content', value)}
-              data-testid="editor-news-content"
-            />
-            {errors.content && <p className="text-sm text-destructive mt-1">{String(errors.content.message)}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">카테고리</label>
-              <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}>
-                <SelectTrigger data-testid="select-news-category">
-                  <SelectValue placeholder="카테고리 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="notice">공지</SelectItem>
-                  <SelectItem value="news">뉴스</SelectItem>
-                  <SelectItem value="column">칼럼</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.category && <p className="text-sm text-destructive mt-1">{String(errors.category.message)}</p>}
-            </div>
-            <div>
-              <label className="form-label">발행</label>
-              <div className="flex items-center space-x-2 mt-2">
-                <Switch {...register('isPublished')} data-testid="switch-news-published" />
-                <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">
+                  요약 <span className="text-destructive">*</span>
+                </label>
+                <Textarea 
+                  {...register('excerpt')} 
+                  placeholder="뉴스 내용을 간략하게 요약해주세요 (목록에 표시됩니다)"
+                  className="min-h-[80px] resize-none"
+                  data-testid="textarea-news-excerpt" 
+                />
+                {errors.excerpt && <p className="text-sm text-destructive mt-1.5">{String(errors.excerpt.message)}</p>}
               </div>
             </div>
-          </div>
 
-          <div>
-            <label className="form-label">대표 이미지</label>
-            <div className="flex gap-2 mb-4">
-              <ObjectUploader
-                maxNumberOfFiles={1}
-                maxFileSize={10485760}
-                onGetUploadParameters={handleGetUploadParameters}
-                onComplete={handleFeaturedImageUpload}
-                buttonClassName="whitespace-nowrap"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                대표 이미지 선택
-              </ObjectUploader>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">
+                  카테고리 <span className="text-destructive">*</span>
+                </label>
+                <Select 
+                  value={selectedCategory}
+                  onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}
+                >
+                  <SelectTrigger className="h-11" data-testid="select-news-category">
+                    <SelectValue placeholder="카테고리 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="notice">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        공지사항
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="news">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        뉴스
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="column">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                        칼럼
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.category && <p className="text-sm text-destructive mt-1.5">{String(errors.category.message)}</p>}
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">발행 상태</label>
+                <div className="h-11 flex items-center gap-3 px-3 rounded-md border bg-muted/30">
+                  <Switch 
+                    checked={isPublished}
+                    onCheckedChange={(checked) => setValue('isPublished', checked)}
+                    data-testid="switch-news-published" 
+                  />
+                  <span className={`text-sm font-medium ${isPublished ? 'text-green-600' : 'text-muted-foreground'}`}>
+                    {isPublished ? '즉시 발행' : '임시저장'}
+                  </span>
+                </div>
+              </div>
             </div>
-            {featuredImageUrl && (
-              <img 
-                src={featuredImageUrl} 
-                alt="대표 이미지" 
-                className="max-w-sm h-40 object-cover rounded border"
-                data-testid="img-featured-preview"
-                onError={(e) => {
-                  e.currentTarget.style.borderColor = '#ef4444';
-                  e.currentTarget.style.opacity = '0.5';
-                }}
-              />
-            )}
-          </div>
 
-          <div>
-            <label className="form-label">추가 이미지</label>
-            <div className="flex gap-2 mb-4">
-              <ObjectUploader
-                maxNumberOfFiles={10}
-                maxFileSize={10485760}
-                onGetUploadParameters={handleGetUploadParameters}
-                onComplete={handleAdditionalImageUpload}
-                buttonClassName="whitespace-nowrap"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                이미지 추가
-              </ObjectUploader>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addImageUrl}
-              >
-                URL 추가
-              </Button>
-            </div>
-            <div className="flex gap-2 mb-4">
-              <Input
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-                placeholder="https://..."
-                data-testid="input-image-url"
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                본문 내용 <span className="text-destructive">*</span>
+              </label>
+              <RichTextEditor
+                value={watch('content') || ''}
+                onChange={(value) => setValue('content', value)}
+                data-testid="editor-news-content"
               />
+              {errors.content && <p className="text-sm text-destructive mt-1.5">{String(errors.content.message)}</p>}
             </div>
-            
-            {imageUrls.length > 0 && (
-              <div className="grid grid-cols-3 gap-3">
-                {imageUrls.map((url, index) => (
-                  <div key={index} className="relative">
-                    <img 
-                      src={url} 
-                      alt={`Image ${index}`}
-                      className="w-full h-24 object-cover rounded border"
-                      data-testid={`img-preview-${index}`}
-                      onError={(e) => {
-                        e.currentTarget.style.borderColor = '#ef4444';
-                        e.currentTarget.style.opacity = '0.5';
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImageUrl(index)}
-                      className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1 hover:bg-destructive/90"
-                      data-testid={`button-remove-image-${index}`}
+
+            <div className="border rounded-lg p-4 bg-muted/20">
+              <label className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                대표 이미지
+              </label>
+              
+              {!featuredImageUrl ? (
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 sm:p-8 text-center hover:border-primary/50 transition-colors bg-background">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                      <Upload className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">이미지를 업로드하세요</p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG, GIF (최대 10MB)</p>
+                    </div>
+                    <ObjectUploader
+                      maxNumberOfFiles={1}
+                      maxFileSize={10485760}
+                      onGetUploadParameters={handleGetUploadParameters}
+                      onComplete={handleFeaturedImageUpload}
+                      buttonClassName="mt-2"
                     >
-                      <X className="h-4 w-4" />
-                    </button>
+                      <Upload className="h-4 w-4 mr-2" />
+                      파일 선택
+                    </ObjectUploader>
                   </div>
-                ))}
+                </div>
+              ) : (
+                <div className="relative group">
+                  <img 
+                    src={featuredImageUrl} 
+                    alt="대표 이미지" 
+                    className="w-full h-48 sm:h-56 object-cover rounded-lg border"
+                    data-testid="img-featured-preview"
+                    onError={(e) => {
+                      e.currentTarget.style.borderColor = '#ef4444';
+                      e.currentTarget.style.opacity = '0.5';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                    <ObjectUploader
+                      maxNumberOfFiles={1}
+                      maxFileSize={10485760}
+                      onGetUploadParameters={handleGetUploadParameters}
+                      onComplete={handleFeaturedImageUpload}
+                      buttonClassName="bg-white text-black hover:bg-gray-100"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      변경
+                    </ObjectUploader>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={removeFeaturedImage}
+                      data-testid="button-remove-featured"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      삭제
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border rounded-lg p-4 bg-muted/20">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  추가 이미지
+                  {imageUrls.length > 0 && (
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {imageUrls.length}개
+                    </span>
+                  )}
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className="text-xs"
+                  >
+                    <LinkIcon className="h-3.5 w-3.5 mr-1" />
+                    URL
+                  </Button>
+                  <ObjectUploader
+                    maxNumberOfFiles={10}
+                    maxFileSize={10485760}
+                    onGetUploadParameters={handleGetUploadParameters}
+                    onComplete={handleAdditionalImageUpload}
+                    buttonClassName="h-8 text-xs"
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1" />
+                    업로드
+                  </ObjectUploader>
+                </div>
               </div>
-            )}
+
+              {showUrlInput && (
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    value={newImageUrl}
+                    onChange={(e) => setNewImageUrl(e.target.value)}
+                    placeholder="https://example.com/image.jpg"
+                    className="flex-1"
+                    data-testid="input-image-url"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addImageUrl();
+                      }
+                    }}
+                  />
+                  <Button type="button" onClick={addImageUrl} size="sm">
+                    추가
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      setShowUrlInput(false);
+                      setNewImageUrl('');
+                    }}
+                  >
+                    취소
+                  </Button>
+                </div>
+              )}
+              
+              {imageUrls.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {imageUrls.map((url, index) => (
+                    <div key={index} className="relative group aspect-square">
+                      <img 
+                        src={url} 
+                        alt={`추가 이미지 ${index + 1}`}
+                        className="w-full h-full object-cover rounded-lg border"
+                        data-testid={`img-preview-${index}`}
+                        onError={(e) => {
+                          e.currentTarget.style.borderColor = '#ef4444';
+                          e.currentTarget.style.opacity = '0.5';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImageUrl(index)}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                        data-testid={`button-remove-image-${index}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p>추가 이미지가 없습니다</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-news">
-              {createMutation.isPending ? '생성 중...' : '생성'}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 mt-6 pt-4 border-t">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => setIsOpen(false)}
+              className="flex-1 sm:flex-none"
+            >
               취소
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={createMutation.isPending} 
+              className="flex-1 sm:flex-none sm:min-w-[120px]"
+              data-testid="button-submit-news"
+            >
+              {createMutation.isPending ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  생성 중...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-1" />
+                  뉴스 생성
+                </>
+              )}
             </Button>
           </div>
         </form>
