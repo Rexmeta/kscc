@@ -14,9 +14,10 @@ import "@uppy/dashboard/css/style.min.css";
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
   maxFileSize?: number;
-  onGetUploadParameters: () => Promise<{
+  onGetUploadParameters: (file: { type?: string; name?: string }) => Promise<{
     method: "PUT";
     url: string;
+    headers?: Record<string, string>;
   }>;
   onComplete?: (
     result: UploadResult<Record<string, unknown>, Record<string, unknown>>

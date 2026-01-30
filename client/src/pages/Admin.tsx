@@ -1571,7 +1571,23 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
   const publishedAt = watch('publishedAt');
   const selectedCategory = watch('category');
 
-  const handleGetUploadParameters = async () => {
+  const setImagePublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set image ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -1585,6 +1601,9 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
     };
   };
 
@@ -1592,6 +1611,7 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setImagePublicAcl(objectPath);
         setFeaturedImageUrl(objectPath);
         setValue('featuredImage', objectPath);
         toast({ title: '대표 이미지가 업로드되었습니다' });
@@ -1603,6 +1623,7 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setImagePublicAcl(objectPath);
         const updated = [...imageUrls, objectPath];
         setImageUrls(updated);
         setValue('images', updated);
@@ -2145,7 +2166,23 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
   
   const isPublished = watch('isPublished');
 
-  const handleGetUploadParameters = async () => {
+  const setFilePublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set file ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -2159,6 +2196,9 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
     };
   };
 
@@ -2166,6 +2206,7 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setFilePublicAcl(objectPath);
         setFileUrl(objectPath);
         setValue('fileUrl', objectPath);
         toast({ title: '파일 업로드 완료!' });
@@ -2295,7 +2336,23 @@ function CreateNewsDialog({
   const selectedCategory = watch('category');
   const publishedAt = watch('publishedAt');
 
-  const handleGetUploadParameters = async () => {
+  const setImagePublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set image ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -2309,6 +2366,9 @@ function CreateNewsDialog({
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
     };
   };
 
@@ -2316,6 +2376,7 @@ function CreateNewsDialog({
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setImagePublicAcl(objectPath);
         setFeaturedImageUrl(objectPath);
         setValue('featuredImage', objectPath);
         toast({ title: '대표 이미지가 업로드되었습니다' });
@@ -2327,6 +2388,7 @@ function CreateNewsDialog({
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setImagePublicAcl(objectPath);
         const updated = [...imageUrls, objectPath];
         setImageUrls(updated);
         setValue('images', updated);
@@ -2896,7 +2958,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
+
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
     resolver: zodResolver(resourceSchema),
     defaultValues: {
@@ -2908,10 +2970,26 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
       isPublished: false,
     }
   });
-  
+
   const isPublished = watch('isPublished');
 
-  const handleGetUploadParameters = async () => {
+  const setFilePublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set file ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -2925,6 +3003,9 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
     };
   };
 
@@ -2932,6 +3013,7 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setFilePublicAcl(objectPath);
         setFileUrl(objectPath);
         setValue('fileUrl', objectPath);
         toast({ title: '파일 업로드 완료!' });
@@ -3176,7 +3258,23 @@ function CreateOrganizationMemberDialog({
     }
   });
 
-  const handleGetUploadParameters = async () => {
+  const setPhotoPublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set photo ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -3187,13 +3285,20 @@ function CreateOrganizationMemberDialog({
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
-    return { method: 'PUT' as const, url: data.signedUrl };
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
+    };
   };
 
   const handlePhotoUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setPhotoPublicAcl(objectPath);
         setPhoto(objectPath);
       }
     }
@@ -3400,7 +3505,23 @@ function EditOrganizationMemberDialog({
     }
   });
 
-  const handleGetUploadParameters = async () => {
+  const setPhotoPublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set photo ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -3411,13 +3532,20 @@ function EditOrganizationMemberDialog({
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
-    return { method: 'PUT' as const, url: data.signedUrl };
+    return {
+      method: 'PUT' as const,
+      url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
+    };
   };
 
   const handlePhotoUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setPhotoPublicAcl(objectPath);
         setPhoto(objectPath);
       }
     }
