@@ -92,9 +92,16 @@ export class ObjectStorageService {
       const [metadata] = await file.getMetadata();
       const aclPolicy = await getObjectAclPolicy(file);
       const isPublic = aclPolicy?.visibility === "public";
-      
+
+      let contentType = metadata.contentType || "application/octet-stream";
+
+      // If Content-Type is generic, try to detect from magic bytes
+      if (contentType === "application/octet-stream") {
+        contentType = await this.detectContentType(file, contentType);
+      }
+
       res.set({
-        "Content-Type": metadata.contentType || "application/octet-stream",
+        "Content-Type": contentType,
         "Content-Length": metadata.size,
         "Cache-Control": `${
           isPublic ? "public" : "private"
@@ -117,6 +124,34 @@ export class ObjectStorageService {
         res.status(500).json({ error: "Error downloading file" });
       }
     }
+  }
+
+  private async detectContentType(file: File, fallback: string): Promise<string> {
+    return new Promise((resolve) => {
+      const chunks: Buffer[] = [];
+      const stream = file.createReadStream({ start: 0, end: 11 });
+      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("end", () => {
+        const header = Buffer.concat(chunks);
+        if (header.length >= 3 && header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+          resolve("image/jpeg");
+        } else if (header.length >= 4 && header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+          resolve("image/png");
+        } else if (header.length >= 4 && header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x38) {
+          resolve("image/gif");
+        } else if (header.length >= 12 && header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+                   header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50) {
+          resolve("image/webp");
+        } else if (header.length >= 2 && header[0] === 0x42 && header[1] === 0x4D) {
+          resolve("image/bmp");
+        } else if (header.length >= 4 && header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46) {
+          resolve("application/pdf");
+        } else {
+          resolve(fallback);
+        }
+      });
+      stream.on("error", () => resolve(fallback));
+    });
   }
 
   async getObjectEntityUploadURL(): Promise<string> {

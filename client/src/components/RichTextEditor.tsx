@@ -40,7 +40,23 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
-  const handleGetUploadParameters = async () => {
+  const setImagePublicAcl = async (objectPath: string) => {
+    const token = localStorage.getItem('token');
+    try {
+      await fetch('/api/images', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageURL: objectPath }),
+      });
+    } catch (e) {
+      console.error('Failed to set image ACL:', e);
+    }
+  };
+
+  const handleGetUploadParameters = async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
@@ -54,15 +70,19 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file?.type || 'application/octet-stream',
+      },
     };
   };
 
   const handleImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (!editor) return;
-    
+
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
       if (objectPath) {
+        await setImagePublicAcl(objectPath);
         editor.chain().focus().setImage({ src: objectPath }).run();
         setImageDialogOpen(false);
       }
