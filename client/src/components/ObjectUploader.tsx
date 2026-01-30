@@ -72,6 +72,7 @@ export function ObjectUploader({
         open={showModal}
         onRequestClose={() => setShowModal(false)}
         proudlyDisplayPoweredByUppy={false}
+        target={document.body}
       />
     </div>
   );
