@@ -1336,7 +1336,10 @@ export default function AdminPage() {
           {/* News Edit Dialog */}
           {selectedItem && activeTab === 'articles' && editDialogOpen && (
             <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>
-              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+              >
                 <DialogHeader>
                   <DialogTitle>뉴스 수정</DialogTitle>
                 </DialogHeader>
@@ -2397,7 +2400,10 @@ function CreateNewsDialog({
           뉴스 생성
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto p-0"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
           <DialogTitle className="text-xl font-semibold">새 뉴스 작성</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">새로운 뉴스 또는 공지사항을 작성합니다</p>
