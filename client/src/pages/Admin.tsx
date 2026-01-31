@@ -48,7 +48,7 @@ import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 import PageEditModal from '@/components/PageEditModal';
 import UserEditDialog from '@/components/UserEditDialog';
 import RichTextEditor from '@/components/RichTextEditor';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 // Form schemas
@@ -1441,7 +1441,10 @@ export default function AdminPage() {
                       variant="outline"
                       onClick={() => {
                         setViewDialogOpen(false);
-                        setEditDialogOpen(true);
+                        // Use setTimeout to ensure view dialog closes before edit dialog opens
+                        setTimeout(() => {
+                          setEditDialogOpen(true);
+                        }, 100);
                       }}
                       data-testid="button-edit-from-view"
                     >
@@ -1648,13 +1651,16 @@ function EditMemberForm({ member, onSuccess }: any) {
 // EditNewsForm Component
 function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSuccess: () => void }) {
   // Extract existing data from news
-  const categoryFromMeta = String(news.meta?.find(m => m.key === 'category')?.value || news.tags?.[0] || '');
-  const existingImages = (news.meta?.find(m => m.key === 'news.images')?.value as string[]) || [];
+  const categoryFromMeta = String(news.meta?.find((m: any) => m.key === 'category')?.value || news.tags?.[0] || '');
+  const existingImages = (news.meta?.find((m: any) => m.key === 'news.images')?.value as string[]) || [];
   
   const [featuredImageUrl, setFeaturedImageUrl] = useState(news.coverImage || '');
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
+  
+  // Store uploaded paths in an array for multiple uploads
+  const uploadedPathsRef = useRef<string[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -1704,6 +1710,8 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
       body: JSON.stringify({}),
     });
     const data = await response.json();
+    // Store path in array for multiple file support
+    uploadedPathsRef.current.push(data.objectPath);
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
@@ -1721,19 +1729,25 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
         toast({ title: '대표 이미지가 업로드되었습니다' });
       }
     }
+    // Clear the array after upload
+    uploadedPathsRef.current = [];
   };
 
   const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const objectPath = (window as any).__lastUploadObjectPath || '';
-      if (objectPath) {
-        await setImagePublicAcl(objectPath);
-        const updated = [...imageUrls, objectPath];
+      // Get all uploaded paths from the array
+      const newPaths = uploadedPathsRef.current.filter(p => p);
+      if (newPaths.length > 0) {
+        // Set ACL for all uploaded images
+        await Promise.all(newPaths.map(path => setImagePublicAcl(path)));
+        const updated = [...imageUrls, ...newPaths];
         setImageUrls(updated);
         setValue('images', updated);
-        toast({ title: '이미지가 추가되었습니다' });
+        toast({ title: `${newPaths.length}개 이미지가 추가되었습니다` });
       }
     }
+    // Clear the array after upload
+    uploadedPathsRef.current = [];
   };
 
   const addImageUrl = () => {
@@ -2417,6 +2431,9 @@ function CreateNewsDialog({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
+  // Store uploaded paths in an array for multiple uploads
+  const uploadedPathsRef = useRef<string[]>([]);
+  
   const isOpen = open !== undefined ? open : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
   
@@ -2465,6 +2482,8 @@ function CreateNewsDialog({
       body: JSON.stringify({}),
     });
     const data = await response.json();
+    // Store path in array for multiple file support
+    uploadedPathsRef.current.push(data.objectPath);
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
@@ -2482,19 +2501,25 @@ function CreateNewsDialog({
         toast({ title: '대표 이미지가 업로드되었습니다' });
       }
     }
+    // Clear the array after upload
+    uploadedPathsRef.current = [];
   };
 
   const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const objectPath = (window as any).__lastUploadObjectPath || '';
-      if (objectPath) {
-        await setImagePublicAcl(objectPath);
-        const updated = [...imageUrls, objectPath];
+      // Get all uploaded paths from the array
+      const newPaths = uploadedPathsRef.current.filter(p => p);
+      if (newPaths.length > 0) {
+        // Set ACL for all uploaded images
+        await Promise.all(newPaths.map(path => setImagePublicAcl(path)));
+        const updated = [...imageUrls, ...newPaths];
         setImageUrls(updated);
         setValue('images', updated);
-        toast({ title: '이미지가 추가되었습니다' });
+        toast({ title: `${newPaths.length}개 이미지가 추가되었습니다` });
       }
     }
+    // Clear the array after upload
+    uploadedPathsRef.current = [];
   };
 
   const addImageUrl = () => {
