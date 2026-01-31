@@ -46,8 +46,8 @@ export function ObjectUploader({
     onCompleteRef.current = onComplete;
   }, [onGetUploadParameters, onComplete]);
   
-  const uppy = useMemo(() =>
-    new Uppy({
+  const uppy = useMemo(() => {
+    const instance = new Uppy({
       restrictions: {
         maxNumberOfFiles,
         maxFileSize,
@@ -75,8 +75,16 @@ export function ObjectUploader({
         console.log('[Uppy] Upload complete:', { successful: result.successful?.length, failed: result.failed?.length });
         onCompleteRef.current?.(result);
         setShowModal(false);
-      })
-  , [maxNumberOfFiles, maxFileSize]);
+        instance.cancelAll();
+      });
+    return instance;
+  }, [maxNumberOfFiles, maxFileSize]);
+
+  useEffect(() => {
+    return () => {
+      uppy.cancelAll();
+    };
+  }, [uppy]);
 
   return (
     <div>
@@ -98,7 +106,6 @@ export function ObjectUploader({
         open={showModal}
         onRequestClose={() => setShowModal(false)}
         proudlyDisplayPoweredByUppy={false}
-        target={document.body}
       />
     </div>
   );

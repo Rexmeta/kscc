@@ -60,7 +60,8 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
 
   const handleGetUploadParameters = useCallback(async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
-    console.log('[RichTextEditor] Getting upload parameters');
+    console.log('[RichTextEditor] handleGetUploadParameters called for file');
+    console.log('[RichTextEditor] Current editorRef:', !!editorRef.current);
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
       headers: {
@@ -118,7 +119,9 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
           class: 'max-w-full h-auto rounded-lg my-4',
         },
       }),
-      Link.configure({
+      Link.extend({
+        inclusive: false,
+      }).configure({
         openOnClick: false,
         HTMLAttributes: {
           class: 'text-primary underline cursor-pointer',
@@ -138,6 +141,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
 
   useEffect(() => {
     if (editor) {
+      console.log('[RichTextEditor] Editor mounted, setting ref');
       (editorRef as React.MutableRefObject<typeof editor>).current = editor;
     }
   }, [editor]);
