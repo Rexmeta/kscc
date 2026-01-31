@@ -2,12 +2,18 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
-import { DashboardModal } from "@uppy/react";
+import { Dashboard } from "@uppy/react";
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-// Uppy CSS imports - required for DashboardModal to display properly
+// Uppy CSS imports - required for Dashboard to display properly
 import "@uppy/core/css/style.min.css";
 import "@uppy/dashboard/css/style.min.css";
 
@@ -101,12 +107,25 @@ export function ObjectUploader({
         {children}
       </Button>
 
-      <DashboardModal
-        uppy={uppy}
-        open={showModal}
-        onRequestClose={() => setShowModal(false)}
-        proudlyDisplayPoweredByUppy={false}
-      />
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent 
+          className="max-w-md p-0 overflow-hidden"
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle>파일 업로드</DialogTitle>
+          </DialogHeader>
+          <div className="px-4 pb-4">
+            <Dashboard
+              uppy={uppy}
+              proudlyDisplayPoweredByUppy={false}
+              hideUploadButton={false}
+              height={300}
+              width="100%"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
