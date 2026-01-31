@@ -64,15 +64,13 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 

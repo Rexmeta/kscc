@@ -768,8 +768,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint for getting upload URL (admin only)
   app.post("/api/objects/upload", authenticateToken, requireAdmin, async (req, res) => {
     try {
+      const { contentType } = req.body || {};
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL(contentType);
       
       // Extract objectPath from uploadURL (format: /replit-objstore-xxx/.private/uploads/uuid)
       const url = new URL(uploadURL);

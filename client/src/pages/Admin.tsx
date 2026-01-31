@@ -1595,15 +1595,13 @@ function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSucce
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
@@ -2190,15 +2188,13 @@ function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslati
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
@@ -2360,15 +2356,13 @@ function CreateNewsDialog({
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
@@ -2997,15 +2991,13 @@ function CreateResourceDialog({ onSuccess }: { onSuccess: () => void }) {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
@@ -3282,15 +3274,13 @@ function CreateOrganizationMemberDialog({
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
@@ -3529,15 +3519,13 @@ function EditOrganizationMemberDialog({
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({}),
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
-      headers: {
-        'Content-Type': file?.type || 'application/octet-stream',
-      },
     };
   };
 
