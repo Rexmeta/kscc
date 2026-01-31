@@ -642,12 +642,23 @@ export default function AdminPage() {
                       <img 
                         src={article.coverImage} 
                         alt={article.translations?.[0]?.title || '뉴스'}
-                        className="w-20 h-20 object-cover rounded border"
+                        className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                         data-testid={`img-news-${article.id}`}
                         onError={(e) => e.currentTarget.style.display = 'none'}
+                        onClick={() => {
+                          setSelectedItem(article);
+                          setViewDialogOpen(true);
+                        }}
                       />
                     )}
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1 cursor-pointer hover:bg-muted/50 rounded p-2 -m-2 transition-colors"
+                      onClick={() => {
+                        setSelectedItem(article);
+                        setViewDialogOpen(true);
+                      }}
+                      data-testid={`news-item-${article.id}`}
+                    >
                       <h4 className="font-medium mb-2">{article.translations?.[0]?.title || '제목 없음'}</h4>
                       <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{article.translations?.[0]?.excerpt || '설명 없음'}</p>
                       <div className="flex items-center space-x-4 text-xs text-muted-foreground">
@@ -1402,6 +1413,93 @@ export default function AdminPage() {
           {selectedItem && activeTab === 'inquiries' && (
             <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
               <InquiryDetailView inquiryId={selectedItem.id} onClose={() => setViewDialogOpen(false)} />
+            </Dialog>
+          )}
+
+          {/* News Detail View Dialog */}
+          {selectedItem && activeTab === 'articles' && viewDialogOpen && (
+            <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <DialogTitle className="text-xl font-bold mb-2">
+                        {selectedItem.translations?.[0]?.title || '제목 없음'}
+                      </DialogTitle>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{new Date(selectedItem.publishedAt || selectedItem.createdAt).toLocaleDateString()}</span>
+                        <Badge variant="secondary">{selectedItem.status === 'published' ? '게시됨' : '임시저장'}</Badge>
+                        {selectedItem.meta?.find((m: any) => m.key === 'category')?.value && (
+                          <Badge variant="outline">
+                            {selectedItem.meta.find((m: any) => m.key === 'category')?.value === 'news' ? '뉴스' :
+                             selectedItem.meta.find((m: any) => m.key === 'category')?.value === 'announcement' ? '공지사항' : '보도자료'}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setViewDialogOpen(false);
+                        setEditDialogOpen(true);
+                      }}
+                      data-testid="button-edit-from-view"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      수정
+                    </Button>
+                  </div>
+                </DialogHeader>
+                
+                <div className="mt-4 space-y-6">
+                  {/* Featured Image */}
+                  {selectedItem.coverImage && (
+                    <div className="w-full">
+                      <img 
+                        src={selectedItem.coverImage} 
+                        alt={selectedItem.translations?.[0]?.title || '뉴스 이미지'}
+                        className="w-full max-h-96 object-cover rounded-lg"
+                        onError={(e) => e.currentTarget.style.display = 'none'}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Excerpt */}
+                  {selectedItem.translations?.[0]?.excerpt && (
+                    <div className="text-muted-foreground italic border-l-4 border-primary pl-4">
+                      {selectedItem.translations[0].excerpt}
+                    </div>
+                  )}
+                  
+                  {/* Content */}
+                  <div 
+                    className="prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ 
+                      __html: selectedItem.translations?.[0]?.content || '<p>내용이 없습니다.</p>' 
+                    }}
+                  />
+                  
+                  {/* Additional Images */}
+                  {selectedItem.meta?.find((m: any) => m.key === 'news.images')?.value && 
+                   Array.isArray(selectedItem.meta.find((m: any) => m.key === 'news.images')?.value) &&
+                   (selectedItem.meta.find((m: any) => m.key === 'news.images')?.value as string[]).length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground">추가 이미지</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {(selectedItem.meta.find((m: any) => m.key === 'news.images')?.value as string[]).map((img: string, idx: number) => (
+                          <img 
+                            key={idx}
+                            src={img} 
+                            alt={`추가 이미지 ${idx + 1}`}
+                            className="w-full h-40 object-cover rounded-lg border"
+                            onError={(e) => e.currentTarget.style.display = 'none'}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
             </Dialog>
           )}
 
