@@ -40,6 +40,8 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
   const setImagePublicAcl = async (objectPath: string) => {
     const token = localStorage.getItem('token');
     try {
@@ -56,8 +58,9 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     }
   };
 
-  const handleGetUploadParameters = async (file: { type?: string }) => {
+  const handleGetUploadParameters = useCallback(async (file: { type?: string }) => {
     const token = localStorage.getItem('token');
+    console.log('[RichTextEditor] Getting upload parameters');
     const response = await fetch('/api/objects/upload', {
       method: 'POST',
       headers: {
@@ -68,24 +71,38 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     });
     const data = await response.json();
     (window as any).__lastUploadObjectPath = data.objectPath;
+    console.log('[RichTextEditor] Upload URL received:', data.uploadURL?.substring(0, 80));
     return {
       method: 'PUT' as const,
       url: data.uploadURL,
     };
-  };
+  }, []);
 
-  const handleImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    if (!editor) return;
+  const handleImageUploadRef = useRef<(result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => Promise<void>>();
+  
+  handleImageUploadRef.current = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    const currentEditor = editorRef.current;
+    console.log('[RichTextEditor] Image upload complete, editor available:', !!currentEditor);
+    
+    if (!currentEditor) {
+      console.error('[RichTextEditor] Editor is not available');
+      return;
+    }
 
     if (result.successful && result.successful.length > 0) {
       const objectPath = (window as any).__lastUploadObjectPath || '';
+      console.log('[RichTextEditor] Setting image with path:', objectPath);
       if (objectPath) {
         await setImagePublicAcl(objectPath);
-        editor.chain().focus().setImage({ src: objectPath }).run();
+        currentEditor.chain().focus().setImage({ src: objectPath }).run();
         setImageDialogOpen(false);
       }
     }
   };
+
+  const handleImageUpload = useCallback((result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    return handleImageUploadRef.current?.(result) || Promise.resolve();
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -118,6 +135,12 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
       },
     },
   });
+
+  useEffect(() => {
+    if (editor) {
+      (editorRef as React.MutableRefObject<typeof editor>).current = editor;
+    }
+  }, [editor]);
 
   useEffect(() => {
     if (editor && value !== editor.getHTML()) {

@@ -209,6 +209,14 @@ export default function AdminPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Handle tab change - clear selected item and close dialogs
+  const handleTabChange = (newTab: string) => {
+    setSelectedItem(null);
+    setEditDialogOpen(false);
+    setViewDialogOpen(false);
+    setActiveTab(newTab);
+  };
+
   // Read URL parameters to auto-navigate to specific tab and action
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -387,10 +395,10 @@ export default function AdminPage() {
     <div className="min-h-screen bg-background">
       <main className="container py-8">
         <div>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             {/* Mobile: Dropdown Select */}
             <div className="md:hidden">
-              <Select value={activeTab} onValueChange={setActiveTab}>
+              <Select value={activeTab} onValueChange={handleTabChange}>
                 <SelectTrigger className="w-full" data-testid="mobile-tab-select">
                   <SelectValue placeholder="메뉴 선택" />
                 </SelectTrigger>
