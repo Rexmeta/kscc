@@ -1,5 +1,5 @@
 // Reference: blueprint:javascript_object_storage
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
 import { DashboardModal } from "@uppy/react";
@@ -35,7 +35,18 @@ export function ObjectUploader({
   children,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
-  const [uppy] = useState(() =>
+  
+  // Use refs to always access the latest callbacks
+  const onGetUploadParametersRef = useRef(onGetUploadParameters);
+  const onCompleteRef = useRef(onComplete);
+  
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onGetUploadParametersRef.current = onGetUploadParameters;
+    onCompleteRef.current = onComplete;
+  }, [onGetUploadParameters, onComplete]);
+  
+  const uppy = useMemo(() =>
     new Uppy({
       restrictions: {
         maxNumberOfFiles,
@@ -45,13 +56,27 @@ export function ObjectUploader({
     })
       .use(AwsS3, {
         shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
+        getUploadParameters: async (file) => {
+          try {
+            console.log('[Uppy] Getting upload parameters for:', file.name);
+            const result = await onGetUploadParametersRef.current(file);
+            console.log('[Uppy] Upload parameters received:', { url: result.url?.substring(0, 100) + '...', method: result.method });
+            return result;
+          } catch (error) {
+            console.error('[Uppy] Error getting upload parameters:', error);
+            throw error;
+          }
+        },
+      })
+      .on("upload-error", (file, error, response) => {
+        console.error('[Uppy] Upload error:', { file: file?.name, error, response });
       })
       .on("complete", (result) => {
-        onComplete?.(result);
+        console.log('[Uppy] Upload complete:', { successful: result.successful?.length, failed: result.failed?.length });
+        onCompleteRef.current?.(result);
         setShowModal(false);
       })
-  );
+  , [maxNumberOfFiles, maxFileSize]);
 
   return (
     <div>
