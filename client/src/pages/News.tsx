@@ -5,13 +5,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, RefreshCw, Newspaper, Plus } from 'lucide-react';
+import { Search, Filter, RefreshCw, Newspaper, Plus, Clock, ChevronRight } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { PostWithTranslations } from '@shared/schema';
-import NewsCard from '@/components/NewsCard';
+import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 
 export default function NewsPage() {
   const { hasPermission } = useAuth();
@@ -134,8 +134,8 @@ export default function NewsPage() {
         </div>
       </section>
 
-      {/* News Grid */}
-      <section className="py-16">
+      {/* News Content */}
+      <section className="py-8">
         <div className="container">
           {isLoading ? (
             <div className="text-center py-12">
@@ -144,10 +144,145 @@ export default function NewsPage() {
             </div>
           ) : posts.length > 0 ? (
             <>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {posts.map((post: PostWithTranslations) => (
-                  <NewsCard key={post.id} post={post} />
-                ))}
+              {/* Featured Section - First article large, next 3 as list */}
+              {page === 1 && posts.length >= 1 && (
+                <div className="grid gap-6 lg:grid-cols-2 mb-12">
+                  {/* Featured Article - Left */}
+                  {(() => {
+                    const featured = posts[0];
+                    const translation = getTranslationSafe(featured, language);
+                    const images = getMetaValue(featured.meta || [], 'news.images');
+                    const featuredImage = featured.coverImage || (Array.isArray(images) && images[0]) || null;
+                    const formatDate = (date: string | Date) => {
+                      const d = typeof date === 'string' ? new Date(date) : date;
+                      return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                    };
+                    return (
+                      <Link href={`/news/${featured.slug}`} className="block group" data-testid={`featured-news-${featured.id}`}>
+                        <div className="space-y-3">
+                          <div className="aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+                            {featuredImage ? (
+                              <img 
+                                src={featuredImage} 
+                                alt={translation?.title || ''} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
+                                <Newspaper className="h-16 w-16 text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Clock className="h-4 w-4" />
+                            <span>게시 시간 : {formatDate(featured.publishedAt || featured.createdAt)}</span>
+                          </div>
+                          <h3 className="text-xl font-bold line-clamp-2 group-hover:text-primary transition-colors">
+                            {translation?.title || '제목 없음'}
+                          </h3>
+                          <p className="text-muted-foreground line-clamp-3">
+                            {translation?.excerpt || ''}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })()}
+
+                  {/* Recent Articles List - Right */}
+                  <div className="space-y-4">
+                    {posts.slice(1, 4).map((post: PostWithTranslations) => {
+                      const translation = getTranslationSafe(post, language);
+                      const images = getMetaValue(post.meta || [], 'news.images');
+                      const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
+                      const formatDate = (date: string | Date) => {
+                        const d = typeof date === 'string' ? new Date(date) : date;
+                        return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                      };
+                      return (
+                        <Link 
+                          key={post.id} 
+                          href={`/news/${post.slug}`} 
+                          className="flex gap-4 group border-b border-border pb-4 last:border-0"
+                          data-testid={`news-list-item-${post.id}`}
+                        >
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <ChevronRight className="h-4 w-4 text-primary" />
+                              <h4 className="font-semibold line-clamp-1 group-hover:text-primary transition-colors">
+                                {translation?.title || '제목 없음'}
+                              </h4>
+                            </div>
+                            <p className="text-sm text-muted-foreground line-clamp-2 pl-6">
+                              {translation?.excerpt || ''}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground pl-6">
+                              <Clock className="h-3 w-3" />
+                              <span>게시 시간 : {formatDate(post.publishedAt || post.createdAt)}</span>
+                            </div>
+                          </div>
+                          {featuredImage && (
+                            <div className="w-28 h-20 flex-shrink-0 overflow-hidden rounded-lg">
+                              <img 
+                                src={featuredImage} 
+                                alt={translation?.title || ''} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* News Grid - 4 columns */}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {(page === 1 ? posts.slice(4) : posts).map((post: PostWithTranslations) => {
+                  const translation = getTranslationSafe(post, language);
+                  const images = getMetaValue(post.meta || [], 'news.images');
+                  const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
+                  const formatDate = (date: string | Date) => {
+                    const d = typeof date === 'string' ? new Date(date) : date;
+                    return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                  };
+                  return (
+                    <Link 
+                      key={post.id} 
+                      href={`/news/${post.slug}`} 
+                      className="block group"
+                      data-testid={`news-card-${post.id}`}
+                    >
+                      <Card className="overflow-hidden border border-border hover:shadow-lg transition-shadow">
+                        <div className="aspect-[16/10] overflow-hidden bg-muted">
+                          {featuredImage ? (
+                            <img 
+                              src={featuredImage} 
+                              alt={translation?.title || ''} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
+                              <Newspaper className="h-10 w-10 text-muted-foreground" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>게시 시간 : {formatDate(post.publishedAt || post.createdAt)}</span>
+                          </div>
+                          <h4 className="font-semibold line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem]">
+                            {translation?.title || '제목 없음'}
+                          </h4>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {translation?.excerpt || ''}
+                          </p>
+                        </div>
+                      </Card>
+                    </Link>
+                  );
+                })}
               </div>
               
               {/* Pagination */}
