@@ -23,9 +23,14 @@ export default function NewsDetail() {
   const queryClient = useQueryClient();
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
-    queryKey: ['/api/posts', id],
+    queryKey: ['/api/posts/slug', id],
     queryFn: async () => {
-      const response = await fetch(`/api/posts/${id}`);
+      // Try slug first, then fall back to ID
+      let response = await fetch(`/api/posts/slug/${id}`);
+      if (!response.ok) {
+        // Fall back to ID-based lookup
+        response = await fetch(`/api/posts/${id}`);
+      }
       if (!response.ok) {
         throw new Error('News not found');
       }
