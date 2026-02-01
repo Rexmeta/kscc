@@ -228,13 +228,16 @@ export default function AdminPage() {
     }
     
     if (action === 'create') {
-      if (tab === 'news') {
-        setCreateNewsDialogOpen(true);
-      } else if (tab === 'events') {
-        setCreateEventDialogOpen(true);
-      } else if (tab === 'resources') {
-        setCreateResourceDialogOpen(true);
-      }
+      // Use setTimeout to ensure tab is set before opening dialog
+      setTimeout(() => {
+        if (tab === 'articles' || tab === 'news') {
+          setCreateNewsDialogOpen(true);
+        } else if (tab === 'events') {
+          setCreateEventDialogOpen(true);
+        } else if (tab === 'resources') {
+          setCreateResourceDialogOpen(true);
+        }
+      }, 100);
     }
   }, []);
 

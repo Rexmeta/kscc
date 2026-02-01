@@ -85,7 +85,7 @@ export default function NewsPage() {
             <h2 className="text-2xl font-semibold">뉴스 목록</h2>
             {hasPermission('news.create') && (
               <Button asChild data-testid="button-create-news">
-                <Link href="/admin?tab=news&action=create">
+                <Link href="/admin?tab=articles&action=create">
                   <Plus className="h-4 w-4 mr-2" />
                   뉴스 작성
                 </Link>
