@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -2185,6 +2185,7 @@ function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSu
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   const translation = event.translations?.[0];
   const eventMeta = event.meta || [];
@@ -2192,6 +2193,10 @@ function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSu
     const val = getMetaValue(eventMeta, key);
     return val !== null ? String(val) : '';
   };
+  
+  // Check if this is a past event
+  const eventDateStr = getMetaVal('event.date');
+  const isPastEvent = eventDateStr ? new Date(eventDateStr) < new Date() : false;
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
@@ -2272,19 +2277,58 @@ function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSu
           data-testid="editor-event-content-edit"
         />
       </div>
+      {isPastEvent && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <Calendar className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-200">이미 지난 행사입니다</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                지난 행사의 일정은 수정할 수 없습니다. 새로운 일정으로 행사를 개최하려면 새 행사를 등록해 주세요.
+              </p>
+            </div>
+          </div>
+          <Button 
+            type="button" 
+            variant="outline" 
+            className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/40"
+            onClick={() => {
+              onSuccess();
+              setTimeout(() => {
+                const createBtn = document.querySelector('[data-testid="button-create-event"]') as HTMLButtonElement;
+                if (createBtn) createBtn.click();
+              }, 200);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            새 행사 등록하기
+          </Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="form-label">시작 날짜</label>
-          <Input type="datetime-local" {...register('eventDate')} />
+          <Input 
+            type="datetime-local" 
+            {...register('eventDate')} 
+            disabled={isPastEvent}
+            className={isPastEvent ? 'bg-muted cursor-not-allowed' : ''}
+          />
+          {isPastEvent && <p className="text-xs text-muted-foreground mt-1">지난 행사는 일정 수정이 불가합니다</p>}
         </div>
         <div>
           <label className="form-label">종료 날짜</label>
-          <Input type="datetime-local" {...register('endDate')} />
+          <Input 
+            type="datetime-local" 
+            {...register('endDate')} 
+            disabled={isPastEvent}
+            className={isPastEvent ? 'bg-muted cursor-not-allowed' : ''}
+          />
         </div>
       </div>
       <div>
         <label className="form-label">장소</label>
-        <Input {...register('location')} />
+        <Input {...register('location')} disabled={isPastEvent} className={isPastEvent ? 'bg-muted cursor-not-allowed' : ''} />
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>
