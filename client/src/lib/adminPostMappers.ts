@@ -23,6 +23,7 @@ export interface NewsFormData {
   category: string;
   featuredImage?: string;
   images?: string[];
+  videos?: string[];
   isPublished: boolean;
   publishedAt?: Date | string | null;
 }
@@ -73,6 +74,14 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
         valueTimestamp: null,
         value: formData.images,
       }] : []),
+      ...(formData.videos && formData.videos.length > 0 ? [{
+        key: NEWS_META_KEYS.videos,
+        valueText: null,
+        valueNumber: null,
+        valueBoolean: null,
+        valueTimestamp: null,
+        value: formData.videos,
+      }] : []),
     ],
   };
 }
@@ -96,6 +105,7 @@ export function mapPostToNewsForm(post: PostWithTranslations): NewsFormData {
     category,
     featuredImage: post.coverImage || '',
     images: getMetaValue(NEWS_META_KEYS.images) || [],
+    videos: getMetaValue(NEWS_META_KEYS.videos) || [],
     isPublished: post.status === 'published',
     publishedAt: post.publishedAt,
   };

@@ -16,6 +16,9 @@ export const NEWS_META_KEYS = {
   // Images (stored as JSONB array)
   images: 'news.images',
   
+  // Videos (stored as JSONB array of URLs)
+  videos: 'news.videos',
+  
   // Featured image (deprecated - use post.coverImage instead)
   // featuredImage: 'news.featuredImage',
 } as const;
@@ -88,6 +91,7 @@ export interface MetaKeyTypeMap {
   'news.category': 'text';
   'news.viewCount': 'number';
   'news.images': 'json';
+  'news.videos': 'json';
   
   // Event
   'event.eventDate': 'timestamp';

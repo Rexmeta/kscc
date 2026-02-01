@@ -2653,6 +2653,12 @@ function CreateNewsDialog({
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
+  
+  // Video state
+  const [videoUrls, setVideoUrls] = useState<string[]>([]);
+  const [showVideoUrlInput, setShowVideoUrlInput] = useState(false);
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -2672,6 +2678,7 @@ function CreateNewsDialog({
       category: '',
       featuredImage: '',
       images: [] as string[],
+      videos: [] as string[],
       isPublished: false,
       publishedAt: new Date().toISOString().slice(0, 16),
     }
@@ -2772,10 +2779,33 @@ function CreateNewsDialog({
     setValue('featuredImage', '');
   };
 
+  // Video URL handlers
+  const addVideoUrl = () => {
+    const url = newVideoUrl.trim();
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      const updated = [...videoUrls, url];
+      setVideoUrls(updated);
+      setValue('videos', updated);
+      setNewVideoUrl('');
+      setShowVideoUrlInput(false);
+      toast({ title: '동영상 URL이 추가되었습니다' });
+    } else {
+      toast({ title: '올바른 URL을 입력해주세요', variant: 'destructive' });
+    }
+  };
+
+  const removeVideoUrl = (index: number) => {
+    const updated = videoUrls.filter((_, i) => i !== index);
+    setVideoUrls(updated);
+    setValue('videos', updated);
+  };
+
   const createMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
-      const { post, translation, meta } = mapNewsFormToPost(formData, user.id);
+      // Include videos in form data
+      const dataWithVideos = { ...formData, videos: videoUrls };
+      const { post, translation, meta } = mapNewsFormToPost(dataWithVideos, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
@@ -2785,6 +2815,9 @@ function CreateNewsDialog({
       setImageUrls([]);
       setShowUrlInput(false);
       setNewImageUrl('');
+      setVideoUrls([]);
+      setShowVideoUrlInput(false);
+      setNewVideoUrl('');
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       onSuccess();
@@ -3093,6 +3126,99 @@ function CreateNewsDialog({
                 <div className="text-center py-6 text-muted-foreground text-sm">
                   <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p>추가 이미지가 없습니다</p>
+                </div>
+              )}
+            </div>
+
+            {/* Video URLs Section */}
+            <div className="border rounded-lg p-4 bg-muted/20">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Video className="h-4 w-4 text-muted-foreground" />
+                  동영상
+                  {videoUrls.length > 0 && (
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {videoUrls.length}개
+                    </span>
+                  )}
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowVideoUrlInput(!showVideoUrlInput)}
+                  className="text-xs"
+                >
+                  <LinkIcon className="h-3.5 w-3.5 mr-1" />
+                  URL 추가
+                </Button>
+              </div>
+
+              {showVideoUrlInput && (
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                    placeholder="https://youtube.com/watch?v=... 또는 동영상 URL"
+                    className="flex-1"
+                    data-testid="input-video-url"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addVideoUrl();
+                      }
+                    }}
+                  />
+                  <Button type="button" onClick={addVideoUrl} size="sm">
+                    추가
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      setShowVideoUrlInput(false);
+                      setNewVideoUrl('');
+                    }}
+                  >
+                    취소
+                  </Button>
+                </div>
+              )}
+              
+              {videoUrls.length > 0 ? (
+                <div className="space-y-3">
+                  {videoUrls.map((url, index) => (
+                    <div key={index} className="relative group flex items-center gap-3 p-3 border rounded-lg bg-background">
+                      <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                        <Play className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <a 
+                          href={url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline truncate block"
+                        >
+                          {url}
+                        </a>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeVideoUrl(index)}
+                        className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                        data-testid={`button-remove-video-${index}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  <Video className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p>동영상이 없습니다</p>
+                  <p className="text-xs mt-1">YouTube, Vimeo 등의 동영상 URL을 추가하세요</p>
                 </div>
               )}
             </div>
