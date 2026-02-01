@@ -212,7 +212,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Navigation
     'nav.home': '홈',
     'nav.about': '소개',
-    'nav.news': '뉴스',
+    'nav.news': '상회 활동',
     'nav.events': '행사',
     'nav.members': '회원사',
     'nav.resources': '자료센터',
@@ -418,7 +418,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Navigation
     'nav.home': 'Home',
     'nav.about': 'About',
-    'nav.news': 'News',
+    'nav.news': 'Chamber Activities',
     'nav.events': 'Events',
     'nav.members': 'Members',
     'nav.resources': 'Resources',
@@ -624,7 +624,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Navigation
     'nav.home': '首页',
     'nav.about': '关于我们',
-    'nav.news': '新闻',
+    'nav.news': '商会活动',
     'nav.events': '活动',
     'nav.members': '会员',
     'nav.resources': '资料中心',
