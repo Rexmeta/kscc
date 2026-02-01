@@ -632,7 +632,11 @@ export default function AdminPage() {
             <TabsContent value="articles" className="space-y-6">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">뉴스 관리</h2>
-                <CreateNewsDialog onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })} />
+                <CreateNewsDialog 
+                  open={createNewsDialogOpen}
+                  onOpenChange={setCreateNewsDialogOpen}
+                  onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })} 
+                />
               </div>
               
               <div className="grid gap-4">
