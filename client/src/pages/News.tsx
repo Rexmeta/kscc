@@ -22,13 +22,13 @@ export default function NewsPage() {
   const [search, setSearch] = useState('');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/posts', 'news', { page, category, search, language, limit: 12 }],
+    queryKey: ['/api/posts', 'news', { page, category, search, language, limit: 14 }],
     queryFn: async () => {
       const params = new URLSearchParams({
         postType: 'news',
         status: 'published',
-        limit: '12',
-        offset: ((page - 1) * 12).toString(),
+        limit: '14',
+        offset: ((page - 1) * 14).toString(),
         ...(category && { tags: category }), // Use tags for category filtering (comma-separated)
         ...(search && { search }), // Add search term
       });
@@ -52,7 +52,7 @@ export default function NewsPage() {
 
   const posts = data?.posts || [];
   const total = data?.total || 0;
-  const totalPages = Math.ceil(total / 12);
+  const totalPages = Math.ceil(total / 14);
 
   const handleFilter = () => {
     setPage(1);
@@ -81,8 +81,7 @@ export default function NewsPage() {
       {/* Search & Filter */}
       <section className="py-8 border-b">
         <div className="container">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold">뉴스 목록</h2>
+          <div className="flex justify-end items-center mb-4">
             {hasPermission('news.create') && (
               <Button asChild data-testid="button-create-news">
                 <Link href="/admin?tab=articles&action=create">
@@ -190,7 +189,7 @@ export default function NewsPage() {
 
                   {/* Recent Articles List - Right */}
                   <div className="space-y-4">
-                    {posts.slice(1, 4).map((post: PostWithTranslations) => {
+                    {posts.slice(1, 6).map((post: PostWithTranslations) => {
                       const translation = getTranslationSafe(post, language);
                       const images = getMetaValue(post.meta || [], 'news.images');
                       const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
@@ -238,7 +237,7 @@ export default function NewsPage() {
 
               {/* News Grid - 4 columns */}
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {(page === 1 ? posts.slice(4) : posts).map((post: PostWithTranslations) => {
+                {(page === 1 ? posts.slice(6) : posts).map((post: PostWithTranslations) => {
                   const translation = getTranslationSafe(post, language);
                   const images = getMetaValue(post.meta || [], 'news.images');
                   const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
