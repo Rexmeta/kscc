@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Eye, ArrowLeft, Share2, Edit, Trash2 } from 'lucide-react';
+import { Calendar, Eye, ArrowLeft, Share2, Edit, Trash2, Video, Play, ExternalLink } from 'lucide-react';
 import { PostWithTranslations } from '@shared/schema';
 import { t } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -98,8 +98,29 @@ export default function NewsDetail() {
   const viewCount = getMetaValue(post.meta || [], 'news.viewCount') || 0;
   const imagesRaw = getMetaValue(post.meta || [], 'news.images');
   const images = Array.isArray(imagesRaw) ? imagesRaw : [];
+  const videosRaw = getMetaValue(post.meta || [], 'news.videos');
+  const videos = Array.isArray(videosRaw) ? videosRaw : [];
   const featuredImage = post.coverImage || (images.length > 0 ? images[0] : null);
   const tags = Array.isArray(post.tags) ? post.tags : [];
+  
+  // Helper to convert YouTube/Vimeo URLs to embeddable format
+  const getEmbedUrl = (url: string): string | null => {
+    try {
+      // YouTube
+      const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (youtubeMatch) {
+        return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+      }
+      // Vimeo
+      const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+      if (vimeoMatch) {
+        return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
 
   const getCategoryBadge = (category: string) => {
     const badgeMap = {
@@ -269,6 +290,57 @@ export default function NewsDetail() {
                         data-testid={`news-image-${index}`}
                       />
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Video Gallery */}
+              {videos.length > 0 && (
+                <div className="mt-8 pt-8 border-t">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Video className="h-5 w-5" />
+                    동영상
+                  </h3>
+                  <div className="space-y-6">
+                    {videos.map((videoUrl: string, index: number) => {
+                      const embedUrl = getEmbedUrl(videoUrl);
+                      
+                      if (embedUrl) {
+                        // Embedded video player for YouTube/Vimeo
+                        return (
+                          <div key={index} className="aspect-video rounded-lg overflow-hidden bg-muted" data-testid={`news-video-${index}`}>
+                            <iframe
+                              src={embedUrl}
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title={`${translation.title || post.slug} - 동영상 ${index + 1}`}
+                            />
+                          </div>
+                        );
+                      } else {
+                        // External link for other video URLs
+                        return (
+                          <a
+                            key={index}
+                            href={videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-4 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors group"
+                            data-testid={`news-video-link-${index}`}
+                          >
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+                              <Play className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">동영상 {index + 1}</p>
+                              <p className="text-xs text-muted-foreground truncate">{videoUrl}</p>
+                            </div>
+                            <ExternalLink className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                          </a>
+                        );
+                      }
+                    })}
                   </div>
                 </div>
               )}
