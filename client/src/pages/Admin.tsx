@@ -29,7 +29,8 @@ import {
   Upload,
   Network,
   Image as ImageIcon,
-  Link as LinkIcon
+  Link as LinkIcon,
+  MapPin
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -587,13 +588,55 @@ export default function AdminPage() {
               </div>
               
               <div className="space-y-4">
-                {eventsData?.posts?.map((event: PostWithTranslations) => (
+                {eventsData?.posts?.map((event: PostWithTranslations) => {
+                  const eventDate = getMetaValue(event.meta || [], 'event.date');
+                  const eventEndDate = getMetaValue(event.meta || [], 'event.endDate');
+                  const eventLocation = getMetaValue(event.meta || [], 'event.location');
+                  const eventCapacity = getMetaValue(event.meta || [], 'event.capacity');
+                  
+                  const formatDate = (dateStr: string | undefined) => {
+                    if (!dateStr) return '';
+                    try {
+                      return new Date(dateStr).toLocaleDateString('ko-KR', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                    } catch {
+                      return dateStr;
+                    }
+                  };
+                  
+                  return (
                   <div key={event.id} className="p-4 border rounded flex justify-between items-start">
                     <div className="flex-1">
                       <h4 className="font-medium">{event.translations?.[0]?.title || '제목 없음'}</h4>
                       <p className="text-sm text-muted-foreground">{event.translations?.[0]?.subtitle || '설명 없음'}</p>
-                      <div className="flex items-center space-x-4 text-xs text-muted-foreground mt-2">
-                        <span>상태: {event.status}</span>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
+                        {eventDate && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(eventDate as string)}
+                            {eventEndDate && ` ~ ${formatDate(eventEndDate as string)}`}
+                          </span>
+                        )}
+                        {eventLocation && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {eventLocation as string}
+                          </span>
+                        )}
+                        {eventCapacity && (
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            정원 {eventCapacity}명
+                          </span>
+                        )}
+                        <Badge variant={event.status === 'published' ? 'default' : 'secondary'}>
+                          {event.status === 'published' ? '게시됨' : '임시저장'}
+                        </Badge>
                       </div>
                     </div>
                     <div className="flex space-x-2">
@@ -628,7 +671,8 @@ export default function AdminPage() {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </TabsContent>
 

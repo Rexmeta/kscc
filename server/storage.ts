@@ -657,13 +657,14 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Upcoming events filtering (SQL-level for correct pagination)
+    // Check event.date key with valueText containing date string
     if (filters?.upcoming && filters?.postType === 'event') {
       conditions.push(sql`EXISTS (
         SELECT 1 FROM ${postMeta}
         WHERE ${postMeta.postId} = ${posts.id}
-          AND ${postMeta.key} = 'event.eventDate'
-          AND ${postMeta.valueTimestamp} IS NOT NULL
-          AND ${postMeta.valueTimestamp} > NOW()
+          AND ${postMeta.key} = 'event.date'
+          AND ${postMeta.valueText} IS NOT NULL
+          AND ${postMeta.valueText}::date >= CURRENT_DATE
       )`);
     }
 
@@ -726,11 +727,13 @@ export class DatabaseStorage implements IStorage {
       meta: metaByPost.get(post.id) || [],
     }));
 
-    // Application-layer sorting for upcoming events (by eventDate ASC)
+    // Application-layer sorting for upcoming events (by event.date ASC)
     if (filters?.upcoming && filters?.postType === 'event') {
       hydratedPosts.sort((a, b) => {
-        const aDate = a.meta.find(m => m.key === 'event.eventDate')?.valueTimestamp;
-        const bDate = b.meta.find(m => m.key === 'event.eventDate')?.valueTimestamp;
+        const aDateMeta = a.meta.find(m => m.key === 'event.date');
+        const bDateMeta = b.meta.find(m => m.key === 'event.date');
+        const aDate = aDateMeta?.valueText || aDateMeta?.valueTimestamp;
+        const bDate = bDateMeta?.valueText || bDateMeta?.valueTimestamp;
         if (!aDate) return 1;  // nulls last
         if (!bDate) return -1; // nulls last
         return new Date(aDate).getTime() - new Date(bDate).getTime(); // ASC
