@@ -45,6 +45,7 @@ import {
   mapResourceFormToPost, mapPostToResourceForm, type ResourceFormData
 } from '@/lib/adminPostMappers';
 import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
+import { getMetaValue } from '@/lib/postHelpers';
 import PageEditModal from '@/components/PageEditModal';
 import UserEditDialog from '@/components/UserEditDialog';
 import RichTextEditor from '@/components/RichTextEditor';
@@ -1436,12 +1437,14 @@ export default function AdminPage() {
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <span>{new Date(selectedItem.publishedAt || selectedItem.createdAt).toLocaleDateString()}</span>
                         <Badge variant="secondary">{selectedItem.status === 'published' ? '게시됨' : '임시저장'}</Badge>
-                        {selectedItem.meta?.find((m: any) => m.key === 'category')?.value && (
-                          <Badge variant="outline">
-                            {selectedItem.meta.find((m: any) => m.key === 'category')?.value === 'news' ? '뉴스' :
-                             selectedItem.meta.find((m: any) => m.key === 'category')?.value === 'announcement' ? '공지사항' : '보도자료'}
-                          </Badge>
-                        )}
+                        {(() => {
+                          const category = getMetaValue(selectedItem.meta || [], 'category');
+                          return category ? (
+                            <Badge variant="outline">
+                              {category === 'news' ? '뉴스' : category === 'announcement' ? '공지사항' : '보도자료'}
+                            </Badge>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                     <Button
@@ -1490,24 +1493,25 @@ export default function AdminPage() {
                   />
                   
                   {/* Additional Images */}
-                  {selectedItem.meta?.find((m: any) => m.key === 'news.images')?.value && 
-                   Array.isArray(selectedItem.meta.find((m: any) => m.key === 'news.images')?.value) &&
-                   (selectedItem.meta.find((m: any) => m.key === 'news.images')?.value as string[]).length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-sm text-muted-foreground">추가 이미지</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {(selectedItem.meta.find((m: any) => m.key === 'news.images')?.value as string[]).map((img: string, idx: number) => (
-                          <img 
-                            key={idx}
-                            src={img} 
-                            alt={`추가 이미지 ${idx + 1}`}
-                            className="w-full h-40 object-cover rounded-lg border"
-                            onError={(e) => e.currentTarget.style.display = 'none'}
-                          />
-                        ))}
+                  {(() => {
+                    const newsImages = getMetaValue(selectedItem.meta || [], 'news.images');
+                    return Array.isArray(newsImages) && newsImages.length > 0 ? (
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-sm text-muted-foreground">추가 이미지</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {newsImages.map((img: string, idx: number) => (
+                            <img 
+                              key={idx}
+                              src={img} 
+                              alt={`추가 이미지 ${idx + 1}`}
+                              className="w-full h-40 object-cover rounded-lg border"
+                              onError={(e) => e.currentTarget.style.display = 'none'}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
                 </div>
               </DialogContent>
             </Dialog>
@@ -1657,9 +1661,11 @@ function EditMemberForm({ member, onSuccess }: any) {
 
 // EditNewsForm Component
 function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; onSuccess: () => void }) {
-  // Extract existing data from news
-  const categoryFromMeta = String(news.meta?.find((m: any) => m.key === 'category')?.value || news.tags?.[0] || '');
-  const existingImages = (news.meta?.find((m: any) => m.key === 'news.images')?.value as string[]) || [];
+  // Extract existing data from news using proper meta value accessor
+  const newsMeta = news.meta || [];
+  const categoryFromMeta = String(getMetaValue(newsMeta, 'category') || news.tags?.[0] || '');
+  const imagesFromMeta = getMetaValue(newsMeta, 'news.images');
+  const existingImages = Array.isArray(imagesFromMeta) ? imagesFromMeta : [];
   
   const [featuredImageUrl, setFeaturedImageUrl] = useState(news.coverImage || '');
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
@@ -2138,7 +2144,10 @@ function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSu
   
   const translation = event.translations?.[0];
   const eventMeta = event.meta || [];
-  const getMetaVal = (key: string) => String(eventMeta.find(m => m.key === key)?.value || '');
+  const getMetaVal = (key: string) => {
+    const val = getMetaValue(eventMeta, key);
+    return val !== null ? String(val) : '';
+  };
   
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm({
     resolver: zodResolver(eventSchema),
