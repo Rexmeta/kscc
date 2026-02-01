@@ -40,6 +40,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
 import { Member, Inquiry, Partner, type PostWithTranslations, type InquiryWithReplies, type InquiryReply, type OrganizationMember } from '@shared/schema';
 import { ObjectUploader } from '@/components/ObjectUploader';
+import { MediaUploader, type MediaItem } from '@/components/MediaUploader';
 import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { UploadResult } from '@uppy/core';
 import { 
@@ -2650,21 +2651,13 @@ function CreateNewsDialog({
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [showUrlInput, setShowUrlInput] = useState(false);
-  const [newImageUrl, setNewImageUrl] = useState('');
   
-  // Video state
-  const [videoUrls, setVideoUrls] = useState<string[]>([]);
-  const [showVideoUrlInput, setShowVideoUrlInput] = useState(false);
-  const [newVideoUrl, setNewVideoUrl] = useState('');
+  // Unified media state
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  
-  // Store uploaded paths in an array for multiple uploads
-  const uploadedPathsRef = useRef<string[]>([]);
   
   const isOpen = open !== undefined ? open : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
@@ -2677,8 +2670,6 @@ function CreateNewsDialog({
       content: '',
       category: '',
       featuredImage: '',
-      images: [] as string[],
-      videos: [] as string[],
       isPublished: false,
       publishedAt: new Date().toISOString().slice(0, 16),
     }
@@ -2715,8 +2706,6 @@ function CreateNewsDialog({
       body: JSON.stringify({}),
     });
     const data = await response.json();
-    // Store path in array for multiple file support
-    uploadedPathsRef.current.push(data.objectPath);
     (window as any).__lastUploadObjectPath = data.objectPath;
     return {
       method: 'PUT' as const,
@@ -2734,44 +2723,6 @@ function CreateNewsDialog({
         toast({ title: '대표 이미지가 업로드되었습니다' });
       }
     }
-    // Clear the array after upload
-    uploadedPathsRef.current = [];
-  };
-
-  const handleAdditionalImageUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    if (result.successful && result.successful.length > 0) {
-      // Get all uploaded paths from the array
-      const newPaths = uploadedPathsRef.current.filter(p => p);
-      if (newPaths.length > 0) {
-        // Set ACL for all uploaded images
-        await Promise.all(newPaths.map(path => setImagePublicAcl(path)));
-        const updated = [...imageUrls, ...newPaths];
-        setImageUrls(updated);
-        setValue('images', updated);
-        toast({ title: `${newPaths.length}개 이미지가 추가되었습니다` });
-      }
-    }
-    // Clear the array after upload
-    uploadedPathsRef.current = [];
-  };
-
-  const addImageUrl = () => {
-    if (newImageUrl.trim() && (newImageUrl.startsWith('http://') || newImageUrl.startsWith('https://'))) {
-      const updated = [...imageUrls, newImageUrl.trim()];
-      setImageUrls(updated);
-      setValue('images', updated);
-      setNewImageUrl('');
-      setShowUrlInput(false);
-      toast({ title: '이미지 URL이 추가되었습니다' });
-    } else {
-      toast({ title: '올바른 URL을 입력해주세요', variant: 'destructive' });
-    }
-  };
-
-  const removeImageUrl = (index: number) => {
-    const updated = imageUrls.filter((_, i) => i !== index);
-    setImageUrls(updated);
-    setValue('images', updated);
   };
 
   const removeFeaturedImage = () => {
@@ -2779,45 +2730,21 @@ function CreateNewsDialog({
     setValue('featuredImage', '');
   };
 
-  // Video URL handlers
-  const addVideoUrl = () => {
-    const url = newVideoUrl.trim();
-    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-      const updated = [...videoUrls, url];
-      setVideoUrls(updated);
-      setValue('videos', updated);
-      setNewVideoUrl('');
-      setShowVideoUrlInput(false);
-      toast({ title: '동영상 URL이 추가되었습니다' });
-    } else {
-      toast({ title: '올바른 URL을 입력해주세요', variant: 'destructive' });
-    }
-  };
-
-  const removeVideoUrl = (index: number) => {
-    const updated = videoUrls.filter((_, i) => i !== index);
-    setVideoUrls(updated);
-    setValue('videos', updated);
-  };
-
   const createMutation = useMutation({
     mutationFn: async (formData: NewsFormData) => {
       if (!user?.id) throw new Error('인증되지 않은 사용자입니다');
-      // Include videos in form data
-      const dataWithVideos = { ...formData, videos: videoUrls };
-      const { post, translation, meta } = mapNewsFormToPost(dataWithVideos, user.id);
+      // Extract images and videos from mediaItems
+      const images = mediaItems.filter(m => m.type === 'image').map(m => m.url);
+      const videos = mediaItems.filter(m => m.type === 'video').map(m => m.url);
+      const dataWithMedia = { ...formData, images, videos };
+      const { post, translation, meta } = mapNewsFormToPost(dataWithMedia, user.id);
       return await createPost({ post, translation, meta });
     },
     onSuccess: () => {
       toast({ title: "뉴스가 성공적으로 생성되었습니다" });
       reset();
       setFeaturedImageUrl('');
-      setImageUrls([]);
-      setShowUrlInput(false);
-      setNewImageUrl('');
-      setVideoUrls([]);
-      setShowVideoUrlInput(false);
-      setNewVideoUrl('');
+      setMediaItems([]);
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
       onSuccess();
@@ -3030,198 +2957,13 @@ function CreateNewsDialog({
               )}
             </div>
 
-            <div className="border rounded-lg p-4 bg-muted/20">
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                  추가 이미지
-                  {imageUrls.length > 0 && (
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                      {imageUrls.length}개
-                    </span>
-                  )}
-                </label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowUrlInput(!showUrlInput)}
-                    className="text-xs"
-                  >
-                    <LinkIcon className="h-3.5 w-3.5 mr-1" />
-                    URL
-                  </Button>
-                  <ObjectUploader
-                    maxNumberOfFiles={10}
-                    maxFileSize={10485760}
-                    onGetUploadParameters={handleGetUploadParameters}
-                    onComplete={handleAdditionalImageUpload}
-                    buttonClassName="h-8 text-xs"
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-1" />
-                    업로드
-                  </ObjectUploader>
-                </div>
-              </div>
-
-              {showUrlInput && (
-                <div className="flex gap-2 mb-4">
-                  <Input
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="flex-1"
-                    data-testid="input-image-url"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addImageUrl();
-                      }
-                    }}
-                  />
-                  <Button type="button" onClick={addImageUrl} size="sm">
-                    추가
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => {
-                      setShowUrlInput(false);
-                      setNewImageUrl('');
-                    }}
-                  >
-                    취소
-                  </Button>
-                </div>
-              )}
-              
-              {imageUrls.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {imageUrls.map((url, index) => (
-                    <div key={index} className="relative group aspect-square">
-                      <img 
-                        src={url} 
-                        alt={`추가 이미지 ${index + 1}`}
-                        className="w-full h-full object-cover rounded-lg border"
-                        data-testid={`img-preview-${index}`}
-                        onError={(e) => {
-                          e.currentTarget.style.borderColor = '#ef4444';
-                          e.currentTarget.style.opacity = '0.5';
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImageUrl(index)}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
-                        data-testid={`button-remove-image-${index}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground text-sm">
-                  <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p>추가 이미지가 없습니다</p>
-                </div>
-              )}
-            </div>
-
-            {/* Video URLs Section */}
-            <div className="border rounded-lg p-4 bg-muted/20">
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <Video className="h-4 w-4 text-muted-foreground" />
-                  동영상
-                  {videoUrls.length > 0 && (
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                      {videoUrls.length}개
-                    </span>
-                  )}
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowVideoUrlInput(!showVideoUrlInput)}
-                  className="text-xs"
-                >
-                  <LinkIcon className="h-3.5 w-3.5 mr-1" />
-                  URL 추가
-                </Button>
-              </div>
-
-              {showVideoUrlInput && (
-                <div className="flex gap-2 mb-4">
-                  <Input
-                    value={newVideoUrl}
-                    onChange={(e) => setNewVideoUrl(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=... 또는 동영상 URL"
-                    className="flex-1"
-                    data-testid="input-video-url"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addVideoUrl();
-                      }
-                    }}
-                  />
-                  <Button type="button" onClick={addVideoUrl} size="sm">
-                    추가
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => {
-                      setShowVideoUrlInput(false);
-                      setNewVideoUrl('');
-                    }}
-                  >
-                    취소
-                  </Button>
-                </div>
-              )}
-              
-              {videoUrls.length > 0 ? (
-                <div className="space-y-3">
-                  {videoUrls.map((url, index) => (
-                    <div key={index} className="relative group flex items-center gap-3 p-3 border rounded-lg bg-background">
-                      <div className="w-10 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                        <Play className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <a 
-                          href={url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline truncate block"
-                        >
-                          {url}
-                        </a>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeVideoUrl(index)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                        data-testid={`button-remove-video-${index}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground text-sm">
-                  <Video className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p>동영상이 없습니다</p>
-                  <p className="text-xs mt-1">YouTube, Vimeo 등의 동영상 URL을 추가하세요</p>
-                </div>
-              )}
-            </div>
+            {/* Unified Media Uploader */}
+            <MediaUploader
+              mediaItems={mediaItems}
+              onMediaChange={setMediaItems}
+              onGetUploadParameters={handleGetUploadParameters}
+              onUploadComplete={setImagePublicAcl}
+            />
           </div>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 mt-6 pt-4 border-t">
