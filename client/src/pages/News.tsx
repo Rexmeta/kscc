@@ -67,19 +67,19 @@ export default function NewsPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-16">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground">{t('news.title')}</h1>
-            <p className="text-lg text-muted-foreground">Latest News / 最新消息</p>
+            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('news.title')}</h1>
+            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Latest News / 最新消息</p>
           </div>
         </div>
       </section>
 
       {/* Search & Filter */}
-      <section className="py-8 border-b">
+      <section className="py-8 border-b border-border dark:border-border">
         <div className="container">
           <div className="flex justify-end items-center mb-4">
             {hasPermission('news.create') && (

@@ -89,20 +89,20 @@ export default function AdminPage() {
             </Select>
           </div>
 
-          <div className="hidden md:block">
-            <TabsList className={`grid w-full gap-1 ${hasManual ? 'grid-cols-11' : 'grid-cols-10'}`}>
-              <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm">대시보드</TabsTrigger>
-              <TabsTrigger value="users" data-testid="tab-users" className="text-sm">사용자</TabsTrigger>
-              <TabsTrigger value="members" data-testid="tab-members" className="text-sm">회원</TabsTrigger>
-              <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm">뉴스</TabsTrigger>
-              <TabsTrigger value="events" data-testid="tab-events" className="text-sm">행사</TabsTrigger>
-              <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm">자료</TabsTrigger>
-              <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm">페이지</TabsTrigger>
-              <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm">문의</TabsTrigger>
-              <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm">조직</TabsTrigger>
-              <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm">파트너</TabsTrigger>
+          <div className="hidden md:block overflow-x-auto">
+            <TabsList className="inline-flex w-max min-w-full gap-1">
+              <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm whitespace-nowrap">대시보드</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users" className="text-sm whitespace-nowrap">사용자</TabsTrigger>
+              <TabsTrigger value="members" data-testid="tab-members" className="text-sm whitespace-nowrap">회원</TabsTrigger>
+              <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm whitespace-nowrap">뉴스</TabsTrigger>
+              <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>
+              <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>
+              <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>
+              <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>
+              <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>
+              <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>
               {hasManual && (
-                <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm">매뉴얼</TabsTrigger>
+                <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm whitespace-nowrap">매뉴얼</TabsTrigger>
               )}
             </TabsList>
           </div>

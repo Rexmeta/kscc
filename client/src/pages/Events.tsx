@@ -50,22 +50,22 @@ export default function EventsPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-16">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground">{t('events.title')}</h1>
-            <p className="text-lg text-muted-foreground">Upcoming Events / 即将举行的活动</p>
+            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('events.title')}</h1>
+            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Upcoming Events / 即将举行的活动</p>
           </div>
         </div>
       </section>
 
       {/* Filter */}
-      <section className="py-8 border-b">
+      <section className="py-8 border-b border-border dark:border-border">
         <div className="container">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold">행사 목록</h2>
+            <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">행사 목록</h2>
             {hasPermission('event.create') && (
               <Button asChild data-testid="button-create-event">
                 <Link href="/admin?tab=events">

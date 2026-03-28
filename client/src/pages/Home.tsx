@@ -179,7 +179,7 @@ export default function Home() {
       </section>
 
       {/* Upcoming Events */}
-      <section className="bg-background py-16">
+      <section className="bg-background dark:bg-background py-16">
         <div className="container">
           <div className="mb-8 flex items-center justify-between">
             <div>
@@ -210,7 +210,7 @@ export default function Home() {
       </section>
 
       {/* Latest News */}
-      <section className="bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-16">
         <div className="container">
           <div className="mb-8 flex items-center justify-between">
             <div>
@@ -241,7 +241,7 @@ export default function Home() {
       </section>
 
       {/* Partners Grid */}
-      <section className="bg-background py-16">
+      <section className="bg-background dark:bg-background py-16">
         <div className="container">
           <div className="mb-12 text-center">
             <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.partners.title')}</h2>
@@ -300,7 +300,7 @@ export default function Home() {
       </section>
 
       {/* About Preview */}
-      <section className="bg-muted py-20">
+      <section className="bg-muted dark:bg-muted py-20">
         <div className="container">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
@@ -389,7 +389,7 @@ export default function Home() {
       </section>
 
       {/* Member Benefits */}
-      <section className="bg-background py-16">
+      <section className="bg-background dark:bg-background py-16">
         <div className="container">
           <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-8">
             <div className="mx-auto max-w-3xl text-center">

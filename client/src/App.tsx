@@ -21,6 +21,8 @@ import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Admin from "@/pages/Admin";
 import Organization from "@/pages/Organization";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -43,6 +45,8 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/admin" component={Admin} />
           <Route path="/organization" component={Organization} />
+          <Route path="/privacy" component={Privacy} />
+          <Route path="/terms" component={Terms} />
           <Route component={NotFound} />
         </Switch>
       </main>

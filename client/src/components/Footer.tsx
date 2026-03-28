@@ -1,6 +1,13 @@
 import { Link } from 'wouter';
 import { t } from '@/lib/i18n';
-import { Building2, Phone, Mail, Clock, MessageSquare, Youtube, Linkedin } from 'lucide-react';
+import { Building2, Phone, Mail, MessageSquare, Youtube, Linkedin } from 'lucide-react';
+
+const SNS_LINKS = {
+  kakao: import.meta.env.VITE_SNS_KAKAO || '',
+  wechat: import.meta.env.VITE_SNS_WECHAT || '',
+  linkedin: import.meta.env.VITE_SNS_LINKEDIN || '',
+  youtube: import.meta.env.VITE_SNS_YOUTUBE || '',
+};
 
 export default function Footer() {
   return (
@@ -59,9 +66,6 @@ export default function Footer() {
               <Link href="/dashboard" className="block opacity-75 hover:opacity-100 transition-opacity">
                 멤버십 안내
               </Link>
-              <a href="#faq" className="block opacity-75 hover:opacity-100 transition-opacity">
-                자주 묻는 질문
-              </a>
               <Link href="/contact" className="block opacity-75 hover:opacity-100 transition-opacity">
                 고객 지원
               </Link>
@@ -86,21 +90,55 @@ export default function Footer() {
               </div>
             </div>
 
-            {/* Social Links */}
-            <div className="flex gap-3 mt-4">
-              <a href="#kakao" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-                <MessageSquare className="h-5 w-5" />
-              </a>
-              <a href="#wechat" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-                <MessageSquare className="h-5 w-5" />
-              </a>
-              <a href="#linkedin" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a href="#youtube" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-                <Youtube className="h-5 w-5" />
-              </a>
-            </div>
+            {/* Social Links — only shown when URL is configured */}
+            {(SNS_LINKS.kakao || SNS_LINKS.wechat || SNS_LINKS.linkedin || SNS_LINKS.youtube) && (
+              <div className="flex gap-3 mt-4">
+                {SNS_LINKS.kakao && (
+                  <a
+                    href={SNS_LINKS.kakao}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="카카오"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                  </a>
+                )}
+                {SNS_LINKS.wechat && (
+                  <a
+                    href={SNS_LINKS.wechat}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="위챗"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                  </a>
+                )}
+                {SNS_LINKS.linkedin && (
+                  <a
+                    href={SNS_LINKS.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="LinkedIn"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <Linkedin className="h-5 w-5" />
+                  </a>
+                )}
+                {SNS_LINKS.youtube && (
+                  <a
+                    href={SNS_LINKS.youtube}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="YouTube"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <Youtube className="h-5 w-5" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -111,15 +149,12 @@ export default function Footer() {
               © 2024 Korea Sichuan-Chongqing Chamber of Commerce. All rights reserved.
             </div>
             <div className="flex gap-6">
-              <a href="#privacy" className="hover:opacity-100 transition-opacity">
+              <Link href="/privacy" className="hover:opacity-100 transition-opacity">
                 개인정보처리방침
-              </a>
-              <a href="#terms" className="hover:opacity-100 transition-opacity">
+              </Link>
+              <Link href="/terms" className="hover:opacity-100 transition-opacity">
                 이용약관
-              </a>
-              <a href="#sitemap" className="hover:opacity-100 transition-opacity">
-                사이트맵
-              </a>
+              </Link>
             </div>
           </div>
         </div>

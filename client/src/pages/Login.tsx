@@ -11,6 +11,12 @@ import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일을 입력해주세요'),
@@ -21,6 +27,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
@@ -47,7 +54,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-muted/10 py-12">
       <div className="container">
         <div className="mx-auto max-w-md">
           {/* Logo */}
@@ -57,13 +64,13 @@ export default function LoginPage() {
                 <span className="text-2xl font-bold text-white">KSCC</span>
               </div>
             </Link>
-            <h1 className="text-2xl font-bold text-foreground">{t('auth.login.title')}</h1>
-            <p className="text-muted-foreground">계정에 로그인하세요</p>
+            <h1 className="text-2xl font-bold text-foreground dark:text-foreground">{t('auth.login.title')}</h1>
+            <p className="text-muted-foreground dark:text-muted-foreground">계정에 로그인하세요</p>
           </div>
 
-          <Card>
+          <Card className="dark:bg-card dark:border-border">
             <CardHeader>
-              <CardTitle className="text-center">{t('auth.login.title')}</CardTitle>
+              <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.login.title')}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -86,7 +93,17 @@ export default function LoginPage() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="password">{t('auth.login.password')}</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="password">{t('auth.login.password')}</Label>
+                    <button
+                      type="button"
+                      onClick={() => setForgotPasswordOpen(true)}
+                      className="text-sm text-primary hover:underline"
+                      data-testid="button-forgot-password"
+                    >
+                      비밀번호 찾기
+                    </button>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
@@ -100,6 +117,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       data-testid="button-toggle-password"
                     >
@@ -122,7 +140,7 @@ export default function LoginPage() {
               </form>
               
               <div className="mt-6 text-center">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                   아직 계정이 없으신가요?{' '}
                   <Link href="/register" className="text-primary hover:underline">
                     {t('auth.login.register')}
@@ -133,6 +151,37 @@ export default function LoginPage() {
           </Card>
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent className="max-w-md dark:bg-card dark:border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground dark:text-foreground">비밀번호 찾기</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-muted-foreground dark:text-muted-foreground leading-relaxed">
+              비밀번호를 잊어버리셨나요? 아래 방법으로 관리자에게 연락하시면 비밀번호를 재설정해 드립니다.
+            </p>
+            <div className="rounded-lg bg-muted dark:bg-muted p-4 space-y-2">
+              <p className="font-medium text-foreground dark:text-foreground">관리자 연락처</p>
+              <p className="text-sm text-muted-foreground dark:text-muted-foreground">이메일: info@kscc.kr</p>
+              <p className="text-sm text-muted-foreground dark:text-muted-foreground">전화: +82-2-1234-5678</p>
+            </div>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground">
+              이메일로 문의 시 가입하신 이메일 주소와 이름을 함께 알려주세요.
+            </p>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setForgotPasswordOpen(false)}
+                data-testid="button-close-forgot-password"
+              >
+                닫기
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

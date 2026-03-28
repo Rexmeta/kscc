@@ -230,19 +230,19 @@ export default function ResourcesPage() {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-16">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground">{t('resources.title')}</h1>
-            <p className="text-lg text-muted-foreground">Resource Center / 资料中心</p>
+            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('resources.title')}</h1>
+            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Resource Center / 资料中心</p>
           </div>
         </div>
       </section>
 
       {/* Resource Categories */}
-      <section className="py-16 bg-background">
+      <section className="py-16 bg-background dark:bg-background">
         <div className="container">
           <div className="mb-12 grid gap-6 md:grid-cols-4">
             <Card className="card-hover p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">

@@ -45,7 +45,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 w-full nav-shadow">
       <div className="container">
         <div className="flex h-20 items-center justify-between">
-          {/* Logo */}
+          {/* Logo — text mark used consistently across all pages */}
           <Link href="/">
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent flex-shrink-0">
@@ -158,6 +158,14 @@ export default function Header() {
                     </Link>
                   ))}
                   
+                  <hr />
+
+                  {/* Language Switcher in mobile menu */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-sm text-muted-foreground">언어 / Language</span>
+                    <LanguageSwitcher />
+                  </div>
+
                   <hr />
                   
                   {isAuthenticated ? (

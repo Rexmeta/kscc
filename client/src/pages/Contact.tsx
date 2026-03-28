@@ -118,7 +118,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative bg-background dark:bg-background">
       {isAdmin && page && (
         <>
           <Button
@@ -140,11 +140,11 @@ export default function ContactPage() {
       )}
 
       {/* Header */}
-      <section className="bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-16">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground">{t('contact.title')}</h1>
-            <p className="text-lg text-muted-foreground">Contact Us / 联系我们</p>
+            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('contact.title')}</h1>
+            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Contact Us / 联系我们</p>
           </div>
         </div>
       </section>
@@ -253,7 +253,8 @@ export default function ContactPage() {
                     data-testid="checkbox-privacy"
                   />
                   <label htmlFor="privacy" className="text-sm text-muted-foreground">
-                    {t('contact.form.privacy')} <a href="#privacy" className="text-primary hover:underline">보기</a>
+                    {t('contact.form.privacy')}{' '}
+                  <a href="/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">보기</a>
                   </label>
                 </div>
                 {errors.privacy && (
