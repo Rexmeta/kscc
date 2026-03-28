@@ -36,6 +36,15 @@ Preferred communication style: Simple, everyday language.
 
 **Schema Design:** PostgreSQL database featuring key tables such as `users`, `members`, `posts` (unified for news, events, pages), `post_translations`, `post_meta`, `eventRegistrations`, `inquiries`, `inquiry_replies`, and `partners`.
 
+### Admin Panel Architecture
+
+**Component Structure:** The Admin page (`client/src/pages/Admin.tsx`) was refactored from a 3,600+ line monolith into a ~120-line shell/router. Components are organized as:
+
+- **Tab components** (`client/src/components/admin/tabs/`): `DashboardTab`, `UsersTab`, `MembersTab`, `ArticlesTab`, `EventsTab`, `ResourcesTab`, `PagesTab`, `PartnersTab`, `OrganizationTab`, `InquiriesTab`, `ManualTab` — each self-manages data fetching with `enabled: isAdmin && activeTab === 'tabname'`
+- **Form/dialog components** (`client/src/components/admin/forms/`): `EditMemberForm`, `EditNewsForm`, `EditEventForm`, `EditResourceForm`, `CreateNewsDialog`, `CreateEventDialog`, `CreateResourceDialog`, `CreateInquiryForm`, `EventRegistrationsDialog`, `CreateOrganizationMemberDialog`, `EditOrganizationMemberDialog`
+- **Shared schemas** (`client/src/components/admin/adminSchemas.ts`): All Zod validation schemas and the `ORGANIZATION_CATEGORIES` constant
+- **Upload utilities** (`client/src/components/admin/uploadHelpers.ts`): `setImagePublicAcl` and `getUploadParameters` helpers
+
 ### System Design Choices
 
 *   **User Type System**: Supports 'staff' (운영진) and 'company' (회원사) user types, with atomic creation of company users and associated member profiles. Server-side logic prevents privilege escalation.

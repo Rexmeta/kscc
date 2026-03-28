@@ -71,7 +71,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
       body: JSON.stringify({}),
     });
     const data = await response.json();
-    (window as any).__lastUploadObjectPath = data.objectPath;
+    window.__lastUploadObjectPath = data.objectPath;
     console.log('[RichTextEditor] Upload URL received:', data.uploadURL?.substring(0, 80));
     return {
       method: 'PUT' as const,
@@ -91,7 +91,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     }
 
     if (result.successful && result.successful.length > 0) {
-      const objectPath = (window as any).__lastUploadObjectPath || '';
+      const objectPath = window.__lastUploadObjectPath || '';
       console.log('[RichTextEditor] Setting image with path:', objectPath);
       if (objectPath) {
         await setImagePublicAcl(objectPath);
