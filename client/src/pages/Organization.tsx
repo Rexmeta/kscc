@@ -3,6 +3,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import type { OrganizationMember } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Users, Award, Building, Briefcase, GraduationCap, UserCheck } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 const CATEGORY_CONFIG = [
   { 
@@ -54,12 +55,6 @@ const CATEGORY_CONFIG = [
     color: 'bg-slate-100 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800'
   },
 ];
-
-const PAGE_LABELS = {
-  title: { ko: '조직 구조', en: 'Organization Structure', zh: '组织架构' },
-  subtitle: { ko: '한국 사천-충칭 총상회의 조직 구성원을 소개합니다.', en: 'Meet the members of Korea Sichuan-Chongqing Chamber of Commerce.', zh: '介绍韩国四川-重庆总商会的组织成员。' },
-  noMembers: { ko: '등록된 조직 구성원이 없습니다.', en: 'No organization members registered.', zh: '暂无组织成员。' },
-};
 
 function getMemberName(member: OrganizationMember, language: string): string {
   if (language === 'en' && member.nameEn) return member.nameEn;
@@ -169,10 +164,10 @@ export default function Organization() {
       <div className="bg-primary text-primary-foreground py-16">
         <div className="container text-center">
           <h1 className="text-4xl font-bold mb-4" data-testid="text-org-title">
-            {getLabel(PAGE_LABELS.title, language)}
+            {t('org.title')}
           </h1>
           <p className="text-lg opacity-90 max-w-2xl mx-auto" data-testid="text-org-subtitle">
-            {getLabel(PAGE_LABELS.subtitle, language)}
+            {t('org.subtitle')}
           </p>
         </div>
       </div>
@@ -209,7 +204,7 @@ export default function Organization() {
             ))}
             {(!members || members.length === 0) && (
               <div className="text-center py-16 text-muted-foreground">
-                {getLabel(PAGE_LABELS.noMembers, language)}
+                {t('org.noMembers')}
               </div>
             )}
           </>

@@ -205,6 +205,41 @@ export interface TranslationKeys {
   'admin.resources': string;
   'admin.inquiries': string;
   'admin.partners': string;
+
+  // Home page sections
+  'home.events.subtitle': string;
+  'home.events.viewAll': string;
+  'home.events.empty': string;
+  'home.news.subtitle': string;
+  'home.news.empty': string;
+  'home.partners.title': string;
+  'home.partners.subtitle': string;
+  'home.partners.empty': string;
+  'home.partners.viewAll': string;
+  'home.about.heading': string;
+  'home.about.benefit1.title': string;
+  'home.about.benefit1.description': string;
+  'home.about.benefit2.title': string;
+  'home.about.benefit2.description': string;
+  'home.about.benefit3.title': string;
+  'home.about.benefit3.description': string;
+  'home.about.downloadBrochure': string;
+  'home.about.viewOrgChart': string;
+  'home.about.statsMembers': string;
+  'home.about.statsEvents': string;
+  'home.benefits.title': string;
+  'home.benefits.subtitle': string;
+  'home.benefits.card1.title': string;
+  'home.benefits.card1.description': string;
+  'home.benefits.card2.title': string;
+  'home.benefits.card2.description': string;
+  'home.benefits.card3.title': string;
+  'home.benefits.card3.description': string;
+
+  // Organization page
+  'org.title': string;
+  'org.subtitle': string;
+  'org.noMembers': string;
 }
 
 const translations: Record<Language, TranslationKeys> = {
@@ -413,6 +448,41 @@ const translations: Record<Language, TranslationKeys> = {
     'admin.resources': '자료 관리',
     'admin.inquiries': '문의 관리',
     'admin.partners': '파트너 관리',
+
+    // Home page sections
+    'home.events.subtitle': '최신 네트워킹 이벤트와 세미나에 참여하세요',
+    'home.events.viewAll': '모든 행사 보기',
+    'home.events.empty': '현재 예정된 행사가 없습니다.',
+    'home.news.subtitle': '총상회의 주요 소식과 활동을 확인하세요',
+    'home.news.empty': '최근 뉴스가 없습니다.',
+    'home.partners.title': '협력 파트너',
+    'home.partners.subtitle': '함께 성장하는 회원사 및 협력 파트너',
+    'home.partners.empty': '협력 파트너를 준비 중입니다.',
+    'home.partners.viewAll': '전체 회원사 디렉토리 보기',
+    'home.about.heading': '한국과 중국을 잇는 신뢰의 비즈니스 플랫폼',
+    'home.about.benefit1.title': '경제·무역 교류 활성화',
+    'home.about.benefit1.description': '양국 기업 간 효율적인 파트너 발굴과 협력 기회 창출',
+    'home.about.benefit2.title': '시장 진출 지원 및 컨설팅',
+    'home.about.benefit2.description': '현지 시장 정보 제공 및 진출 전략 수립 지원',
+    'home.about.benefit3.title': '정기 세미나 및 교류 행사',
+    'home.about.benefit3.description': '산업별 전문 세미나와 문화 교류 프로그램 운영',
+    'home.about.downloadBrochure': '총상회 소개서 다운로드',
+    'home.about.viewOrgChart': '조직도 보기',
+    'home.about.statsMembers': '회원사',
+    'home.about.statsEvents': '연간 행사',
+    'home.benefits.title': '회원 전용 혜택',
+    'home.benefits.subtitle': '로그인하시면 더 많은 정보와 서비스를 이용하실 수 있습니다',
+    'home.benefits.card1.title': '심화 자료',
+    'home.benefits.card1.description': '회원 전용 리포트 및 정책 브리핑',
+    'home.benefits.card2.title': '멤버 네트워크',
+    'home.benefits.card2.description': '회원사 상세 연락처 및 매칭',
+    'home.benefits.card3.title': '행사 우대',
+    'home.benefits.card3.description': '우선 등록 및 할인 혜택',
+
+    // Organization page
+    'org.title': '조직 구조',
+    'org.subtitle': '한국 사천-충칭 총상회의 조직 구성원을 소개합니다.',
+    'org.noMembers': '등록된 조직 구성원이 없습니다.',
   },
   en: {
     // Navigation
@@ -619,6 +689,41 @@ const translations: Record<Language, TranslationKeys> = {
     'admin.resources': 'Resource Management',
     'admin.inquiries': 'Inquiry Management',
     'admin.partners': 'Partner Management',
+
+    // Home page sections
+    'home.events.subtitle': 'Join our latest networking events and seminars',
+    'home.events.viewAll': 'View All Events',
+    'home.events.empty': 'No upcoming events at this time.',
+    'home.news.subtitle': 'Stay updated with the Chamber\'s latest news and activities',
+    'home.news.empty': 'No recent news available.',
+    'home.partners.title': 'Partner Members',
+    'home.partners.subtitle': 'Member companies and partners growing together',
+    'home.partners.empty': 'Partner information coming soon.',
+    'home.partners.viewAll': 'View Full Member Directory',
+    'home.about.heading': 'A Trusted Business Platform Bridging Korea and China',
+    'home.about.benefit1.title': 'Economic & Trade Exchange',
+    'home.about.benefit1.description': 'Efficient partner discovery and cooperation opportunities between companies of both countries',
+    'home.about.benefit2.title': 'Market Entry Support & Consulting',
+    'home.about.benefit2.description': 'Local market information and market entry strategy support',
+    'home.about.benefit3.title': 'Regular Seminars & Exchange Events',
+    'home.about.benefit3.description': 'Industry-specific professional seminars and cultural exchange programs',
+    'home.about.downloadBrochure': 'Download Chamber Brochure',
+    'home.about.viewOrgChart': 'View Organization Chart',
+    'home.about.statsMembers': 'Members',
+    'home.about.statsEvents': 'Annual Events',
+    'home.benefits.title': 'Member Exclusive Benefits',
+    'home.benefits.subtitle': 'Log in to access more information and services',
+    'home.benefits.card1.title': 'In-Depth Resources',
+    'home.benefits.card1.description': 'Member-only reports and policy briefings',
+    'home.benefits.card2.title': 'Member Network',
+    'home.benefits.card2.description': 'Detailed member contact and matching services',
+    'home.benefits.card3.title': 'Event Privileges',
+    'home.benefits.card3.description': 'Priority registration and discount benefits',
+
+    // Organization page
+    'org.title': 'Organization Structure',
+    'org.subtitle': 'Meet the members of Korea Sichuan-Chongqing Chamber of Commerce.',
+    'org.noMembers': 'No organization members registered.',
   },
   zh: {
     // Navigation
@@ -825,6 +930,41 @@ const translations: Record<Language, TranslationKeys> = {
     'admin.resources': '资源管理',
     'admin.inquiries': '咨询管理',
     'admin.partners': '合作伙伴管理',
+
+    // Home page sections
+    'home.events.subtitle': '参加最新的网络交流活动和研讨会',
+    'home.events.viewAll': '查看所有活动',
+    'home.events.empty': '目前没有预定的活动。',
+    'home.news.subtitle': '了解商会的最新消息和活动',
+    'home.news.empty': '暂无最新新闻。',
+    'home.partners.title': '合作伙伴',
+    'home.partners.subtitle': '共同成长的会员企业和合作伙伴',
+    'home.partners.empty': '合作伙伴信息即将上线。',
+    'home.partners.viewAll': '查看完整会员目录',
+    'home.about.heading': '连接韩中两国的可信赖商务平台',
+    'home.about.benefit1.title': '经济贸易交流促进',
+    'home.about.benefit1.description': '高效发掘两国企业合作伙伴，创造合作机会',
+    'home.about.benefit2.title': '市场进入支持与咨询',
+    'home.about.benefit2.description': '提供本地市场信息及市场进入策略支持',
+    'home.about.benefit3.title': '定期研讨会及交流活动',
+    'home.about.benefit3.description': '举办各行业专业研讨会及文化交流项目',
+    'home.about.downloadBrochure': '下载商会简介',
+    'home.about.viewOrgChart': '查看组织架构',
+    'home.about.statsMembers': '会员企业',
+    'home.about.statsEvents': '年度活动',
+    'home.benefits.title': '会员专属福利',
+    'home.benefits.subtitle': '登录后可享受更多信息和服务',
+    'home.benefits.card1.title': '深度资料',
+    'home.benefits.card1.description': '会员专属报告及政策简报',
+    'home.benefits.card2.title': '会员网络',
+    'home.benefits.card2.description': '详细会员联系方式及匹配服务',
+    'home.benefits.card3.title': '活动优惠',
+    'home.benefits.card3.description': '优先报名及折扣优惠',
+
+    // Organization page
+    'org.title': '组织架构',
+    'org.subtitle': '介绍韩国四川-重庆总商会的组织成员。',
+    'org.noMembers': '暂无组织成员。',
   },
 };
 

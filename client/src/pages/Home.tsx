@@ -184,11 +184,11 @@ export default function Home() {
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h2 className="mb-2 text-3xl font-bold text-foreground">{t('events.upcoming')}</h2>
-              <p className="text-muted-foreground">최신 네트워킹 이벤트와 세미나에 참여하세요</p>
+              <p className="text-muted-foreground">{t('home.events.subtitle')}</p>
             </div>
             <Link href="/events">
               <Button variant="outline" data-testid="link-all-events">
-                모든 행사 보기
+                {t('home.events.viewAll')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -202,7 +202,7 @@ export default function Home() {
             ) : (
               <div className="col-span-full text-center py-12">
                 <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">현재 예정된 행사가 없습니다.</p>
+                <p className="text-muted-foreground">{t('home.events.empty')}</p>
               </div>
             )}
           </div>
@@ -215,7 +215,7 @@ export default function Home() {
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h2 className="mb-2 text-3xl font-bold text-foreground">{t('news.latest')}</h2>
-              <p className="text-muted-foreground">총상회의 주요 소식과 활동을 확인하세요</p>
+              <p className="text-muted-foreground">{t('home.news.subtitle')}</p>
             </div>
             <Link href="/news">
               <Button variant="outline" data-testid="link-all-news">
@@ -233,7 +233,7 @@ export default function Home() {
             ) : (
               <div className="col-span-full text-center py-12">
                 <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">최근 뉴스가 없습니다.</p>
+                <p className="text-muted-foreground">{t('home.news.empty')}</p>
               </div>
             )}
           </div>
@@ -244,8 +244,8 @@ export default function Home() {
       <section className="bg-background py-16">
         <div className="container">
           <div className="mb-12 text-center">
-            <h2 className="mb-2 text-3xl font-bold text-foreground">협력 파트너</h2>
-            <p className="text-muted-foreground">함께 성장하는 회원사 및 협력 파트너</p>
+            <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.partners.title')}</h2>
+            <p className="text-muted-foreground">{t('home.partners.subtitle')}</p>
           </div>
           
           <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-6">
@@ -283,7 +283,7 @@ export default function Home() {
             ) : (
               <div className="col-span-full text-center py-12">
                 <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">협력 파트너를 준비 중입니다.</p>
+                <p className="text-muted-foreground">{t('home.partners.empty')}</p>
               </div>
             )}
           </div>
@@ -291,7 +291,7 @@ export default function Home() {
           <div className="mt-10 text-center">
             <Link href="/members">
               <Button data-testid="link-member-directory">
-                전체 회원사 디렉토리 보기
+                {t('home.partners.viewAll')}
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
@@ -310,8 +310,7 @@ export default function Home() {
               </div>
               
               <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">
-                한국과 중국을 잇는<br />
-                신뢰의 비즈니스 플랫폼
+                {t('home.about.heading')}
               </h2>
               
               <p className="mb-6 text-lg text-muted-foreground">
@@ -324,8 +323,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">경제·무역 교류 활성화</h4>
-                    <p className="text-sm text-muted-foreground">양국 기업 간 효율적인 파트너 발굴과 협력 기회 창출</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit1.title')}</h4>
+                    <p className="text-sm text-muted-foreground">{t('home.about.benefit1.description')}</p>
                   </div>
                 </div>
                 
@@ -334,8 +333,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">시장 진출 지원 및 컨설팅</h4>
-                    <p className="text-sm text-muted-foreground">현지 시장 정보 제공 및 진출 전략 수립 지원</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit2.title')}</h4>
+                    <p className="text-sm text-muted-foreground">{t('home.about.benefit2.description')}</p>
                   </div>
                 </div>
                 
@@ -344,8 +343,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">정기 세미나 및 교류 행사</h4>
-                    <p className="text-sm text-muted-foreground">산업별 전문 세미나와 문화 교류 프로그램 운영</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit3.title')}</h4>
+                    <p className="text-sm text-muted-foreground">{t('home.about.benefit3.description')}</p>
                   </div>
                 </div>
               </div>
@@ -353,13 +352,13 @@ export default function Home() {
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Link href="/about">
                   <Button data-testid="button-about">
-                    총상회 소개서 다운로드
+                    {t('home.about.downloadBrochure')}
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 </Link>
                 <Link href="/contact">
                   <Button variant="outline" data-testid="button-org-chart">
-                    조직도 보기
+                    {t('home.about.viewOrgChart')}
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 </Link>
@@ -377,12 +376,12 @@ export default function Home() {
               
               <div className="absolute -bottom-6 -left-6 rounded-lg border border-border bg-card p-6 shadow-xl">
                 <div className="mb-1 text-3xl font-bold text-primary">{memberCount}+</div>
-                <div className="text-sm text-muted-foreground">회원사</div>
+                <div className="text-sm text-muted-foreground">{t('home.about.statsMembers')}</div>
               </div>
               
               <div className="absolute -right-6 -top-6 rounded-lg border border-border bg-card p-6 shadow-xl">
                 <div className="mb-1 text-3xl font-bold text-accent">50+</div>
-                <div className="text-sm text-muted-foreground">연간 행사</div>
+                <div className="text-sm text-muted-foreground">{t('home.about.statsEvents')}</div>
               </div>
             </div>
           </div>
@@ -397,26 +396,26 @@ export default function Home() {
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary">
                 <Users className="h-10 w-10 text-white" />
               </div>
-              <h2 className="mb-4 text-3xl font-bold text-foreground">회원 전용 혜택</h2>
+              <h2 className="mb-4 text-3xl font-bold text-foreground">{t('home.benefits.title')}</h2>
               <p className="mb-8 text-muted-foreground">
-                로그인하시면 더 많은 정보와 서비스를 이용하실 수 있습니다
+                {t('home.benefits.subtitle')}
               </p>
               
               <div className="mb-8 grid gap-6 md:grid-cols-3">
                 <Card className="border-border p-6">
                   <Building className="mb-3 h-8 w-8 text-primary mx-auto" />
-                  <h4 className="mb-2 font-bold">심화 자료</h4>
-                  <p className="text-sm text-muted-foreground">회원 전용 리포트 및 정책 브리핑</p>
+                  <h4 className="mb-2 font-bold">{t('home.benefits.card1.title')}</h4>
+                  <p className="text-sm text-muted-foreground">{t('home.benefits.card1.description')}</p>
                 </Card>
                 <Card className="border-border p-6">
                   <Users className="mb-3 h-8 w-8 text-accent mx-auto" />
-                  <h4 className="mb-2 font-bold">멤버 네트워크</h4>
-                  <p className="text-sm text-muted-foreground">회원사 상세 연락처 및 매칭</p>
+                  <h4 className="mb-2 font-bold">{t('home.benefits.card2.title')}</h4>
+                  <p className="text-sm text-muted-foreground">{t('home.benefits.card2.description')}</p>
                 </Card>
                 <Card className="border-border p-6">
                   <Calendar className="mb-3 h-8 w-8 text-secondary mx-auto" />
-                  <h4 className="mb-2 font-bold">행사 우대</h4>
-                  <p className="text-sm text-muted-foreground">우선 등록 및 할인 혜택</p>
+                  <h4 className="mb-2 font-bold">{t('home.benefits.card3.title')}</h4>
+                  <p className="text-sm text-muted-foreground">{t('home.benefits.card3.description')}</p>
                 </Card>
               </div>
               
