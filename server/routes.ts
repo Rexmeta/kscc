@@ -469,9 +469,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      const updatedMember = await storage.updateMember(req.params.id, req.body);
+      const updateData = insertMemberSchema.partial().parse(req.body);
+      const updatedMember = await storage.updateMember(req.params.id, updateData);
       res.json(updatedMember);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });
@@ -546,15 +550,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const inquiryUpdateSchema = z.object({
+    status: z.enum(['pending', 'in_progress', 'resolved', 'closed']).optional(),
+    category: z.string().max(100).optional(),
+    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    assignedTo: z.string().uuid().optional().nullable(),
+    notes: z.string().max(5000).optional(),
+  });
+
   app.put("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const updateData = req.body;
+      const updateData = inquiryUpdateSchema.parse(req.body);
       const inquiry = await storage.updateInquiry(req.params.id, updateData);
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
       }
       res.json(inquiry);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });
@@ -649,9 +664,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Partner not found" });
       }
       
-      const updatedPartner = await storage.updatePartner(req.params.id, req.body);
+      const updateData = insertPartnerSchema.partial().parse(req.body);
+      const updatedPartner = await storage.updatePartner(req.params.id, updateData);
       res.json(updatedPartner);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
   });

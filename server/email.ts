@@ -5,6 +5,15 @@ export interface EmailOptions {
   text?: string;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export class EmailService {
   private apiKey: string | undefined;
   private fromEmail: string;
@@ -100,18 +109,18 @@ ${replyMessage}
       <p style="margin: 10px 0 0;">Korea Sichuan-Chongqing Chamber of Commerce</p>
     </div>
     <div class="content">
-      <p>안녕하세요 <strong>${recipientName}</strong>님,</p>
+      <p>안녕하세요 <strong>${escapeHtml(recipientName)}</strong>님,</p>
       <p>문의하신 내용에 대한 답변을 보내드립니다.</p>
       
       <div class="section">
         <div class="section-title">원본 문의</div>
-        <p><strong>제목:</strong> ${inquirySubject}</p>
-        <p><strong>내용:</strong><br>${inquiryMessage.replace(/\n/g, '<br>')}</p>
+        <p><strong>제목:</strong> ${escapeHtml(inquirySubject)}</p>
+        <p><strong>내용:</strong><br>${escapeHtml(inquiryMessage).replace(/\n/g, '<br>')}</p>
       </div>
       
       <div class="section">
         <div class="section-title">답변</div>
-        <p>${replyMessage.replace(/\n/g, '<br>')}</p>
+        <p>${escapeHtml(replyMessage).replace(/\n/g, '<br>')}</p>
       </div>
       
       <p>추가 문의사항이 있으시면 언제든지 연락 주시기 바랍니다.</p>
