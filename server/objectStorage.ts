@@ -80,7 +80,10 @@ export class ObjectStorageService {
 
       const [exists] = await file.exists();
       if (exists) {
-        return file;
+        const aclPolicy = await getObjectAclPolicy(file);
+        if (aclPolicy?.visibility === "public") {
+          return file;
+        }
       }
     }
 
@@ -91,6 +94,10 @@ export class ObjectStorageService {
     try {
       const [metadata] = await file.getMetadata();
       const aclPolicy = await getObjectAclPolicy(file);
+      if (!aclPolicy) {
+        if (!res.headersSent) res.sendStatus(403);
+        return;
+      }
       const isPublic = aclPolicy?.visibility === "public";
 
       let contentType = metadata.contentType || "application/octet-stream";
@@ -257,6 +264,10 @@ export class ObjectStorageService {
       objectFile,
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
+  }
+
+  async getObjectEntityAclPolicy(file: File): Promise<ObjectAclPolicy | null> {
+    return getObjectAclPolicy(file);
   }
 }
 

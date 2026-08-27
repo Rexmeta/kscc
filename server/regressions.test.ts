@@ -9,8 +9,58 @@ import {
   posts,
   users,
 } from "@shared/schema";
+import { canReadPost, publicPostAccess } from "./postAccess";
+import { canAccessObject, ObjectPermission } from "./objectAcl";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
+
+test("post visibility policy separates anonymous, member, premium, and admin callers", () => {
+  const post = (visibility: "public" | "members" | "premium" | "internal", status: "draft" | "published" = "published") => ({
+    status,
+    visibility,
+    publishedAt: new Date(Date.now() - 1_000),
+    expiresAt: null,
+  }) as any;
+  const memberAccess = {
+    ...publicPostAccess,
+    userId: "member-user",
+    canReadMembers: true,
+  };
+  const premiumAccess = {
+    ...memberAccess,
+    userId: "premium-user",
+    canReadPremium: true,
+  };
+  const adminAccess = {
+    ...premiumAccess,
+    userId: "admin-user",
+    isAdmin: true,
+  };
+
+  assert.equal(canReadPost(post("public"), publicPostAccess), true);
+  assert.equal(canReadPost(post("members"), publicPostAccess), false);
+  assert.equal(canReadPost(post("premium"), memberAccess), false);
+  assert.equal(canReadPost(post("members"), memberAccess), true);
+  assert.equal(canReadPost(post("premium"), premiumAccess), true);
+  assert.equal(canReadPost(post("internal"), premiumAccess), false);
+  assert.equal(canReadPost(post("draft"), adminAccess), true);
+});
+
+test("object reads fail closed without ACL metadata", async () => {
+  const file = {
+    async getMetadata() {
+      return [{ metadata: {} }];
+    },
+  } as any;
+
+  assert.equal(
+    await canAccessObject({
+      objectFile: file,
+      requestedPermission: ObjectPermission.READ,
+    }),
+    false,
+  );
+});
 
 async function getDatabase() {
   const [{ db, pool }, { storage }] = await Promise.all([

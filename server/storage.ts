@@ -1,6 +1,7 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postMeta, organizationMembers,
+  tiers, roles, userMemberships,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
@@ -11,12 +12,19 @@ import {
   type OrganizationMember, type InsertOrganizationMember
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, gte, lte, count, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
+import {
+  canReadPost,
+  publicPostAccess,
+  type PostAccessContext,
+} from "./postAccess";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
+
+export type { PostAccessContext } from "./postAccess";
 
 function boundedPageSize(limit: number | undefined, max: number): number {
   if (limit === undefined || !Number.isFinite(limit)) {
@@ -92,11 +100,13 @@ export interface IStorage {
   deletePartner(id: string): Promise<void>;
 
   // Unified Posts System
+  getPostAccessContext(userId?: string, isAdmin?: boolean): Promise<PostAccessContext>;
   // Posts
   getPost(id: string): Promise<Post | undefined>;
   getPostBySlug(slug: string): Promise<Post | undefined>;
-  getPostBySlugWithTranslations(slug: string, locale?: string): Promise<PostWithTranslations | undefined>;
-  getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined>;
+  getPostByObjectPath(objectPath: string): Promise<Post | undefined>;
+  getPostBySlugWithTranslations(slug: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
+  getPostWithTranslations(id: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
   getPosts(filters?: {
     postType?: string;
     status?: string;
@@ -112,6 +122,7 @@ export interface IStorage {
     compact?: boolean;
     limit?: number;
     offset?: number;
+    access?: PostAccessContext;
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
@@ -579,6 +590,50 @@ export class DatabaseStorage implements IStorage {
 
   // Unified Posts System
   // Posts
+  async getPostAccessContext(userId?: string, isAdmin = false): Promise<PostAccessContext> {
+    if (isAdmin) {
+      return {
+        userId,
+        isAdmin: true,
+        canReadMembers: true,
+        canReadPremium: true,
+      };
+    }
+
+    if (!userId) return publicPostAccess;
+
+    const now = new Date();
+    const activeMemberships = await db
+      .select({ tierCode: tiers.code })
+      .from(userMemberships)
+      .innerJoin(users, eq(userMemberships.userId, users.id))
+      .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+      .innerJoin(roles, eq(userMemberships.roleId, roles.id))
+      .where(and(
+        eq(userMemberships.userId, userId),
+        eq(users.isActive, true),
+        eq(userMemberships.isActive, true),
+        eq(tiers.isActive, true),
+        eq(roles.isActive, true),
+        lte(userMemberships.startedAt, now),
+        or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, now)),
+      ));
+
+    const premiumTiers = new Set([
+      "PRO", "CORP", "PARTNER", "ADMIN",
+      "PREMIUM", "SILVER", "GOLD", "PLATINUM",
+    ]);
+
+    return {
+      userId,
+      isAdmin: false,
+      canReadMembers: activeMemberships.length > 0,
+      canReadPremium: activeMemberships.some(({ tierCode }) =>
+        premiumTiers.has(tierCode.toUpperCase()),
+      ),
+    };
+  }
+
   async getPost(id: string): Promise<Post | undefined> {
     const [post] = await db.select().from(posts).where(eq(posts.id, id));
     return post || undefined;
@@ -587,6 +642,21 @@ export class DatabaseStorage implements IStorage {
   async getPostBySlug(slug: string): Promise<Post | undefined> {
     const [post] = await db.select().from(posts).where(eq(posts.slug, slug));
     return post || undefined;
+  }
+
+  async getPostByObjectPath(objectPath: string): Promise<Post | undefined> {
+    const [result] = await db
+      .select({ post: posts })
+      .from(postMeta)
+      .innerJoin(posts, eq(postMeta.postId, posts.id))
+      .where(and(
+        eq(postMeta.key, "resource.fileUrl"),
+        or(
+          eq(postMeta.valueText, objectPath),
+          sql`${postMeta.value} = ${JSON.stringify(objectPath)}::jsonb`,
+        )!,
+      ));
+    return result?.post;
   }
 
   private async getLocalizedPostTranslations(postId: string, primaryLocale: string, locale?: string): Promise<PostTranslation[]> {
@@ -617,9 +687,13 @@ export class DatabaseStorage implements IStorage {
     return translations;
   }
 
-  async getPostBySlugWithTranslations(slug: string, locale?: string): Promise<PostWithTranslations | undefined> {
+  async getPostBySlugWithTranslations(
+    slug: string,
+    locale?: string,
+    access: PostAccessContext = publicPostAccess,
+  ): Promise<PostWithTranslations | undefined> {
     const post = await this.getPostBySlug(slug);
-    if (!post) return undefined;
+    if (!post || !canReadPost(post, access)) return undefined;
 
     const [translations, meta] = await Promise.all([
       this.getLocalizedPostTranslations(post.id, post.primaryLocale, locale),
@@ -633,9 +707,13 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined> {
+  async getPostWithTranslations(
+    id: string,
+    locale?: string,
+    access: PostAccessContext = publicPostAccess,
+  ): Promise<PostWithTranslations | undefined> {
     const post = await this.getPost(id);
-    if (!post) return undefined;
+    if (!post || !canReadPost(post, access)) return undefined;
 
     const [translations, meta] = await Promise.all([
       this.getLocalizedPostTranslations(id, post.primaryLocale, locale),
@@ -664,6 +742,7 @@ export class DatabaseStorage implements IStorage {
     compact?: boolean;
     limit?: number;
     offset?: number;
+    access?: PostAccessContext;
   }): Promise<{ posts: PostWithTranslations[]; total: number }> {
     let query = db.select().from(posts);
     let countQuery = db.select({ count: count() }).from(posts);
@@ -674,12 +753,34 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(posts.postType, filters.postType as any));
     }
 
-    if (filters?.status) {
+    const access = filters?.access || publicPostAccess;
+
+    if (access.isAdmin && filters?.status) {
       conditions.push(eq(posts.status, filters.status as any));
+    } else if (!access.isAdmin) {
+      conditions.push(eq(posts.status, "published"));
     }
 
-    if (filters?.visibility) {
+    if (access.isAdmin && filters?.visibility) {
       conditions.push(eq(posts.visibility, filters.visibility as any));
+    } else if (!access.isAdmin) {
+      const readableVisibilities = ["public"];
+      if (access.canReadMembers) readableVisibilities.push("members");
+      if (access.canReadPremium) readableVisibilities.push("premium");
+
+      if (filters?.visibility && !readableVisibilities.includes(filters.visibility)) {
+        conditions.push(sql`FALSE`);
+      } else {
+        conditions.push(inArray(posts.visibility, readableVisibilities as any));
+      }
+      conditions.push(or(
+        isNull(posts.publishedAt),
+        lte(posts.publishedAt, new Date()),
+      )!);
+      conditions.push(or(
+        isNull(posts.expiresAt),
+        gt(posts.expiresAt, new Date()),
+      )!);
     }
 
     if (filters?.authorId) {

@@ -2,7 +2,7 @@ import { Router, type Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { insertPostSchema, insertPostTranslationSchema, insertEventRegistrationSchema } from "@shared/schema";
 import { z } from "zod";
-import { authenticateToken } from "../routes";
+import { authenticateToken, optionalAuthenticateToken } from "../routes";
 import "../types";
 
 const router = Router();
@@ -45,9 +45,13 @@ const postMetaPayloadSchema = z.object({
 });
 
 // GET /api/posts - List posts with filters
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const query = postQuerySchema.parse(req.query);
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
     
     // Parse tags from comma-separated string
     const tags = query.tags ? query.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined;
@@ -67,6 +71,7 @@ router.get("/", async (req: Request, res: Response) => {
       compact: query.compact === 'true',
       limit: query.limit,
       offset: query.offset,
+      access,
     });
     
     res.json(posts);
@@ -80,12 +85,16 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // GET /api/posts/slug/:slug - Get single post by slug with translations
-router.get("/slug/:slug", async (req: Request, res: Response) => {
+router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
     
     const locale = localeQuerySchema.parse(req.query.locale);
-    const post = await storage.getPostBySlugWithTranslations(slug, locale);
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
+    const post = await storage.getPostBySlugWithTranslations(slug, locale, access);
     
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
@@ -99,12 +108,16 @@ router.get("/slug/:slug", async (req: Request, res: Response) => {
 });
 
 // GET /api/posts/:id - Get single post by ID with translations
-router.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     const locale = localeQuerySchema.parse(req.query.locale);
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
     
-    const post = await storage.getPostWithTranslations(id, locale);
+    const post = await storage.getPostWithTranslations(id, locale, access);
     
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
@@ -126,7 +139,11 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
     const { id } = postIdSchema.parse(req.params);
     
     // Check if post exists and is an event (use getPostWithTranslations for consistency)
-    const post = await storage.getPostWithTranslations(id);
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
+    const post = await storage.getPostWithTranslations(id, undefined, access);
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -177,7 +194,8 @@ router.get("/:id/registrations", authenticateToken, requireAdmin, async (req: Re
     const { id } = postIdSchema.parse(req.params);
     
     // Check if post exists and is an event
-    const post = await storage.getPostWithTranslations(id);
+    const access = await storage.getPostAccessContext(undefined, true);
+    const post = await storage.getPostWithTranslations(id, undefined, access);
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
     }
@@ -316,10 +334,18 @@ router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Re
 });
 
 // GET /api/posts/:id/meta - Get post meta
-router.get("/:id/meta", async (req: Request, res: Response) => {
+router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     const key = req.query.key as string | undefined;
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
+    const post = await storage.getPostWithTranslations(id, undefined, access);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
     
     if (key) {
       // Get specific meta value

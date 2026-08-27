@@ -73,12 +73,27 @@ export async function setObjectAclPolicy(
 export async function getObjectAclPolicy(
   objectFile: File,
 ): Promise<ObjectAclPolicy | null> {
-  const [metadata] = await objectFile.getMetadata();
-  const aclPolicy = metadata?.metadata?.[ACL_POLICY_METADATA_KEY];
-  if (!aclPolicy) {
+  try {
+    const [metadata] = await objectFile.getMetadata();
+    const aclPolicy = metadata?.metadata?.[ACL_POLICY_METADATA_KEY];
+    if (!aclPolicy) {
+      return null;
+    }
+
+    const parsed = JSON.parse(aclPolicy as string) as Partial<ObjectAclPolicy>;
+    if (
+      typeof parsed.owner !== "string" ||
+      (parsed.visibility !== "public" && parsed.visibility !== "private") ||
+      (parsed.aclRules !== undefined && !Array.isArray(parsed.aclRules))
+    ) {
+      return null;
+    }
+
+    return parsed as ObjectAclPolicy;
+  } catch {
+    // Invalid or unreadable ACL metadata must never make an object public.
     return null;
   }
-  return JSON.parse(aclPolicy as string);
 }
 
 export async function canAccessObject({

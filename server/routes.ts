@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { canReadPost, publicPostAccess } from "./postAccess";
 import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, userMemberships, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -32,6 +33,20 @@ const inquiryQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+function toPublicMember(member: import("@shared/schema").Member) {
+  const {
+    userId,
+    address,
+    phone,
+    contactPerson,
+    contactEmail,
+    contactPhone,
+    membershipStatus,
+    ...publicMember
+  } = member;
+  return publicMember;
+}
 
 // Auth middleware
 export function authenticateToken(req: Request, res: Response, next: NextFunction) {
@@ -68,6 +83,33 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
       req.user = user;
     }
     
+    next();
+  });
+}
+
+// Public endpoints may use a valid token for member-only content, but an
+// absent or invalid token should simply be treated as anonymous.
+export function optionalAuthenticateToken(req: Request, _res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return next();
+
+  jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
+    if (err || !user?.id) return next();
+
+    if (!user.role) {
+      try {
+        const dbUser = await storage.getUser(user.id);
+        if (dbUser) {
+          req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
+        }
+      } catch {
+        // Fail closed for member content when the account cannot be loaded.
+      }
+    } else {
+      req.user = user;
+    }
     next();
   });
 }
@@ -426,7 +468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Members routes
-  app.get("/api/members", async (req, res) => {
+  app.get("/api/members", optionalAuthenticateToken, async (req, res) => {
     try {
       const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema.parse(req.query);
       const offset = (page - 1) * limit;
@@ -441,7 +483,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       res.json({
-        members: result.members,
+        members: req.user?.role === "admin"
+          ? result.members
+          : result.members.map(toPublicMember),
         total: result.total,
         page,
         totalPages: Math.ceil(result.total / limit),
@@ -454,13 +498,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/members/:id", async (req, res) => {
+  app.get("/api/members/:id", optionalAuthenticateToken, async (req, res) => {
     try {
       const member = await storage.getMember(req.params.id);
       if (!member) {
         return res.status(404).json({ message: "Member not found" });
       }
-      res.json(member);
+
+      const canViewPrivateMember =
+        req.user?.role === "admin" || member.userId === req.user?.id;
+      if (!member.isPublic && !canViewPrivateMember) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+
+      res.json(canViewPrivateMember ? member : toPublicMember(member));
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -785,10 +836,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get("/api/admin/dashboard", authenticateToken, requireAdmin, async (req, res) => {
     try {
+      const adminPostAccess = await storage.getPostAccessContext(req.user!.id, true);
       const [membersResult, eventsResult, newsResult, inquiriesResult] = await Promise.all([
         storage.getMembers({ limit: 1 }),
-        storage.getPosts({ postType: 'event', limit: 1 }),
-        storage.getPosts({ postType: 'news', limit: 1 }),
+        storage.getPosts({ postType: 'event', limit: 1, access: adminPostAccess }),
+        storage.getPosts({ postType: 'news', limit: 1, access: adminPostAccess }),
         storage.getInquiries({ limit: 1 }),
       ]);
 
@@ -834,8 +886,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Endpoint for setting ACL after upload (admin only)
   app.put("/api/images", authenticateToken, requireAdmin, async (req, res) => {
-    if (!req.body.imageURL) {
-      return res.status(400).json({ error: "imageURL is required" });
+    const aclPayloadSchema = z.object({
+      imageURL: z.string().min(1),
+      visibility: z.enum(["public", "private"]).default("private"),
+    });
+
+    const parsedPayload = aclPayloadSchema.safeParse(req.body);
+    if (!parsedPayload.success) {
+      return res.status(400).json({ error: "imageURL and a valid visibility are required" });
     }
 
     const userId = req.user?.id || '';
@@ -843,10 +901,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const objectStorageService = new ObjectStorageService();
       const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.imageURL,
+        parsedPayload.data.imageURL,
         {
           owner: userId,
-          visibility: "public", // News/event images should be public
+          visibility: parsedPayload.data.visibility,
         },
       );
 
@@ -874,14 +932,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Endpoint for serving uploaded objects (public read)
-  app.get("/objects/:objectPath(*)", async (req, res) => {
+  // Endpoint for serving uploaded objects. Every object must have an ACL;
+  // resource objects also inherit the post's published visibility policy.
+  app.get("/objects/:objectPath(*)", optionalAuthenticateToken, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(
         req.path,
       );
-      objectStorageService.downloadObject(objectFile, res);
+      const aclPolicy = await objectStorageService.getObjectEntityAclPolicy(objectFile);
+      if (!aclPolicy) {
+        return res.sendStatus(403);
+      }
+
+      const objectAclAllowed = req.user?.role === "admin" ||
+        await objectStorageService.canAccessObjectEntity({
+          userId: req.user?.id,
+          objectFile,
+        });
+      const linkedPost = await storage.getPostByObjectPath(req.path);
+
+      let allowed = objectAclAllowed;
+      if (linkedPost) {
+        const postAccess = await storage.getPostAccessContext(
+          req.user?.id,
+          req.user?.role === "admin",
+        );
+        const postAllowed = canReadPost(linkedPost, postAccess);
+        const postIsPublic = canReadPost(linkedPost, publicPostAccess);
+
+        // A private resource object is granted through the post policy, but
+        // public resources still require an explicitly public object ACL.
+        allowed = postAllowed && (!postIsPublic || aclPolicy.visibility === "public");
+      }
+
+      if (!allowed) {
+        return res.sendStatus(403);
+      }
+
+      await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error serving object:", error);
       if (error instanceof ObjectNotFoundError) {
