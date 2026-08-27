@@ -15,8 +15,9 @@ import {
 
 export default function Header() {
   const [location] = useLocation();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const canAccessAdmin = isAdmin || hasAnyPermission(['news.read', 'event.read', 'resource.read']);
 
   const navigation = [
     { name: t('nav.home'), href: '/' },
@@ -100,7 +101,7 @@ export default function Header() {
                       {t('nav.dashboard')}
                     </DropdownMenuItem>
                   </Link>
-                  {user?.role === 'admin' && (
+                  {canAccessAdmin && (
                     <Link href="/admin">
                       <DropdownMenuItem>
                         {t('nav.admin')}
@@ -176,7 +177,7 @@ export default function Header() {
                           {t('nav.dashboard')}
                         </Button>
                       </Link>
-                      {user?.role === 'admin' && (
+                      {canAccessAdmin && (
                         <Link href="/admin" onClick={() => setMobileOpen(false)}>
                           <Button variant="ghost" className="w-full justify-start">
                             {t('nav.admin')}

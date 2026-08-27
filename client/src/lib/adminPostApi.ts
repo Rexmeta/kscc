@@ -70,7 +70,7 @@ export async function updatePost({ postId, post, translation, meta }: UpdatePost
   }
 
   // Return updated post using apiRequest for consistent auth/error handling
-  const response = await apiRequest('GET', `/api/posts/${postId}`);
+  const response = await apiRequest('GET', `/api/posts/${postId}?admin=true`);
   return response.json();
 }
 

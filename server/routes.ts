@@ -8,7 +8,7 @@ import { z } from "zod";
 import { sql, eq, and } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
-import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission } from "./permissions";
+import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission, requireAnyPermission } from "./permissions";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
@@ -97,17 +97,16 @@ export function optionalAuthenticateToken(req: Request, _res: Response, next: Ne
   jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
     if (err || !user?.id) return next();
 
-    if (!user.role) {
-      try {
-        const dbUser = await storage.getUser(user.id);
-        if (dbUser) {
-          req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
-        }
-      } catch {
-        // Fail closed for member content when the account cannot be loaded.
+    try {
+      // Optional authentication still needs the current account state.
+      // Otherwise a demoted or deactivated account could retain access to
+      // member-only content through a stale token claim.
+      const dbUser = await storage.getUser(user.id);
+      if (dbUser?.isActive) {
+        req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
       }
-    } else {
-      req.user = user;
+    } catch {
+      // Fail closed for member content when the account cannot be loaded.
     }
     next();
   });
@@ -849,8 +848,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Object Storage routes (Reference: blueprint:javascript_object_storage)
-  // Endpoint for getting upload URL (admin only)
-  app.post("/api/objects/upload", authenticateToken, requireAdmin, async (req, res) => {
+  // Endpoint for getting upload URL for managed content
+  app.post(
+    "/api/objects/upload",
+    authenticateToken,
+    requireAnyPermission("news.create", "event.create", "resource.upload"),
+    async (req, res) => {
     try {
       const { contentType } = req.body || {};
       const objectStorageService = new ObjectStorageService();
@@ -873,10 +876,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  });
+    },
+  );
 
-  // Endpoint for setting ACL after upload (admin only)
-  app.put("/api/images", authenticateToken, requireAdmin, async (req, res) => {
+  // Endpoint for setting ACL after upload for managed content
+  app.put(
+    "/api/images",
+    authenticateToken,
+    requireAnyPermission("news.create", "event.create", "resource.upload"),
+    async (req, res) => {
     const aclPayloadSchema = z.object({
       imageURL: z.string().min(1),
       visibility: z.enum(["public", "private"]).default("private"),
@@ -921,7 +929,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error setting image ACL:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  });
+    },
+  );
 
   // Endpoint for serving uploaded objects. Every object must have an ACL;
   // resource objects also inherit the post's published visibility policy.

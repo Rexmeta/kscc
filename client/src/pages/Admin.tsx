@@ -16,27 +16,45 @@ const OrganizationTab = lazy(() => import('@/components/admin/tabs/OrganizationT
 const InquiriesTab = lazy(() => import('@/components/admin/tabs/InquiriesTab').then((module) => ({ default: module.InquiriesTab })));
 const ManualTab = lazy(() => import('@/components/admin/tabs/ManualTab').then((module) => ({ default: module.ManualTab })));
 
+const boardTabConfig = [
+  { tab: 'articles', permission: 'news.read' },
+  { tab: 'events', permission: 'event.read' },
+  { tab: 'resources', permission: 'resource.read' },
+] as const;
+
 export default function AdminPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const urlTab = params.get('tab') || 'dashboard';
-  const urlAction = params.get('action');
 
   const [activeTab, setActiveTab] = useState(urlTab);
   const [createNewsDialogOpen, setCreateNewsDialogOpen] = useState(false);
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const [createResourceDialogOpen, setCreateResourceDialogOpen] = useState(false);
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading, hasPermission } = useAuth();
+  const boardTabs = boardTabConfig
+    .filter(({ permission }) => isAdmin || hasPermission(permission))
+    .map(({ tab }) => tab);
+  const hasManual = isAdmin || user?.role === 'operator';
+  const allowedTabs = isAdmin
+    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'partners', ...(hasManual ? ['manual'] : [])]
+    : [...boardTabs, ...(hasManual ? ['manual'] : [])];
+  const allowedTabsKey = allowedTabs.join(',');
+  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || 'dashboard';
+  const canAccessAdmin = isAdmin || boardTabs.length > 0;
 
   useEffect(() => {
+    if (loading) return;
+
     const newParams = new URLSearchParams(search);
-    const tab = newParams.get('tab') || 'dashboard';
+    const requestedTab = newParams.get('tab') || defaultTab;
     const action = newParams.get('action');
+    const tab = allowedTabs.includes(requestedTab) ? requestedTab : defaultTab;
 
     setActiveTab(tab);
 
-    if (action === 'create') {
+    if (action === 'create' && tab === requestedTab) {
       if (tab === 'articles' || tab === 'news') {
         setCreateNewsDialogOpen(true);
       } else if (tab === 'events') {
@@ -45,23 +63,32 @@ export default function AdminPage() {
         setCreateResourceDialogOpen(true);
       }
       navigate(`/admin?tab=${tab}`, { replace: true });
+    } else if (tab !== requestedTab) {
+      navigate(`/admin?tab=${tab}`, { replace: true });
     }
-  }, [search]);
+  }, [search, loading, defaultTab, allowedTabsKey]);
 
   const handleTabChange = (newTab: string) => {
+    if (!allowedTabs.includes(newTab)) return;
     setActiveTab(newTab);
     navigate(`/admin?tab=${newTab}`, { replace: true });
   };
 
-  if (!isAdmin) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-muted-foreground">관리자만 접근 가능합니다.</p>
+        <p className="text-muted-foreground">권한 확인 중...</p>
       </div>
     );
   }
 
-  const hasManual = user?.role === 'admin' || user?.role === 'operator';
+  if (!canAccessAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">게시판 관리 권한이 없습니다.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,16 +100,16 @@ export default function AdminPage() {
                 <SelectValue placeholder="메뉴 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="dashboard" data-testid="option-tab-dashboard">대시보드</SelectItem>
-                <SelectItem value="users" data-testid="option-tab-users">사용자</SelectItem>
-                <SelectItem value="members" data-testid="option-tab-members">회원</SelectItem>
-                <SelectItem value="articles" data-testid="option-tab-articles">뉴스</SelectItem>
-                <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>
-                <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>
-                <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>
-                <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>
-                <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>
-                <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>
+                {isAdmin && <SelectItem value="dashboard" data-testid="option-tab-dashboard">대시보드</SelectItem>}
+                {isAdmin && <SelectItem value="users" data-testid="option-tab-users">사용자</SelectItem>}
+                {isAdmin && <SelectItem value="members" data-testid="option-tab-members">회원</SelectItem>}
+                {allowedTabs.includes('articles') && <SelectItem value="articles" data-testid="option-tab-articles">뉴스</SelectItem>}
+                {allowedTabs.includes('events') && <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>}
+                {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
+                {isAdmin && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
+                {isAdmin && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
+                {isAdmin && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
+                {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                 {hasManual && (
                   <SelectItem value="manual" data-testid="option-tab-manual">매뉴얼</SelectItem>
                 )}
@@ -92,16 +119,16 @@ export default function AdminPage() {
 
           <div className="hidden md:block overflow-x-auto">
             <TabsList className="inline-flex w-max min-w-full gap-1">
-              <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm whitespace-nowrap">대시보드</TabsTrigger>
-              <TabsTrigger value="users" data-testid="tab-users" className="text-sm whitespace-nowrap">사용자</TabsTrigger>
-              <TabsTrigger value="members" data-testid="tab-members" className="text-sm whitespace-nowrap">회원</TabsTrigger>
-              <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm whitespace-nowrap">뉴스</TabsTrigger>
-              <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>
-              <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>
-              <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>
-              <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>
-              <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>
-              <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>
+              {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm whitespace-nowrap">대시보드</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="users" data-testid="tab-users" className="text-sm whitespace-nowrap">사용자</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="members" data-testid="tab-members" className="text-sm whitespace-nowrap">회원</TabsTrigger>}
+              {allowedTabs.includes('articles') && <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm whitespace-nowrap">뉴스</TabsTrigger>}
+              {allowedTabs.includes('events') && <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>}
+              {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
               {hasManual && (
                 <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm whitespace-nowrap">매뉴얼</TabsTrigger>
               )}
@@ -109,34 +136,34 @@ export default function AdminPage() {
           </div>
 
           <Suspense fallback={<div className="py-12 text-center text-muted-foreground">로딩 중...</div>}>
-            {activeTab === 'dashboard' && <DashboardTab activeTab={activeTab} />}
-            {activeTab === 'users' && <UsersTab activeTab={activeTab} />}
-            {activeTab === 'members' && <MembersTab activeTab={activeTab} />}
-            {activeTab === 'articles' && (
+            {isAdmin && activeTab === 'dashboard' && <DashboardTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'users' && <UsersTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'members' && <MembersTab activeTab={activeTab} />}
+            {allowedTabs.includes('articles') && activeTab === 'articles' && (
               <ArticlesTab
                 activeTab={activeTab}
                 createNewsDialogOpen={createNewsDialogOpen}
                 setCreateNewsDialogOpen={setCreateNewsDialogOpen}
               />
             )}
-            {activeTab === 'events' && (
+            {allowedTabs.includes('events') && activeTab === 'events' && (
               <EventsTab
                 activeTab={activeTab}
                 createEventDialogOpen={createEventDialogOpen}
                 setCreateEventDialogOpen={setCreateEventDialogOpen}
               />
             )}
-            {activeTab === 'resources' && (
+            {allowedTabs.includes('resources') && activeTab === 'resources' && (
               <ResourcesTab
                 activeTab={activeTab}
                 createResourceDialogOpen={createResourceDialogOpen}
                 setCreateResourceDialogOpen={setCreateResourceDialogOpen}
               />
             )}
-            {activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
-            {activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
-            {activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
-            {activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
+            {isAdmin && activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
             {activeTab === 'manual' && hasManual && <ManualTab />}
           </Suspense>
         </Tabs>

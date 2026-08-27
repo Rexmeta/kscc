@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { deletePost } from '@/lib/adminPostApi';
 import type { PostWithTranslations } from '@shared/schema';
 import { CreateResourceDialog } from '../forms/CreateResourceDialog';
@@ -21,10 +22,14 @@ interface ResourcesTabProps {
 export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateResourceDialogOpen }: ResourcesTabProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin, hasPermission } = useAuth();
   const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: resourcesData } = useAdminPosts('resource', activeTab);
+  const canCreate = isAdmin || hasPermission('resource.upload');
+  const canUpdate = isAdmin || hasPermission('resource.update');
+  const canDelete = isAdmin || hasPermission('resource.delete');
 
   const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
 
@@ -32,15 +37,19 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
     <TabsContent value="resources" className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">자료 관리</h2>
-        <Button onClick={() => setCreateResourceDialogOpen(true)} data-testid="button-create-resource">
-          <Plus className="h-4 w-4 mr-1" />
-          자료 생성
-        </Button>
-        <CreateResourceDialog
-          onSuccess={invalidate}
-          open={createResourceDialogOpen}
-          onOpenChange={setCreateResourceDialogOpen}
-        />
+        {canCreate && (
+          <>
+            <Button onClick={() => setCreateResourceDialogOpen(true)} data-testid="button-create-resource">
+              <Plus className="h-4 w-4 mr-1" />
+              자료 생성
+            </Button>
+            <CreateResourceDialog
+              onSuccess={invalidate}
+              open={createResourceDialogOpen}
+              onOpenChange={setCreateResourceDialogOpen}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-4">
@@ -55,7 +64,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
               </div>
             </div>
             <div className="flex space-x-2">
-              <Button
+              {canUpdate && <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
@@ -65,8 +74,8 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
                 data-testid={`button-edit-resource-${resource.id}`}
               >
                 <Edit className="h-4 w-4" />
-              </Button>
-              <Button
+              </Button>}
+              {canDelete && <Button
                 size="sm"
                 variant="ghost"
                 onClick={async () => {
@@ -83,7 +92,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
                 data-testid={`button-delete-resource-${resource.id}`}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              </Button>}
             </div>
           </div>
         ))}

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import type { PostWithTranslations } from '@shared/schema';
@@ -24,25 +25,33 @@ export function ArticlesTab({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin, hasPermission } = useAuth();
   const [selectedArticle, setSelectedArticle] = useState<PostWithTranslations | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: newsData } = useAdminPosts('news', activeTab);
+  const canCreate = isAdmin || hasPermission('news.create');
+  const canUpdate = isAdmin || hasPermission('news.update');
+  const canDelete = isAdmin || hasPermission('news.delete');
 
   return (
     <TabsContent value="articles" className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">뉴스 관리</h2>
-        <Button onClick={() => setCreateNewsDialogOpen(true)} data-testid="button-create-news">
-          <Plus className="h-4 w-4 mr-1" />
-          뉴스 생성
-        </Button>
-        <CreateNewsDialog
-          open={createNewsDialogOpen}
-          onOpenChange={setCreateNewsDialogOpen}
-          onSuccess={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' })}
-        />
+        {canCreate && (
+          <>
+            <Button onClick={() => setCreateNewsDialogOpen(true)} data-testid="button-create-news">
+              <Plus className="h-4 w-4 mr-1" />
+              뉴스 생성
+            </Button>
+            <CreateNewsDialog
+              open={createNewsDialogOpen}
+              onOpenChange={setCreateNewsDialogOpen}
+              onSuccess={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' })}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-4">
@@ -77,7 +86,7 @@ export function ArticlesTab({
               </div>
             </div>
             <div className="flex space-x-2">
-              <Button
+              {canUpdate && <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
@@ -87,8 +96,8 @@ export function ArticlesTab({
                 data-testid={`button-edit-news-${article.id}`}
               >
                 <Edit className="h-4 w-4" />
-              </Button>
-              <Button
+              </Button>}
+              {canDelete && <Button
                 size="sm"
                 variant="ghost"
                 onClick={async () => {
@@ -105,7 +114,7 @@ export function ArticlesTab({
                 data-testid={`button-delete-news-${article.id}`}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              </Button>}
             </div>
           </div>
         ))}
@@ -153,7 +162,7 @@ export function ArticlesTab({
                     })()}
                   </div>
                 </div>
-                <Button
+                {canUpdate && <Button
                   variant="outline"
                   onClick={() => {
                     setViewDialogOpen(false);
@@ -165,7 +174,7 @@ export function ArticlesTab({
                 >
                   <Edit className="h-4 w-4 mr-2" />
                   수정
-                </Button>
+                </Button>}
               </div>
             </DialogHeader>
 

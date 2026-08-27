@@ -1,18 +1,55 @@
-import { Router, type Request, Response, NextFunction } from "express";
+import { Router, type Request, Response } from "express";
 import { storage } from "../storage";
 import { insertPostSchema, insertPostTranslationSchema, insertEventRegistrationSchema } from "@shared/schema";
 import { ObjectStorageService, getResourceObjectAclVisibility } from "../objectStorage";
 import type { Post } from "@shared/schema";
 import { z } from "zod";
 import { authenticateToken, optionalAuthenticateToken } from "../routes";
+import { hasPermission } from "../permissions";
+import {
+  getPostPermissionKey,
+  isManagedPostType,
+  type PostAction,
+} from "../postPermissions";
 import "../types";
 
 const router = Router();
 
-// Middleware to require admin access
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ message: 'Admin access required' });
+async function canManagePost(
+  req: Request,
+  postType: string,
+  action: PostAction,
+): Promise<boolean> {
+  if (req.user?.role === "admin") return true;
+  if (!req.user?.id || !isManagedPostType(postType)) return false;
+
+  const permission = getPostPermissionKey(postType, action);
+  return permission ? hasPermission(req.user.id, permission) : false;
+}
+
+async function requirePostPermission(
+  req: Request,
+  res: Response,
+  postType: string,
+  action: PostAction,
+): Promise<boolean> {
+  if (!req.user?.id) {
+    res.status(401).json({ message: "Authentication required" });
+    return false;
+  }
+
+  if (await canManagePost(req, postType, action)) return true;
+
+  res.status(403).json({
+    message: "Insufficient permissions",
+    required: isManagedPostType(postType) ? getPostPermissionKey(postType, action) : undefined,
+  });
+  return false;
+}
+
+function requireAdmin(req: Request, res: Response, next: () => void) {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ message: "Admin access required" });
   }
   next();
 }
@@ -28,6 +65,7 @@ const postQuerySchema = z.object({
   search: z.string().optional(), // Search term for title/content/excerpt/slug
   upcoming: z.enum(['true', 'false']).optional(), // Filter for upcoming events (eventDate > now)
   compact: z.enum(['true', 'false']).optional(),
+  admin: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
@@ -66,9 +104,17 @@ async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<void>
 router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const query = postQuerySchema.parse(req.query);
+    const adminMode = query.admin === "true";
+    if (adminMode) {
+      if (!query.postType) {
+        return res.status(400).json({ message: "postType is required for admin post lists" });
+      }
+      if (!await requirePostPermission(req, res, query.postType, "read")) return;
+    }
+
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
     
     // Parse tags from comma-separated string
@@ -108,9 +154,19 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
     const { slug } = req.params;
     
     const locale = localeQuerySchema.parse(req.query.locale);
+    const adminMode = req.query.admin === "true";
+    let adminPostType: string | undefined;
+    if (adminMode) {
+      const adminPost = await storage.getPostBySlug(slug);
+      if (!adminPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      adminPostType = adminPost.postType;
+      if (!await requirePostPermission(req, res, adminPostType, "read")) return;
+    }
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
     const post = await storage.getPostBySlugWithTranslations(slug, locale, access);
     
@@ -130,9 +186,19 @@ router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response
   try {
     const { id } = postIdSchema.parse(req.params);
     const locale = localeQuerySchema.parse(req.query.locale);
+    const adminMode = req.query.admin === "true";
+    let adminPostType: string | undefined;
+    if (adminMode) {
+      const adminPost = await storage.getPost(id);
+      if (!adminPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      adminPostType = adminPost.postType;
+      if (!await requirePostPermission(req, res, adminPostType, "read")) return;
+    }
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
     
     const post = await storage.getPostWithTranslations(id, locale, access);
@@ -207,9 +273,10 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
 });
 
 // GET /api/posts/:id/registrations - Get all registrations for an event (Admin only)
-router.get("/:id/registrations", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.get("/:id/registrations", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
+    if (!await requirePostPermission(req, res, "event", "attendeeManage")) return;
     
     // Check if post exists and is an event
     const access = await storage.getPostAccessContext(undefined, true);
@@ -242,9 +309,12 @@ function generateSlug(postType: string): string {
 }
 
 // POST /api/posts - Create new post
-router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post("/", authenticateToken, async (req: Request, res: Response) => {
   try {
     const postData = insertPostSchema.parse(req.body);
+    if (!await requirePostPermission(req, res, postData.postType, "create")) return;
+    if (postData.status === "published" &&
+      !await requirePostPermission(req, res, postData.postType, "publish")) return;
     
     // Set author to current user if not provided
     const authorId = postData.authorId || req.user?.id;
@@ -274,7 +344,7 @@ router.post("/", authenticateToken, requireAdmin, async (req: Request, res: Resp
 });
 
 // PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -283,10 +353,14 @@ router.patch("/:id", authenticateToken, requireAdmin, async (req: Request, res: 
     if (!existingPost) {
       return res.status(404).json({ message: "Post not found" });
     }
+    if (!await requirePostPermission(req, res, existingPost.postType, "update")) return;
     
     // Validate update data (partial)
     const updateSchema = insertPostSchema.partial();
     const updateData = updateSchema.parse(req.body);
+    if (updateData.status === "published" &&
+      existingPost.status !== "published" &&
+      !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
     
     const updatedPost = await storage.updatePost(id, updateData);
     
@@ -305,7 +379,7 @@ router.patch("/:id", authenticateToken, requireAdmin, async (req: Request, res: 
 });
 
 // DELETE /api/posts/:id - Delete post
-router.delete("/:id", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.delete("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -314,6 +388,7 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req: Request, res:
     if (!existingPost) {
       return res.status(404).json({ message: "Post not found" });
     }
+    if (!await requirePostPermission(req, res, existingPost.postType, "delete")) return;
     
     await storage.deletePost(id);
     
@@ -328,7 +403,7 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req: Request, res:
 });
 
 // POST /api/posts/:id/translations - Upsert translation
-router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post("/:id/translations", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -337,6 +412,7 @@ router.post("/:id/translations", authenticateToken, requireAdmin, async (req: Re
     if (!existingPost) {
       return res.status(404).json({ message: "Post not found" });
     }
+    if (!await requirePostPermission(req, res, existingPost.postType, "update")) return;
     
     const translationData = insertPostTranslationSchema.omit({ postId: true }).parse(req.body);
 
@@ -388,7 +464,7 @@ router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Res
 });
 
 // POST /api/posts/:id/meta - Set post meta
-router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post("/:id/meta", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -397,6 +473,7 @@ router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, r
     if (!existingPost) {
       return res.status(404).json({ message: "Post not found" });
     }
+    if (!await requirePostPermission(req, res, existingPost.postType, "update")) return;
     
     const metaData = postMetaPayloadSchema.parse(req.body);
     

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Edit, Trash2, Calendar, MapPin, Users, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import type { PostWithTranslations } from '@shared/schema';
@@ -23,11 +24,16 @@ interface EventsTabProps {
 export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDialogOpen }: EventsTabProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin, hasPermission } = useAuth();
   const [selectedEvent, setSelectedEvent] = useState<PostWithTranslations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
 
   const { data: eventsData } = useAdminPosts('event', activeTab);
+  const canCreate = isAdmin || hasPermission('event.create');
+  const canUpdate = isAdmin || hasPermission('event.update');
+  const canDelete = isAdmin || hasPermission('event.delete');
+  const canManageAttendees = isAdmin || hasPermission('event.attendee.manage');
 
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
@@ -50,15 +56,19 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
     <TabsContent value="events" className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">행사 관리</h2>
-        <Button onClick={() => setCreateEventDialogOpen(true)} data-testid="button-create-event">
-          <Plus className="h-4 w-4 mr-1" />
-          행사 생성
-        </Button>
-        <CreateEventDialog
-          onSuccess={invalidate}
-          open={createEventDialogOpen}
-          onOpenChange={setCreateEventDialogOpen}
-        />
+        {canCreate && (
+          <>
+            <Button onClick={() => setCreateEventDialogOpen(true)} data-testid="button-create-event">
+              <Plus className="h-4 w-4 mr-1" />
+              행사 생성
+            </Button>
+            <CreateEventDialog
+              onSuccess={invalidate}
+              open={createEventDialogOpen}
+              onOpenChange={setCreateEventDialogOpen}
+            />
+          </>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -99,7 +109,7 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
                 </div>
               </div>
               <div className="flex space-x-2">
-                <Button
+                {canManageAttendees && <Button
                   size="sm"
                   variant="outline"
                   onClick={() => {
@@ -109,8 +119,8 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
                   data-testid={`button-view-registrations-${event.id}`}
                 >
                   <Users className="h-4 w-4" />
-                </Button>
-                <Button
+                </Button>}
+                {canUpdate && <Button
                   size="sm"
                   variant="outline"
                   onClick={() => {
@@ -120,8 +130,8 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
                   data-testid={`button-edit-event-${event.id}`}
                 >
                   <Edit className="h-4 w-4" />
-                </Button>
-                <Button
+                </Button>}
+                {canDelete && <Button
                   size="sm"
                   variant="ghost"
                   onClick={async () => {
@@ -138,7 +148,7 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
                   data-testid={`button-delete-event-${event.id}`}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                </Button>}
               </div>
             </div>
           );

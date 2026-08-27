@@ -26,18 +26,19 @@ export function useAdminPosts(
   postType: 'news' | 'event' | 'resource' | 'page',
   activeTab: string
 ) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
   const tabNames: Record<typeof postType, string> = {
     news: 'articles',
     event: 'events',
     resource: 'resources',
     page: 'pages',
   };
+  const canRead = isAdmin || hasPermission(`${postType}.read`);
   return useQuery<PostsResponse>({
     queryKey: queryKeys.posts.list({ postType, admin: true }),
     queryFn: () =>
       fetchJson<PostsResponse>(`/api/posts?postType=${postType}&admin=true`),
-    enabled: isAdmin && activeTab === tabNames[postType],
+    enabled: canRead && activeTab === tabNames[postType],
   });
 }
 
