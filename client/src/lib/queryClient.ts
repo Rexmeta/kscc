@@ -1,9 +1,28 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+export class ApiRequestError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseBody: unknown,
+    responseText: string,
+  ) {
+    super(`${status}: ${responseText}`);
+    this.name = "ApiRequestError";
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let responseBody: unknown;
+
+    try {
+      responseBody = JSON.parse(text);
+    } catch {
+      responseBody = undefined;
+    }
+
+    throw new ApiRequestError(res.status, responseBody, text);
   }
 }
 

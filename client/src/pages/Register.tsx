@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
+import { ApiRequestError } from '@/lib/queryClient';
 
 const companySchema = z.object({
   name: z.string().min(2, '이름은 2자 이상이어야 합니다'),
@@ -29,6 +30,27 @@ const companySchema = z.object({
 });
 
 type RegisterForm = z.infer<typeof companySchema>;
+
+const DEFAULT_REGISTER_ERROR = "회원가입 중 오류가 발생했습니다.";
+
+function getRegisterErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiRequestError)) {
+    return DEFAULT_REGISTER_ERROR;
+  }
+
+  const responseBody = error.responseBody;
+  if (
+    responseBody !== null &&
+    typeof responseBody === "object" &&
+    "message" in responseBody &&
+    typeof responseBody.message === "string" &&
+    responseBody.message.trim()
+  ) {
+    return responseBody.message;
+  }
+
+  return DEFAULT_REGISTER_ERROR;
+}
 
 export default function RegisterPage() {
   const [userType, setUserType] = useState<'staff' | 'company'>('staff');
@@ -98,7 +120,7 @@ export default function RegisterPage() {
     } catch (error) {
       toast({
         title: "회원가입 실패",
-        description: "회원가입 중 오류가 발생했습니다.",
+        description: getRegisterErrorMessage(error),
         variant: "destructive",
       });
     }

@@ -149,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+      res.status(500).json({ message: "회원가입 처리 중 오류가 발생했습니다." });
     }
   });
 
