@@ -78,7 +78,7 @@ export default function Footer() {
             <div className="space-y-2 text-sm opacity-75">
               <div className="flex items-start gap-2">
                 <Building2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>서울 강남구 테헤란로 123<br />한중빌딩 10층</span>
+                <span>{t('contact.office.addressValue')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 flex-shrink-0" />

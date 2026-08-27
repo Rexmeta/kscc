@@ -19,6 +19,7 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       connectSrc: ["'self'", "ws:", "wss:", "https://storage.googleapis.com"],
+      frameSrc: ["'self'", "https://www.openstreetmap.org"],
     },
   },
   crossOriginEmbedderPolicy: false,

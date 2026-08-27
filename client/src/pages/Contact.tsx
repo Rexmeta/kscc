@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Phone, Mail, Clock, MessageSquare, Linkedin, Send, Edit } from 'lucide-react';
+import { Building2, Phone, Mail, Clock, MessageSquare, Linkedin, Send, Edit, MapPin, ExternalLink } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,6 +30,9 @@ const inquirySchema = z.object({
 });
 
 type InquiryForm = z.infer<typeof inquirySchema>;
+
+const OFFICE_MAP_URL = 'https://www.openstreetmap.org/export/embed.html?bbox=127.0715%2C37.2038%2C127.0770%2C37.2094&layer=mapnik&marker=37.2066154%2C127.0742566';
+const OFFICE_EXTERNAL_MAP_URL = 'https://www.openstreetmap.org/?mlat=37.2066154&mlon=127.0742566#map=18/37.2066154/127.0742566';
 
 interface ContactContent {
   office: {
@@ -285,8 +288,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <div className="font-medium text-foreground mb-1">{t('contact.office.address')}</div>
-                      <div className="text-sm text-muted-foreground">서울특별시 강남구 테헤란로 123</div>
-                      <div className="text-sm text-muted-foreground">한중빌딩 10층 (우: 06234)</div>
+                      <div className="text-sm text-muted-foreground">{t('contact.office.addressValue')}</div>
                     </div>
                   </div>
                   
@@ -356,20 +358,45 @@ export default function ContactPage() {
                 </div>
               </Card>
               
-              {/* Map Placeholder */}
+              {/* Office Map */}
               <Card className="overflow-hidden">
-                <div className="relative h-64 bg-muted">
-                  <img 
-                    src="https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400" 
-                    alt="Seoul Gangnam district map" 
-                    className="h-full w-full object-cover opacity-60"
+                <div className="border-b border-border bg-card p-6">
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                    <MapPin className="h-5 w-5 text-primary" aria-hidden="true" />
+                    {t('contact.office.mapTitle')}
+                  </h3>
+                  <p className="mt-2 text-sm text-muted-foreground">{t('contact.office.addressValue')}</p>
+                </div>
+                <div className="relative aspect-[4/3] min-h-[16rem] w-full bg-muted sm:aspect-video">
+                  <iframe
+                    src={OFFICE_MAP_URL}
+                    title={t('contact.office.mapTitle')}
+                    className="absolute inset-0 h-full w-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
                   />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="rounded-lg bg-white/90 p-4 text-center backdrop-blur-sm">
-                      <Building2 className="mx-auto mb-2 h-8 w-8 text-primary" />
-                      <div className="text-sm font-medium">지도에서 보기</div>
-                    </div>
-                  </div>
+                </div>
+                <div className="space-y-2 bg-card p-4 text-sm">
+                  <a
+                    href={OFFICE_EXTERNAL_MAP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    {t('contact.office.openMap')}
+                  </a>
+                  <p className="text-xs text-muted-foreground">
+                    {t('contact.office.mapAttribution')}{' '}
+                    <a
+                      href="https://www.openstreetmap.org/copyright"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-foreground"
+                    >
+                      OpenStreetMap
+                    </a>
+                  </p>
                 </div>
               </Card>
             </div>

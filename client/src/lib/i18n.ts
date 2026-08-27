@@ -167,12 +167,16 @@ export interface TranslationKeys {
   'contact.form.send': string;
   'contact.office.title': string;
   'contact.office.address': string;
+  'contact.office.addressValue': string;
   'contact.office.phone': string;
   'contact.office.email': string;
   'contact.office.hours': string;
   'contact.office.weekdays': string;
   'contact.office.lunch': string;
   'contact.office.weekend': string;
+  'contact.office.mapTitle': string;
+  'contact.office.openMap': string;
+  'contact.office.mapAttribution': string;
 
   // Auth
   'auth.login.title': string;
@@ -410,12 +414,16 @@ const translations: Record<Language, TranslationKeys> = {
     'contact.form.send': '문의 보내기',
     'contact.office.title': '사무국 정보',
     'contact.office.address': '주소',
+    'contact.office.addressValue': '경기 화성시 동탄구 동탄중심상가2길 26-15, 601호',
     'contact.office.phone': '전화',
     'contact.office.email': '이메일',
     'contact.office.hours': '운영 시간',
     'contact.office.weekdays': '평일 09:00-18:00',
     'contact.office.lunch': '점심시간 12:00-13:00',
     'contact.office.weekend': '주말 및 공휴일 휴무',
+    'contact.office.mapTitle': '사무국 위치',
+    'contact.office.openMap': '외부 지도에서 열기',
+    'contact.office.mapAttribution': '지도 데이터:',
 
     // Auth
     'auth.login.title': '로그인',
@@ -651,12 +659,16 @@ const translations: Record<Language, TranslationKeys> = {
     'contact.form.send': 'Send Inquiry',
     'contact.office.title': 'Office Information',
     'contact.office.address': 'Address',
+    'contact.office.addressValue': '경기 화성시 동탄구 동탄중심상가2길 26-15, 601호',
     'contact.office.phone': 'Phone',
     'contact.office.email': 'Email',
     'contact.office.hours': 'Operating Hours',
     'contact.office.weekdays': 'Weekdays 09:00-18:00',
     'contact.office.lunch': 'Lunch 12:00-13:00',
     'contact.office.weekend': 'Closed on weekends and holidays',
+    'contact.office.mapTitle': 'Office Location',
+    'contact.office.openMap': 'Open in external map',
+    'contact.office.mapAttribution': 'Map data:',
 
     // Auth
     'auth.login.title': 'Login',
@@ -892,12 +904,16 @@ const translations: Record<Language, TranslationKeys> = {
     'contact.form.send': '发送咨询',
     'contact.office.title': '办公室信息',
     'contact.office.address': '地址',
+    'contact.office.addressValue': '경기 화성시 동탄구 동탄중심상가2길 26-15, 601호',
     'contact.office.phone': '电话',
     'contact.office.email': '邮箱',
     'contact.office.hours': '营业时间',
     'contact.office.weekdays': '工作日 09:00-18:00',
     'contact.office.lunch': '午休 12:00-13:00',
     'contact.office.weekend': '周末和节假日休息',
+    'contact.office.mapTitle': '办公室位置',
+    'contact.office.openMap': '在外部地图中打开',
+    'contact.office.mapAttribution': '地图数据：',
 
     // Auth
     'auth.login.title': '登录',
