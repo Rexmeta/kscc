@@ -49,7 +49,7 @@ function toPublicMember(member: import("@shared/schema").Member) {
 }
 
 // Auth middleware
-export function authenticateToken(req: Request, res: Response, next: NextFunction) {
+export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -57,34 +57,33 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
-    if (err) {
-      console.log('[AUTH] Token verification failed:', err.message);
+  let tokenPayload: string | jwt.JwtPayload;
+  try {
+    tokenPayload = jwt.verify(token, JWT_SECRET!);
+  } catch (error: any) {
+    console.log('[AUTH] Token verification failed:', error.message);
+    return res.sendStatus(403);
+  }
+
+  if (typeof tokenPayload === 'string' || typeof tokenPayload.id !== 'string') {
+    return res.sendStatus(403);
+  }
+
+  try {
+    // Never trust role or email claims from a long-lived token. Fetching the
+    // current account on every protected request makes demotions and
+    // deactivations effective immediately.
+    const dbUser = await storage.getUser(tokenPayload.id);
+    if (!dbUser || !dbUser.isActive) {
       return res.sendStatus(403);
     }
-    
-    // If token doesn't have role (old token), fetch from database
-    if (!user.role) {
-      console.log('[AUTH] Token missing role, fetching from DB for user:', user.id);
-      try {
-        const dbUser = await storage.getUser(user.id);
-        if (!dbUser) {
-          console.log('[AUTH] User not found in DB:', user.id);
-          return res.sendStatus(403);
-        }
-        console.log('[AUTH] Fetched role from DB:', dbUser.role);
-        req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
-      } catch (error) {
-        console.log('[AUTH] DB fetch error:', error);
-        return res.sendStatus(403);
-      }
-    } else {
-      console.log('[AUTH] Token has role:', user.role);
-      req.user = user;
-    }
-    
+
+    req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
     next();
-  });
+  } catch (error) {
+    console.log('[AUTH] DB fetch error:', error);
+    return res.sendStatus(403);
+  }
 }
 
 // Public endpoints may use a valid token for member-only content, but an
@@ -114,7 +113,7 @@ export function optionalAuthenticateToken(req: Request, _res: Response, next: Ne
   });
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ message: 'Admin access required' });
   }
@@ -142,10 +141,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User already exists" });
       }
 
-      // Check if this is the first user - make them admin automatically
-      const userCount = await storage.getUserCount();
-      const role = userCount === 0 ? 'admin' : 'member';
-
       let user: User;
 
       // If company user, create user with member profile atomically
@@ -170,18 +165,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Create user and member atomically
-        const result = await storage.createUserWithMember(
-          { ...userData, role, userType: 'company' },
+        const result = await storage.createUserWithMemberForRegistration(
+          { ...userData, userType: 'company' },
           memberPayload
         );
         user = result.user;
       } else {
         // Staff user - just create user
-        user = await storage.createUser({
-          ...userData,
-          role,
-          userType: 'staff'
-        });
+        user = await storage.createUserForRegistration({ ...userData, userType: 'staff' });
       }
       
       const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });

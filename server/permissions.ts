@@ -1,52 +1,35 @@
 import { Request, Response, NextFunction } from 'express';
-import { eq, and, sql } from 'drizzle-orm';
-import { userMemberships, roles, rolePermissions, permissions, tiers } from '../shared/schema';
+import { eq, and, or, gt, isNull } from 'drizzle-orm';
+import { users, userMemberships, roles, rolePermissions, permissions, tiers } from '../shared/schema';
 import { db } from './db';
 
-// Cache for user permissions (simple in-memory cache)
-const permissionCache = new Map<string, Set<string>>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-interface CacheEntry {
-  permissions: Set<string>;
-  timestamp: number;
-}
-
-const cache = new Map<string, CacheEntry>();
-
 /**
- * Get all permissions for a user
+ * Get the permissions from the user's current, effective membership.
+ *
+ * Authorization must not use a time-based cache: an administrator can
+ * deactivate a membership, role, or tier while another request is in flight.
  */
 export async function getUserPermissions(userId: string): Promise<Set<string>> {
-  // Check cache
-  const cached = cache.get(userId);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.permissions;
-  }
-
-  // Query database
   const result = await db
     .select({
       permissionKey: permissions.key,
     })
     .from(userMemberships)
+    .innerJoin(users, eq(userMemberships.userId, users.id))
+    .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
     .innerJoin(roles, eq(userMemberships.roleId, roles.id))
     .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
     .where(and(
       eq(userMemberships.userId, userId),
-      eq(userMemberships.isActive, true)
+      eq(users.isActive, true),
+      eq(userMemberships.isActive, true),
+      eq(roles.isActive, true),
+      eq(tiers.isActive, true),
+      or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
     ));
 
-  const perms = new Set(result.map(r => r.permissionKey));
-
-  // Update cache
-  cache.set(userId, {
-    permissions: perms,
-    timestamp: Date.now(),
-  });
-
-  return perms;
+  return new Set(result.map(r => r.permissionKey));
 }
 
 /**
@@ -98,14 +81,17 @@ export async function hasAllPermissions(userId: string, permissionKeys: string[]
  * Clear permission cache for a user (call when user's membership changes)
  */
 export function clearUserPermissionCache(userId: string): void {
-  cache.delete(userId);
+  // Kept as a compatibility hook for callers that update memberships. Reads
+  // are intentionally uncached so invalidation is immediate even when a role
+  // or tier is changed outside this process.
+  void userId;
 }
 
 /**
  * Clear all permission cache
  */
 export function clearAllPermissionCache(): void {
-  cache.clear();
+  // Permission reads are intentionally uncached.
 }
 
 /**
@@ -191,7 +177,10 @@ export async function getUserMembershipInfo(userId: string) {
     .innerJoin(roles, eq(userMemberships.roleId, roles.id))
     .where(and(
       eq(userMemberships.userId, userId),
-      eq(userMemberships.isActive, true)
+      eq(userMemberships.isActive, true),
+      eq(roles.isActive, true),
+      eq(tiers.isActive, true),
+      or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
     ))
     .limit(1);
 

@@ -1,0 +1,1 @@
+- [Live authorization state](authorization-state.md) — revoked accounts and ACL assignments must not remain usable through process-local or time-based authorization caches.

@@ -11,8 +11,11 @@ import {
 } from "@shared/schema";
 import { canReadPost, publicPostAccess } from "./postAccess";
 import { canAccessObject, ObjectPermission } from "./objectAcl";
+import jwt from "jsonwebtoken";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
+
+const authTestAvailable = databaseAvailable && Boolean(process.env.SESSION_SECRET);
 
 test("post visibility policy separates anonymous, member, premium, and admin callers", () => {
   const post = (visibility: "public" | "members" | "premium" | "internal", status: "draft" | "published" = "published") => ({
@@ -103,6 +106,8 @@ test(
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
+
+    const initialUserCount = await storage.getUserCount();
     const requestedLocalePost = await createPost(db, { slugPrefix: "requested-locale" });
     const fallbackPost = await createPost(db, { slugPrefix: "primary-locale-fallback" });
 
@@ -176,6 +181,8 @@ test(
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
+
+    const initialUserCount = await storage.getUserCount();
     const [event] = await db
       .insert(posts)
       .values({
@@ -239,6 +246,8 @@ test(
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
+
+    const initialUserCount = await storage.getUserCount();
     const seededPosts = await db
       .insert(posts)
       .values(
@@ -279,15 +288,111 @@ test(
         storage.getPosts({ limit: Number.NaN }),
       ]);
 
-      assert.equal(memberResults[0].members.length, 50);
-      assert.equal(memberResults[1].members.length, 1);
-      assert.equal(memberResults[2].members.length, 50);
-      assert.equal(postResults[0].posts.length, 100);
-      assert.equal(postResults[1].posts.length, 1);
-      assert.equal(postResults[2].posts.length, 50);
+async function authorizeAdminWithToken(
+  authenticateToken: typeof import("./routes")["authenticateToken"],
+  requireAdmin: typeof import("./routes")["requireAdmin"],
+  token: string,
+): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const req = {
+      headers: { authorization: `Bearer ${token}` },
+    } as any;
+    const res = {
+      sendStatus: (status: number) => {
+        resolve(status);
+        return res;
+      },
+      status: (status: number) => ({
+        json: () => resolve(status),
+      }),
+    } as any;
+
+    authenticateToken(req, res, () => {
+      requireAdmin(req, res, () => resolve(200));
+    }).catch(reject);
+  });
+}
+
+    try {
+      assert.deepEqual(
+        registrations.map((user) => user.role).sort(),
+        ["admin", "member"],
+      );
     } finally {
-      await db.delete(members).where(inArray(members.id, seededMembers.map(({ id }) => id)));
-      await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
+      await db.delete(users).where(
+        inArray(users.id, registrations.map((user) => user.id)),
+      );
     }
   },
 );
+
+    const [role] = await db
+      .insert(roles)
+      .values({
+        code: `test-role-${randomUUID()}`,
+        name: "ACL Test Role",
+      })
+      .returning();
+
+    const [{ db, storage }, { getUserPermissions }] = await Promise.all([
+      getDatabase(),
+      import("./permissions"),
+    ]);
+
+    const [{ db, storage }, { authenticateToken, requireAdmin }] = await Promise.all([
+      getDatabase(),
+      import("./routes"),
+    ]);
+
+    const user = await storage.createUser({
+      email: `acl-invalidation-${randomUUID()}@example.test`,
+      password: "test-password",
+      name: "ACL Invalidation Test User",
+      role: "member",
+      userType: "staff",
+    });
+
+      const [membership] = await db
+        .insert(userMemberships)
+        .values({
+          userId: user.id,
+          tierId: tier.id,
+          roleId: role.id,
+          expiresAt: new Date(Date.now() + 60_000),
+        })
+        .returning();
+
+    const registrations = await Promise.all(
+      Array.from({ length: 2 }, (_, index) =>
+        storage.createUserForRegistration({
+          email: `bootstrap-${randomUUID()}-${index}@example.test`,
+          password: "test-password",
+          name: `Bootstrap Test User ${index}`,
+          userType: "staff",
+        }),
+      ),
+    );
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: "admin" },
+      process.env.SESSION_SECRET!,
+      { expiresIn: "7d" },
+    );
+
+    const [tier] = await db
+      .insert(tiers)
+      .values({
+        code: `test-tier-${randomUUID()}`,
+        name: "ACL Test Tier",
+      })
+      .returning();
+
+    const [permission] = await db
+      .insert(permissions)
+      .values({
+        key: `test.permission.${randomUUID()}`,
+        resource: "test",
+        action: "read",
+        description: "Permission used by the ACL invalidation regression",
+      })
+      .returning();

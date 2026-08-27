@@ -50,6 +50,8 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
   createUserWithMember(userData: InsertUser & { role?: string; userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
+  createUserForRegistration(userData: InsertUser & { userType?: string }): Promise<User>;
+  createUserWithMemberForRegistration(userData: InsertUser & { userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
   validateUser(email: string, password: string): Promise<User | undefined>;
 
@@ -203,6 +205,64 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async createUserForRegistration(
+    userData: InsertUser & { userType?: string },
+  ): Promise<User> {
+    return await db.transaction(async (tx) => {
+      // Serialize the first-registration check with all other registrations.
+      // A count followed by an insert is otherwise racy when two public
+      // registration requests arrive at the same time.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('users-bootstrap-registration'))`);
+      const [result] = await tx.select({ count: count() }).from(users);
+      const role = Number(result?.count || 0) === 0 ? "admin" : "member";
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+      const [user] = await tx
+        .insert(users)
+        .values({
+          ...userData,
+          role,
+          password: hashedPassword,
+        })
+        .returning();
+      return user;
+    });
+  }
+
+  async createUserWithMemberForRegistration(
+    userData: InsertUser & { userType?: string },
+    memberData: Omit<InsertMember, 'userId'>,
+  ): Promise<{ user: User; member: Member }> {
+    return await db.transaction(async (tx) => {
+      // Keep the user count check and both inserts in the same serialized
+      // transaction so only one concurrent registration can bootstrap admin.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('users-bootstrap-registration'))`);
+      const [result] = await tx.select({ count: count() }).from(users);
+      const role = Number(result?.count || 0) === 0 ? "admin" : "member";
+      const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+      const [user] = await tx
+        .insert(users)
+        .values({
+          ...userData,
+          role,
+          password: hashedPassword,
+          userType: 'company',
+        })
+        .returning();
+
+      const [member] = await tx
+        .insert(members)
+        .values({
+          ...memberData,
+          userId: user.id,
+        })
+        .returning();
+
+      return { user, member };
+    });
+  }
+
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
     const [user] = await db
       .update(users)
@@ -214,7 +274,7 @@ export class DatabaseStorage implements IStorage {
 
   async validateUser(email: string, password: string): Promise<User | undefined> {
     const user = await this.getUserByEmail(email);
-    if (!user) return undefined;
+    if (!user || !user.isActive) return undefined;
     
     const isValid = await bcrypt.compare(password, user.password);
     return isValid ? user : undefined;
