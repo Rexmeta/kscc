@@ -26,8 +26,8 @@ const postQuerySchema = z.object({
   search: z.string().optional(), // Search term for title/content/excerpt/slug
   upcoming: z.enum(['true', 'false']).optional(), // Filter for upcoming events (eventDate > now)
   compact: z.enum(['true', 'false']).optional(),
-  limit: z.coerce.number().positive().max(100).optional().default(20),
-  offset: z.coerce.number().nonnegative().optional().default(0),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 const postIdSchema = z.object({

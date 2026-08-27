@@ -14,6 +14,26 @@ import { db } from "./db";
 import { eq, desc, and, or, like, gte, lte, count, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_MEMBER_PAGE_SIZE = 50;
+const MAX_POST_PAGE_SIZE = 100;
+
+function boundedPageSize(limit: number | undefined, max: number): number {
+  if (limit === undefined || !Number.isFinite(limit)) {
+    return Math.min(DEFAULT_PAGE_SIZE, max);
+  }
+
+  return Math.min(Math.max(Math.trunc(limit), 1), max);
+}
+
+function boundedOffset(offset: number | undefined): number {
+  if (offset === undefined || !Number.isFinite(offset)) {
+    return 0;
+  }
+
+  return Math.max(Math.trunc(offset), 0);
+}
+
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -219,6 +239,8 @@ export class DatabaseStorage implements IStorage {
   }): Promise<{ members: Member[]; total: number }> {
     let query = db.select().from(members);
     let countQuery = db.select({ count: count() }).from(members);
+    const limit = boundedPageSize(filters?.limit, MAX_MEMBER_PAGE_SIZE);
+    const offset = boundedOffset(filters?.offset);
 
     const conditions = [eq(members.isPublic, true)];
 
@@ -255,8 +277,8 @@ export class DatabaseStorage implements IStorage {
       countQuery,
       query
         .orderBy(desc(members.createdAt))
-        .limit(filters?.limit || 50)
-        .offset(filters?.offset || 0),
+        .limit(limit)
+        .offset(offset),
     ]);
 
     return {
@@ -722,8 +744,8 @@ export class DatabaseStorage implements IStorage {
     // Always order by publishedAt DESC in SQL, then sort in memory for upcoming events
     const postsQuery = query
       .orderBy(desc(posts.publishedAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
+      .limit(boundedPageSize(filters?.limit, MAX_POST_PAGE_SIZE))
+      .offset(boundedOffset(filters?.offset));
     const [[totalResult], postsResult] = await Promise.all([countQuery, postsQuery]);
 
     // Early return if no posts
@@ -798,11 +820,21 @@ export class DatabaseStorage implements IStorage {
     });
     
     // Combine posts with their translations and meta
-    const hydratedPosts: PostWithTranslations[] = postsResult.map(post => ({
-      ...post,
-      translations: translationsByPost.get(post.id) || [],
-      meta: metaByPost.get(post.id) || [],
-    }));
+    const hydratedPosts: PostWithTranslations[] = postsResult.map(post => {
+      const translations = translationsByPost.get(post.id) || [];
+      const selectedTranslation = filters?.compact && filters.locale
+        ? translations.find(translation => translation.locale === filters.locale)
+          || translations.find(translation => translation.locale === post.primaryLocale)
+        : undefined;
+
+      return {
+        ...post,
+        // Compact public lists expose only the requested translation, or the
+        // post's primary locale when the requested translation is unavailable.
+        translations: selectedTranslation ? [selectedTranslation] : translations,
+        meta: metaByPost.get(post.id) || [],
+      };
+    });
 
     // Application-layer sorting for upcoming events (by event date ASC).
     // Support the legacy event.date key while preferring event.eventDate.
