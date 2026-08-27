@@ -44,7 +44,7 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
     }
   };
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'event', admin: true }] });
+  const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
 
   return (
     <TabsContent value="events" className="space-y-6">

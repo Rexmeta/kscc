@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
-import { DashboardTab } from '@/components/admin/tabs/DashboardTab';
-import { UsersTab } from '@/components/admin/tabs/UsersTab';
-import { MembersTab } from '@/components/admin/tabs/MembersTab';
-import { EventsTab } from '@/components/admin/tabs/EventsTab';
-import { ArticlesTab } from '@/components/admin/tabs/ArticlesTab';
-import { ResourcesTab } from '@/components/admin/tabs/ResourcesTab';
-import { PagesTab } from '@/components/admin/tabs/PagesTab';
-import { PartnersTab } from '@/components/admin/tabs/PartnersTab';
-import { OrganizationTab } from '@/components/admin/tabs/OrganizationTab';
-import { InquiriesTab } from '@/components/admin/tabs/InquiriesTab';
-import { ManualTab } from '@/components/admin/tabs/ManualTab';
+
+const DashboardTab = lazy(() => import('@/components/admin/tabs/DashboardTab').then((module) => ({ default: module.DashboardTab })));
+const UsersTab = lazy(() => import('@/components/admin/tabs/UsersTab').then((module) => ({ default: module.UsersTab })));
+const MembersTab = lazy(() => import('@/components/admin/tabs/MembersTab').then((module) => ({ default: module.MembersTab })));
+const EventsTab = lazy(() => import('@/components/admin/tabs/EventsTab').then((module) => ({ default: module.EventsTab })));
+const ArticlesTab = lazy(() => import('@/components/admin/tabs/ArticlesTab').then((module) => ({ default: module.ArticlesTab })));
+const ResourcesTab = lazy(() => import('@/components/admin/tabs/ResourcesTab').then((module) => ({ default: module.ResourcesTab })));
+const PagesTab = lazy(() => import('@/components/admin/tabs/PagesTab').then((module) => ({ default: module.PagesTab })));
+const PartnersTab = lazy(() => import('@/components/admin/tabs/PartnersTab').then((module) => ({ default: module.PartnersTab })));
+const OrganizationTab = lazy(() => import('@/components/admin/tabs/OrganizationTab').then((module) => ({ default: module.OrganizationTab })));
+const InquiriesTab = lazy(() => import('@/components/admin/tabs/InquiriesTab').then((module) => ({ default: module.InquiriesTab })));
+const ManualTab = lazy(() => import('@/components/admin/tabs/ManualTab').then((module) => ({ default: module.ManualTab })));
 
 export default function AdminPage() {
   const [, navigate] = useLocation();
@@ -107,29 +108,37 @@ export default function AdminPage() {
             </TabsList>
           </div>
 
-          <DashboardTab activeTab={activeTab} />
-          <UsersTab activeTab={activeTab} />
-          <MembersTab activeTab={activeTab} />
-          <ArticlesTab
-            activeTab={activeTab}
-            createNewsDialogOpen={createNewsDialogOpen}
-            setCreateNewsDialogOpen={setCreateNewsDialogOpen}
-          />
-          <EventsTab
-            activeTab={activeTab}
-            createEventDialogOpen={createEventDialogOpen}
-            setCreateEventDialogOpen={setCreateEventDialogOpen}
-          />
-          <ResourcesTab
-            activeTab={activeTab}
-            createResourceDialogOpen={createResourceDialogOpen}
-            setCreateResourceDialogOpen={setCreateResourceDialogOpen}
-          />
-          <PagesTab activeTab={activeTab} />
-          <PartnersTab activeTab={activeTab} />
-          <OrganizationTab activeTab={activeTab} />
-          <InquiriesTab activeTab={activeTab} />
-          {hasManual && <ManualTab />}
+          <Suspense fallback={<div className="py-12 text-center text-muted-foreground">로딩 중...</div>}>
+            {activeTab === 'dashboard' && <DashboardTab activeTab={activeTab} />}
+            {activeTab === 'users' && <UsersTab activeTab={activeTab} />}
+            {activeTab === 'members' && <MembersTab activeTab={activeTab} />}
+            {activeTab === 'articles' && (
+              <ArticlesTab
+                activeTab={activeTab}
+                createNewsDialogOpen={createNewsDialogOpen}
+                setCreateNewsDialogOpen={setCreateNewsDialogOpen}
+              />
+            )}
+            {activeTab === 'events' && (
+              <EventsTab
+                activeTab={activeTab}
+                createEventDialogOpen={createEventDialogOpen}
+                setCreateEventDialogOpen={setCreateEventDialogOpen}
+              />
+            )}
+            {activeTab === 'resources' && (
+              <ResourcesTab
+                activeTab={activeTab}
+                createResourceDialogOpen={createResourceDialogOpen}
+                setCreateResourceDialogOpen={setCreateResourceDialogOpen}
+              />
+            )}
+            {activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
+            {activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
+            {activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
+            {activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
+            {activeTab === 'manual' && hasManual && <ManualTab />}
+          </Suspense>
         </Tabs>
       </main>
     </div>

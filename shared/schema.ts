@@ -48,7 +48,9 @@ export const members = pgTable("members", {
   isPublic: boolean("is_public").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  publicCreatedIdx: index("members_public_created_idx").on(table.isPublic, table.createdAt.desc()),
+}));
 
 export const eventRegistrations = pgTable("event_registrations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -61,7 +63,9 @@ export const eventRegistrations = pgTable("event_registrations", {
   status: text("status").notNull().default("registered"), // registered, approved, cancelled, attended
   paymentStatus: text("payment_status").default("free"), // free, paid, pending
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  eventUserUnique: uniqueIndex("event_registrations_event_user_unique").on(table.eventId, table.userId),
+}));
 
 export const inquiries = pgTable("inquiries", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -9,16 +9,19 @@ import { t } from '@/lib/i18n';
 import { PostWithTranslations } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { queryKeys } from '@/lib/queryClient';
 
 export default function EventsPage() {
   const { hasPermission } = useAuth();
+  const { language } = useLanguage();
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
   const [upcoming, setUpcoming] = useState('true');
   const limit = 9;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/posts', { postType: 'event', page, category, upcoming, limit }],
+    queryKey: queryKeys.posts.list({ postType: 'event', page, category, upcoming, limit, language }),
     queryFn: async () => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams({
@@ -26,6 +29,8 @@ export default function EventsPage() {
         status: 'published',
         offset: offset.toString(),
         limit: limit.toString(),
+        locale: language,
+        compact: 'true',
         ...(category && { tags: category }),
         ...(upcoming === 'true' && { upcoming: 'true' }),
       });

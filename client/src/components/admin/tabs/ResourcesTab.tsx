@@ -26,7 +26,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
 
   const { data: resourcesData } = useAdminPosts('resource', activeTab);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'resource', admin: true }] });
+  const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
 
   return (
     <TabsContent value="resources" className="space-y-6">

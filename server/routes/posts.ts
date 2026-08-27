@@ -1,6 +1,6 @@
 import { Router, type Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
-import { insertPostSchema, insertPostTranslationSchema, insertPostMetaSchema, insertEventRegistrationSchema } from "@shared/schema";
+import { insertPostSchema, insertPostTranslationSchema, insertEventRegistrationSchema } from "@shared/schema";
 import { z } from "zod";
 import { authenticateToken } from "../routes";
 import "../types";
@@ -19,18 +19,28 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 const postQuerySchema = z.object({
   postType: z.enum(['news', 'event', 'resource', 'page']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
-  visibility: z.enum(['public', 'members', 'staff']).optional(),
+  visibility: z.enum(['public', 'members', 'premium', 'internal']).optional(),
   tags: z.string().optional(), // Comma-separated tags
   authorId: z.string().uuid().optional(),
   locale: z.enum(['ko', 'en', 'zh']).optional(),
   search: z.string().optional(), // Search term for title/content/excerpt/slug
   upcoming: z.enum(['true', 'false']).optional(), // Filter for upcoming events (eventDate > now)
+  compact: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().positive().max(100).optional().default(20),
   offset: z.coerce.number().nonnegative().optional().default(0),
 });
 
 const postIdSchema = z.object({
   id: z.string().uuid(),
+});
+
+const postMetaPayloadSchema = z.object({
+  key: z.string().trim().min(1).max(100),
+  value: z.unknown().optional(),
+  valueText: z.string().nullable().optional(),
+  valueNumber: z.number().nullable().optional(),
+  valueBoolean: z.boolean().nullable().optional(),
+  valueTimestamp: z.coerce.date().nullable().optional(),
 });
 
 // GET /api/posts - List posts with filters
@@ -50,8 +60,10 @@ router.get("/", async (req: Request, res: Response) => {
       visibility: query.visibility,
       tags,
       authorId: query.authorId,
+      locale: query.locale,
       search: query.search,
       upcoming,
+      compact: query.compact === 'true',
       limit: query.limit,
       offset: query.offset,
     });
@@ -122,14 +134,13 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
     }
     
     // Check for existing registration
-    const existingRegistration = await storage.getEventRegistration(id, req.user.id);
+    const existingRegistration = await storage.getEventRegistration(id, req.user!.id);
     
     if (existingRegistration) {
       // If cancelled, reactivate it
       if (existingRegistration.status === 'cancelled') {
         const reactivated = await storage.updateEventRegistration(existingRegistration.id, {
           status: 'registered',
-          registeredAt: new Date(),
         });
         return res.status(200).json(reactivated);
       }
@@ -141,10 +152,13 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
     const registrationData = insertEventRegistrationSchema.parse({
       ...req.body,
       eventId: id,
-      userId: req.user.id,
+      userId: req.user!.id,
     });
     
     const registration = await storage.createEventRegistration(registrationData);
+    if (!registration) {
+      return res.status(400).json({ message: "Already registered for this event" });
+    }
     res.status(201).json(registration);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -334,7 +348,7 @@ router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, r
       return res.status(404).json({ message: "Post not found" });
     }
     
-    const metaData = insertPostMetaSchema.omit({ id: true, postId: true }).parse(req.body);
+    const metaData = postMetaPayloadSchema.parse(req.body);
     
     // Determine value from typed columns
     let value: any = metaData.value;

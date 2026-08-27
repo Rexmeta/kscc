@@ -10,6 +10,7 @@ import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, Refresh
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { queryKeys } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
 import type { PostWithTranslations, PostMeta } from '@shared/schema';
 import { deletePost } from '@/lib/adminPostApi';
@@ -58,7 +59,7 @@ export default function ResourcesPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/posts', 'resource', { page, category, language, limit: 20 }],
+    queryKey: queryKeys.posts.list({ postType: 'resource', page, category, language, limit: 20 }),
     queryFn: async () => {
       const params = new URLSearchParams({
         postType: 'resource',
@@ -66,6 +67,8 @@ export default function ResourcesPage() {
         limit: '20',
         offset: ((page - 1) * 20).toString(),
         ...(category && { tags: category }), // Use tags for category filtering
+        locale: language,
+        compact: 'true',
       });
       
       const response = await fetch(`/api/posts?${params}`, {

@@ -17,6 +17,15 @@ if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
 }
 
+const memberQuerySchema = z.object({
+  country: z.string().trim().max(100).optional(),
+  industry: z.string().trim().max(100).optional(),
+  membershipLevel: z.string().trim().max(50).optional(),
+  search: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(12),
+});
+
 // Auth middleware
 export function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
@@ -26,7 +35,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     return res.sendStatus(401);
   }
 
-  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
     if (err) {
       console.log('[AUTH] Token verification failed:', err.message);
       return res.sendStatus(403);
@@ -126,7 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
       
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
@@ -150,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
       res.json({ user: { ...user, password: undefined }, token });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -412,25 +421,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Members routes
   app.get("/api/members", async (req, res) => {
     try {
-      const { country, industry, membershipLevel, search, page = "1", limit = "12" } = req.query;
-      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+      const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema.parse(req.query);
+      const offset = (page - 1) * limit;
       
       const result = await storage.getMembers({
-        country: country as string,
-        industry: industry as string,
-        membershipLevel: membershipLevel as string,
-        search: search as string,
-        limit: parseInt(limit as string),
+        country,
+        industry,
+        membershipLevel,
+        search,
+        limit,
         offset,
       });
       
       res.json({
         members: result.members,
         total: result.total,
-        page: parseInt(page as string),
-        totalPages: Math.ceil(result.total / parseInt(limit as string)),
+        page,
+        totalPages: Math.ceil(result.total / limit),
       });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid member query", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });

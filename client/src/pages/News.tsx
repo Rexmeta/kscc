@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { PostWithTranslations } from '@shared/schema';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
+import { queryKeys } from '@/lib/queryClient';
 
 export default function NewsPage() {
   const { hasPermission } = useAuth();
@@ -22,7 +23,7 @@ export default function NewsPage() {
   const [search, setSearch] = useState('');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['/api/posts', 'news', { page, category, search, language, limit: 14 }],
+    queryKey: queryKeys.posts.list({ postType: 'news', page, category, search, language, limit: 14 }),
     queryFn: async () => {
       const params = new URLSearchParams({
         postType: 'news',
@@ -31,6 +32,8 @@ export default function NewsPage() {
         offset: ((page - 1) * 14).toString(),
         ...(category && { tags: category }), // Use tags for category filtering (comma-separated)
         ...(search && { search }), // Add search term
+        locale: language,
+        compact: 'true',
       });
       
       const response = await fetch(`/api/posts?${params}`);

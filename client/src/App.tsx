@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,47 +9,61 @@ import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
-import About from "@/pages/About";
-import News from "@/pages/News";
-import NewsDetail from "@/pages/NewsDetail";
-import Events from "@/pages/Events";
-import EventDetail from "@/pages/EventDetail";
-import Members from "@/pages/Members";
-import Resources from "@/pages/Resources";
-import Contact from "@/pages/Contact";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import Dashboard from "@/pages/Dashboard";
-import Admin from "@/pages/Admin";
-import Organization from "@/pages/Organization";
-import Privacy from "@/pages/Privacy";
-import Terms from "@/pages/Terms";
-import NotFound from "@/pages/not-found";
+
+const About = lazy(() => import("@/pages/About"));
+const News = lazy(() => import("@/pages/News"));
+const NewsDetail = lazy(() => import("@/pages/NewsDetail"));
+const Events = lazy(() => import("@/pages/Events"));
+const EventDetail = lazy(() => import("@/pages/EventDetail"));
+const Members = lazy(() => import("@/pages/Members"));
+const Resources = lazy(() => import("@/pages/Resources"));
+const Contact = lazy(() => import("@/pages/Contact"));
+const Login = lazy(() => import("@/pages/Login"));
+const Register = lazy(() => import("@/pages/Register"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const Organization = lazy(() => import("@/pages/Organization"));
+const Privacy = lazy(() => import("@/pages/Privacy"));
+const Terms = lazy(() => import("@/pages/Terms"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+        <p className="mt-4 text-muted-foreground">로딩 중...</p>
+      </div>
+    </div>
+  );
+}
 
 function Router() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/about" component={About} />
-          <Route path="/news/:id" component={NewsDetail} />
-          <Route path="/news" component={News} />
-          <Route path="/events/:id" component={EventDetail} />
-          <Route path="/events" component={Events} />
-          <Route path="/members" component={Members} />
-          <Route path="/resources" component={Resources} />
-          <Route path="/contact" component={Contact} />
-          <Route path="/login" component={Login} />
-          <Route path="/register" component={Register} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/admin" component={Admin} />
-          <Route path="/organization" component={Organization} />
-          <Route path="/privacy" component={Privacy} />
-          <Route path="/terms" component={Terms} />
-          <Route component={NotFound} />
-        </Switch>
+        <Suspense fallback={<PageLoading />}>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/about" component={About} />
+            <Route path="/news/:id" component={NewsDetail} />
+            <Route path="/news" component={News} />
+            <Route path="/events/:id" component={EventDetail} />
+            <Route path="/events" component={Events} />
+            <Route path="/members" component={Members} />
+            <Route path="/resources" component={Resources} />
+            <Route path="/contact" component={Contact} />
+            <Route path="/login" component={Login} />
+            <Route path="/register" component={Register} />
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/admin" component={Admin} />
+            <Route path="/organization" component={Organization} />
+            <Route path="/privacy" component={Privacy} />
+            <Route path="/terms" component={Terms} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
       </main>
       <Footer />
     </div>

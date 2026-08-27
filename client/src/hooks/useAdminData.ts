@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { queryKeys } from '@/lib/queryClient';
 import type {
   PostWithTranslations,
   Member,
@@ -33,7 +34,7 @@ export function useAdminPosts(
     page: 'pages',
   };
   return useQuery<PostsResponse>({
-    queryKey: ['/api/posts', { postType, admin: true }],
+    queryKey: queryKeys.posts.list({ postType, admin: true }),
     queryFn: () =>
       fetchJson<PostsResponse>(`/api/posts?postType=${postType}&admin=true`),
     enabled: isAdmin && activeTab === tabNames[postType],

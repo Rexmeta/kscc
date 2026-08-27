@@ -67,6 +67,9 @@ export default function NewsCard({ post }: NewsCardProps) {
           src={featuredImage}
           alt={translation?.title || post.slug}
           className="w-full h-48 object-cover rounded-t-lg"
+          width={640}
+          height={192}
+          loading="lazy"
         />
       ) : (
         <div className="w-full h-48 bg-gradient-to-r from-muted to-muted/50 rounded-t-lg flex items-center justify-center">

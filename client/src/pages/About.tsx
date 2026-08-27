@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
-import ksccLogoPath from '@/assets/kscc_logo.png';
+import ksccLogoPath from '@/assets/kscc_logo.webp';
 
 interface AboutContent {
   hero: { title: string; intro: string };
@@ -98,6 +98,9 @@ export default function AboutPage() {
               src={ksccLogoPath} 
               alt="KSCC Logo" 
               className="w-32 h-32 md:w-40 md:h-40 flex-shrink-0"
+              width={776}
+              height={800}
+              loading="lazy"
               data-testid="img-kscc-logo"
             />
             <div className="max-w-3xl flex-1">

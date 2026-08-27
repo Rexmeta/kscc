@@ -13,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
+import { queryKeys } from '@/lib/queryClient';
 
 export default function EventDetailPage() {
   const { id } = useParams();
@@ -23,9 +24,9 @@ export default function EventDetailPage() {
   const { language } = useLanguage();
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
-    queryKey: ['/api/posts', id],
+    queryKey: queryKeys.posts.detail(id || '', language),
     queryFn: async () => {
-      const response = await fetch(`/api/posts/${id}`);
+      const response = await fetch(`/api/posts/${id}?locale=${language}`);
       if (!response.ok) throw new Error('Failed to fetch post');
       return response.json();
     },
@@ -47,7 +48,7 @@ export default function EventDetailPage() {
         description: "행사 신청이 성공적으로 완료되었습니다.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/user/registrations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/posts', id] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(id || '', language) });
     },
     onError: (error: any) => {
       toast({

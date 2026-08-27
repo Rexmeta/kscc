@@ -41,7 +41,7 @@ export function ArticlesTab({
         <CreateNewsDialog
           open={createNewsDialogOpen}
           onOpenChange={setCreateNewsDialogOpen}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] })}
+          onSuccess={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' })}
         />
       </div>
 
@@ -96,7 +96,7 @@ export function ArticlesTab({
                     try {
                       await deletePost(article.id);
                       toast({ title: "뉴스가 삭제되었습니다" });
-                      queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
+                      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
                     } catch (error) {
                       toast({ title: "삭제 실패", variant: "destructive" });
                     }
@@ -124,7 +124,7 @@ export function ArticlesTab({
               news={selectedArticle}
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['/api/posts', { postType: 'news', admin: true }] });
+                queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
               }}
             />
           </DialogContent>

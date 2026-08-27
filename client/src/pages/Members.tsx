@@ -10,6 +10,7 @@ import { t } from '@/lib/i18n';
 import { Member } from '@shared/schema';
 import MemberCard from '@/components/MemberCard';
 import { useAuth } from '@/hooks/useAuth';
+import { queryKeys } from '@/lib/queryClient';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -31,7 +32,7 @@ export default function MembersPage() {
   const debouncedSearch = useDebounce(search, 300);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['/api/members', { page, search: debouncedSearch, country, industry, membershipLevel, limit: 12 }],
+    queryKey: queryKeys.members.list({ page, search: debouncedSearch, country, industry, membershipLevel, limit: 12 }),
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),

@@ -8,6 +8,7 @@ import { t } from '@/lib/i18n';
 import { Member, PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
+import { queryKeys } from '@/lib/queryClient';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 
@@ -30,43 +31,34 @@ export default function Home() {
 
   // Fetch upcoming events
   const { data: eventsData } = useQuery({
-    queryKey: ['/api/posts', 'event', { upcoming: true, limit: 3 }],
+    queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, limit: 3, language }),
     queryFn: async () => {
-      const response = await fetch('/api/posts?postType=event&status=published&upcoming=true&limit=3');
+      const response = await fetch(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`);
       return response.json();
     },
   });
 
   // Fetch latest news
   const { data: newsData } = useQuery({
-    queryKey: ['/api/posts', 'news', { limit: 3 }],
+    queryKey: queryKeys.posts.list({ postType: 'news', limit: 3, language }),
     queryFn: async () => {
-      const response = await fetch('/api/posts?postType=news&status=published&limit=3');
+      const response = await fetch(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`);
       return response.json();
     },
   });
 
-  // Fetch members to display as partners
-  const { data: membersPartners } = useQuery({
-    queryKey: ['/api/members', { isPublic: true, limit: 12 }],
-    queryFn: async () => {
-      const response = await fetch('/api/members?limit=100');
-      const data = await response.json();
-      return data.members || [];
-    },
-  });
-
-  // Fetch member stats
+  // Fetch the partner cards and the total count in one bounded response.
   const { data: membersData } = useQuery({
-    queryKey: ['/api/members', { limit: 1 }],
+    queryKey: queryKeys.members.list({ isPublic: true, limit: 12 }),
     queryFn: async () => {
-      const response = await fetch('/api/members?limit=1');
+      const response = await fetch('/api/members?limit=12');
       return response.json();
     },
   });
 
   const events = eventsData?.posts || [];
   const news = newsData?.posts || [];
+  const membersPartners = membersData?.members || [];
   const memberCount = membersData?.total || 0;
   const latestNews = news[0];
   const latestNewsTranslation = latestNews ? getTranslationSafe(latestNews, language) : null;
@@ -261,7 +253,7 @@ export default function Home() {
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                           const fallback = e.currentTarget.nextElementSibling;
-                          if (fallback) fallback.style.display = 'flex';
+                          if (fallback instanceof HTMLElement) fallback.style.display = 'flex';
                         }}
                       />
                     ) : null}

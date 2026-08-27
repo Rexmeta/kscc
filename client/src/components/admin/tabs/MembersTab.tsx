@@ -64,7 +64,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
                       const response = await apiRequest('DELETE', `/api/members/${member.id}`, null);
                       if (response.ok) {
                         toast({ title: "회원이 삭제되었습니다" });
-                        queryClient.invalidateQueries({ queryKey: ['/api/members', { admin: true }] });
+                        queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
                       }
                     } catch (error) {
                       toast({ title: "삭제 실패", variant: "destructive" });
@@ -162,7 +162,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
               member={selectedMember}
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ queryKey: ['/api/members', { admin: true }] });
+                queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
               }}
             />
           </DialogContent>

@@ -82,6 +82,9 @@ export default function MemberCard({ member }: MemberCardProps) {
                 src={member.logo}
                 alt={`${member.companyName} logo`}
                 className="h-full w-full object-contain rounded-lg"
+                width={64}
+                height={64}
+                loading="lazy"
               />
             ) : (
               <Building className="h-8 w-8 text-muted-foreground" />

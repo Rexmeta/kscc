@@ -44,7 +44,7 @@ export interface IStorage {
   getEventRegistrationById(id: string): Promise<EventRegistration | undefined>;
   getEventRegistrations(eventId: string): Promise<EventRegistration[]>;
   getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]>;
-  createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration>;
+  createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration | undefined>;
   updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined>;
 
   // Inquiries
@@ -88,6 +88,8 @@ export interface IStorage {
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
+    locale?: string;
+    compact?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
@@ -249,15 +251,17 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [totalResult] = await countQuery;
-    const membersResult = await query
-      .orderBy(desc(members.createdAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
+    const [[totalResult], membersResult] = await Promise.all([
+      countQuery,
+      query
+        .orderBy(desc(members.createdAt))
+        .limit(filters?.limit || 50)
+        .offset(filters?.offset || 0),
+    ]);
 
     return {
       members: membersResult,
-      total: totalResult.count,
+      total: totalResult?.count || 0,
     };
   }
 
@@ -355,12 +359,15 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration> {
+  async createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration | undefined> {
     const [newRegistration] = await db
       .insert(eventRegistrations)
       .values(registration)
+      .onConflictDoNothing({
+        target: [eventRegistrations.eventId, eventRegistrations.userId],
+      })
       .returning();
-    return newRegistration;
+    return newRegistration || undefined;
   }
 
   async updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined> {
@@ -596,6 +603,8 @@ export class DatabaseStorage implements IStorage {
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
+    locale?: string;
+    compact?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ posts: PostWithTranslations[]; total: number }> {
@@ -678,27 +687,52 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [totalResult] = await countQuery;
-    
     // Always order by publishedAt DESC in SQL, then sort in memory for upcoming events
-    const postsResult = await query
+    const postsQuery = query
       .orderBy(desc(posts.publishedAt))
       .limit(filters?.limit || 50)
       .offset(filters?.offset || 0);
+    const [[totalResult], postsResult] = await Promise.all([countQuery, postsQuery]);
 
     // Early return if no posts
     if (postsResult.length === 0) {
-      return { posts: [], total: 0 };
+      return { posts: [], total: totalResult?.count || 0 };
     }
 
     // Batch fetch translations and meta for all posts
     const postIds = postsResult.map(p => p.id);
     
-    // Fetch all translations (all locales)
-    const allTranslations = await db
-      .select()
-      .from(postTranslations)
-      .where(inArray(postTranslations.postId, postIds));
+    // Public list views only need the selected locale and card metadata.
+    const translationConditions = [inArray(postTranslations.postId, postIds)];
+    if (filters?.locale) {
+      const locales = Array.from(new Set([
+        filters.locale,
+        ...postsResult.map(post => post.primaryLocale),
+      ]));
+      translationConditions.push(inArray(postTranslations.locale, locales as any));
+    }
+    const allTranslations = filters?.compact
+      ? await db
+          .select({
+            id: postTranslations.id,
+            postId: postTranslations.postId,
+            locale: postTranslations.locale,
+            title: postTranslations.title,
+            subtitle: postTranslations.subtitle,
+            excerpt: postTranslations.excerpt,
+            content: sql<string | null>`NULL`,
+            seoTitle: postTranslations.seoTitle,
+            seoDescription: postTranslations.seoDescription,
+            seoKeywords: postTranslations.seoKeywords,
+            createdAt: postTranslations.createdAt,
+            updatedAt: postTranslations.updatedAt,
+          })
+          .from(postTranslations)
+          .where(and(...translationConditions))
+      : await db
+          .select()
+          .from(postTranslations)
+          .where(and(...translationConditions));
     
     // Fetch all meta
     const allMeta = await db
@@ -742,14 +776,18 @@ export class DatabaseStorage implements IStorage {
 
     return {
       posts: hydratedPosts,
-      total: totalResult.count,
+      total: totalResult?.count || 0,
     };
   }
 
   async createPost(post: InsertPost): Promise<Post> {
+    const postData = {
+      ...post,
+      slug: post.slug || `${post.postType}-${Date.now().toString(36)}`,
+    };
     const [newPost] = await db
       .insert(posts)
-      .values(post)
+      .values(postData)
       .returning();
     return newPost;
   }

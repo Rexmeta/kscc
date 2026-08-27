@@ -6,10 +6,14 @@ import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 import { mapNewsFormToPost, mapEventFormToPost, mapResourceFormToPost, type NewsFormData, type EventFormData, type ResourceFormData } from '@/lib/adminPostMappers';
 import type { MemberFormValues, NewsFormValues, EventFormValues, ResourceFormValues } from '@/components/admin/adminSchemas';
 
-const POSTS_NEWS_KEY = ['/api/posts', { postType: 'news', admin: true }];
-const POSTS_EVENT_KEY = ['/api/posts', { postType: 'event', admin: true }];
-const POSTS_RESOURCE_KEY = ['/api/posts', { postType: 'resource', admin: true }];
-const MEMBERS_KEY = ['/api/members', { admin: true }];
+const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) =>
+  queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] === '/api/posts',
+  });
+const invalidateMembers = (queryClient: ReturnType<typeof useQueryClient>) =>
+  queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] === '/api/members',
+  });
 
 export function useCreateNewsPost(options: {
   userId: string;
@@ -26,7 +30,7 @@ export function useCreateNewsPost(options: {
     },
     onSuccess: () => {
       toast({ title: '뉴스가 성공적으로 생성되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_NEWS_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -74,7 +78,7 @@ export function useUpdateNewsPost(options: {
     },
     onSuccess: () => {
       toast({ title: '뉴스가 수정되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_NEWS_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -90,7 +94,7 @@ export function useDeleteNewsPost(onSuccess?: () => void) {
     mutationFn: (postId: string) => deletePost(postId),
     onSuccess: () => {
       toast({ title: '뉴스가 삭제되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_NEWS_KEY });
+      invalidatePosts(queryClient);
       onSuccess?.();
     },
     onError: () => {
@@ -112,7 +116,7 @@ export function useCreateEventPost(options: {
     },
     onSuccess: () => {
       toast({ title: '행사가 생성되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_EVENT_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -156,7 +160,7 @@ export function useUpdateEventPost(options: {
     },
     onSuccess: () => {
       toast({ title: '행사가 수정되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_EVENT_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -172,7 +176,7 @@ export function useDeleteEventPost(onSuccess?: () => void) {
     mutationFn: (postId: string) => deletePost(postId),
     onSuccess: () => {
       toast({ title: '행사가 삭제되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_EVENT_KEY });
+      invalidatePosts(queryClient);
       onSuccess?.();
     },
     onError: () => {
@@ -197,7 +201,7 @@ export function useCreateResourcePost(options: {
     },
     onSuccess: () => {
       toast({ title: '자료가 생성되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_RESOURCE_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -237,7 +241,7 @@ export function useUpdateResourcePost(options: {
     },
     onSuccess: () => {
       toast({ title: '자료가 수정되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_RESOURCE_KEY });
+      invalidatePosts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -253,7 +257,7 @@ export function useDeleteResourcePost(onSuccess?: () => void) {
     mutationFn: (postId: string) => deletePost(postId),
     onSuccess: () => {
       toast({ title: '자료가 삭제되었습니다' });
-      queryClient.invalidateQueries({ queryKey: POSTS_RESOURCE_KEY });
+      invalidatePosts(queryClient);
       onSuccess?.();
     },
     onError: () => {
@@ -278,7 +282,7 @@ export function useUpdateMember(options: {
     },
     onSuccess: () => {
       toast({ title: '회원 정보가 업데이트되었습니다' });
-      queryClient.invalidateQueries({ queryKey: MEMBERS_KEY });
+      invalidateMembers(queryClient);
       options.onSuccess();
     },
     onError: () => {

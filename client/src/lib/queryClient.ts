@@ -39,7 +39,7 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+  async ({ queryKey, signal }) => {
     const token = localStorage.getItem("token");
     const headers: Record<string, string> = {};
     
@@ -47,9 +47,11 @@ export const getQueryFn: <T>(options: {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = typeof queryKey[0] === "string" ? queryKey[0] : String(queryKey[0]);
+    const res = await fetch(url, {
       headers,
       credentials: "include",
+      signal,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -60,13 +62,27 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+export const queryKeys = {
+  posts: {
+    list: (params: Record<string, unknown> = {}) =>
+      ["/api/posts", "list", params] as const,
+    detail: (id: string, locale?: string) =>
+      ["/api/posts", "detail", id, locale ?? null] as const,
+  },
+  members: {
+    list: (params: Record<string, unknown> = {}) =>
+      ["/api/members", "list", params] as const,
+  },
+} as const;
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 60 * 1000,
+      gcTime: 10 * 60 * 1000,
       retry: false,
     },
     mutations: {

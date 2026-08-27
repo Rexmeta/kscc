@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
+import { queryKeys } from '@/lib/queryClient';
 
 export default function NewsDetail() {
   // ALL HOOKS MUST BE AT THE TOP (Rules of Hooks)
@@ -23,13 +24,13 @@ export default function NewsDetail() {
   const queryClient = useQueryClient();
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
-    queryKey: ['/api/posts/slug', id],
+    queryKey: queryKeys.posts.detail(id || '', language),
     queryFn: async () => {
       // Try slug first, then fall back to ID
-      let response = await fetch(`/api/posts/slug/${id}`);
+      let response = await fetch(`/api/posts/slug/${id}?locale=${language}`);
       if (!response.ok) {
         // Fall back to ID-based lookup
-        response = await fetch(`/api/posts/${id}`);
+        response = await fetch(`/api/posts/${id}?locale=${language}`);
       }
       if (!response.ok) {
         throw new Error('News not found');
