@@ -5,8 +5,13 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
   members,
+  permissions,
   postTranslations,
   posts,
+  rolePermissions,
+  roles,
+  tiers,
+  userMemberships,
   users,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
@@ -59,6 +64,81 @@ async function createPost(
     .returning();
   return post;
 }
+
+test(
+  "effective ACL changes are reflected without a process restart",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const [{ getUserPermissions }] = await Promise.all([
+      import("./permissions"),
+    ]);
+    const suffix = randomUUID();
+    const user = await storage.createUser({
+      email: `operator-acl-${suffix}@example.test`,
+      password: "test-password",
+      name: "Operator ACL Test",
+      role: "operator",
+      userType: "staff",
+    });
+    const [tier] = await db.insert(tiers).values({
+      code: `test-tier-${suffix}`,
+      name: "Operator ACL Test Tier",
+    }).returning();
+    const [role] = await db.insert(roles).values({
+      code: `test-role-${suffix}`,
+      name: "Operator ACL Test Role",
+    }).returning();
+    const [permission] = await db.insert(permissions).values({
+      key: `inquiry.read.${suffix}`,
+      resource: "inquiry",
+      action: "read",
+      description: "Operator ACL regression permission",
+    }).returning();
+    await db.insert(rolePermissions).values({
+      roleId: role.id,
+      permissionId: permission.id,
+    });
+    const [membership] = await db.insert(userMemberships).values({
+      userId: user.id,
+      tierId: tier.id,
+      roleId: role.id,
+      expiresAt: new Date(Date.now() + 60_000),
+    }).returning();
+
+    try {
+      assert.equal((await getUserPermissions(user.id)).has(permission.key), true);
+
+      await db.update(userMemberships)
+        .set({ isActive: false })
+        .where(eq(userMemberships.id, membership.id));
+      assert.equal((await getUserPermissions(user.id)).has(permission.key), false);
+
+      await db.update(userMemberships)
+        .set({ isActive: true })
+        .where(eq(userMemberships.id, membership.id));
+      await db.update(userMemberships)
+        .set({ startedAt: new Date(Date.now() + 60_000) })
+        .where(eq(userMemberships.id, membership.id));
+      assert.equal((await getUserPermissions(user.id)).has(permission.key), false);
+
+      await db.update(userMemberships)
+        .set({ startedAt: new Date(Date.now() - 60_000) })
+        .where(eq(userMemberships.id, membership.id));
+      await db.update(users)
+        .set({ isActive: false })
+        .where(eq(users.id, user.id));
+      assert.equal((await getUserPermissions(user.id)).has(permission.key), false);
+    } finally {
+      await db.delete(userMemberships).where(eq(userMemberships.id, membership.id));
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, role.id));
+      await db.delete(permissions).where(eq(permissions.id, permission.id));
+      await db.delete(users).where(eq(users.id, user.id));
+      await db.delete(roles).where(eq(roles.id, role.id));
+      await db.delete(tiers).where(eq(tiers.id, tier.id));
+    }
+  },
+);
 
 test(
   "compact post lists select the requested locale and fall back to the primary locale",

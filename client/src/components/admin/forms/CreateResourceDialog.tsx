@@ -18,6 +18,7 @@ import { type ResourceFormData } from '@/lib/adminPostMappers';
 import { resourceSchema } from '../adminSchemas';
 import { getResourceObjectAclVisibility, getUploadParameters, setObjectAcl } from '../uploadHelpers';
 import { useCreateResourcePost } from '@/hooks/useAdminMutations';
+import { enforceCreatePublishPermission } from '@/lib/adminPermissions';
 
 interface CreateResourceDialogProps {
   onSuccess: () => void;
@@ -28,7 +29,8 @@ interface CreateResourceDialogProps {
 export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateResourceDialogProps) {
   const [fileUrl, setFileUrl] = useState('');
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canPublish = isAdmin || hasPermission('resource.publish');
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<z.infer<typeof resourceSchema>>({
     resolver: zodResolver(resourceSchema),
@@ -69,7 +71,12 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
   });
 
   const onSubmit = (data: z.infer<typeof resourceSchema>) => {
-    createMutation.mutate({ ...data, excerpt: data.excerpt || '', _uploadedFileUrl: fileUrl } as ResourceFormData & { _uploadedFileUrl: string });
+    createMutation.mutate({
+      ...data,
+      excerpt: data.excerpt || '',
+      isPublished: enforceCreatePublishPermission(canPublish, data.isPublished),
+      _uploadedFileUrl: fileUrl,
+    } as ResourceFormData & { _uploadedFileUrl: string });
   };
 
   return (
@@ -122,7 +129,7 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} data-testid="switch-resource-published" />
+            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} disabled={!canPublish} data-testid="switch-resource-published" />
             <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
           </div>
 

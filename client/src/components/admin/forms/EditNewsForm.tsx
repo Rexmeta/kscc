@@ -36,7 +36,8 @@ export function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; 
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(initialMediaItems);
 
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canPublish = isAdmin || hasPermission('news.publish');
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<NewsFormValues>({
     resolver: zodResolver(newsSchema),
@@ -155,6 +156,7 @@ export function EditNewsForm({ news, onSuccess }: { news: PostWithTranslations; 
             <Switch
               checked={isPublished}
               onCheckedChange={(checked) => setValue('isPublished', checked)}
+              disabled={!canPublish}
               data-testid="switch-news-published-edit"
             />
             <span className={`text-sm font-medium ${isPublished ? 'text-green-600' : 'text-muted-foreground'}`}>

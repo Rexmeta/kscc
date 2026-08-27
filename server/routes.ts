@@ -119,6 +119,14 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function requireAdminOrPermission(permission: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === 'admin') {
+      return next();
+    }
+    return requirePermission(permission)(req, res, next);
+  };
+}
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount Posts API router
   app.use("/api/posts", postsRouter);
@@ -660,7 +668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/inquiries", authenticateToken, requireAdmin, async (req, res) => {
+  app.get("/api/inquiries", authenticateToken, requireAdminOrPermission("inquiry.read"), async (req, res) => {
     try {
       const { status, category, page, limit } = inquiryQuerySchema.parse(req.query);
       const offset = (page - 1) * limit;
@@ -686,7 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.get("/api/inquiries/:id", authenticateToken, requireAdminOrPermission("inquiry.read"), async (req, res) => {
     try {
       const inquiry = await storage.getInquiryWithReplies(req.params.id);
       if (!inquiry) {
@@ -699,16 +707,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const inquiryUpdateSchema = z.object({
-    status: z.enum(['pending', 'in_progress', 'resolved', 'closed']).optional(),
+    status: z.enum(['new', 'pending', 'in_progress', 'resolved', 'closed']).optional(),
     category: z.string().max(100).optional(),
     priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
     assignedTo: z.string().uuid().optional().nullable(),
     notes: z.string().max(5000).optional(),
   });
 
-  app.put("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/inquiries/:id", authenticateToken, requireAdminOrPermission("inquiry.respond"), async (req, res) => {
     try {
       const updateData = inquiryUpdateSchema.parse(req.body);
+      if (req.user?.role !== 'admin' && Object.keys(updateData).some((key) => key !== 'status')) {
+        return res.status(403).json({
+          message: 'Operators may only change inquiry status',
+        });
+      }
       const inquiry = await storage.updateInquiry(req.params.id, updateData);
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
@@ -736,7 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/inquiries/:id/reply", authenticateToken, requireAdmin, async (req, res) => {
+  app.post("/api/inquiries/:id/reply", authenticateToken, requireAdminOrPermission("inquiry.respond"), async (req, res) => {
     try {
       const inquiryId = req.params.id;
       const { message, sendEmail } = req.body;

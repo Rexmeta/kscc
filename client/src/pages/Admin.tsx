@@ -36,13 +36,14 @@ export default function AdminPage() {
   const boardTabs = boardTabConfig
     .filter(({ permission }) => isAdmin || hasPermission(permission))
     .map(({ tab }) => tab);
+  const canReadInquiries = isAdmin || hasPermission('inquiry.read');
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
     ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'partners', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(hasManual ? ['manual'] : [])];
+    : [...boardTabs, ...(canReadInquiries ? ['inquiries'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
-  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || 'dashboard';
-  const canAccessAdmin = isAdmin || boardTabs.length > 0;
+  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || (canReadInquiries ? 'inquiries' : 'dashboard');
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadInquiries;
 
   useEffect(() => {
     if (loading) return;
@@ -107,7 +108,7 @@ export default function AdminPage() {
                 {allowedTabs.includes('events') && <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>}
                 {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
                 {isAdmin && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
-                {isAdmin && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
+                 {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
                 {isAdmin && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
                 {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                 {hasManual && (
@@ -126,7 +127,7 @@ export default function AdminPage() {
               {allowedTabs.includes('events') && <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>}
               {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
               {isAdmin && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
+               {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
               {isAdmin && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
               {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
               {hasManual && (
@@ -163,7 +164,7 @@ export default function AdminPage() {
             {isAdmin && activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
-            {isAdmin && activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
+             {allowedTabs.includes('inquiries') && activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
             {activeTab === 'manual' && hasManual && <ManualTab />}
           </Suspense>
         </Tabs>

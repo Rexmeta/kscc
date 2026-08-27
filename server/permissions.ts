@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { eq, and, or, gt, isNull } from 'drizzle-orm';
+import { eq, and, or, gt, isNull, lte } from 'drizzle-orm';
 import { users, userMemberships, roles, rolePermissions, permissions, tiers } from '../shared/schema';
 import { db } from './db';
 
@@ -26,6 +26,7 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
       eq(userMemberships.isActive, true),
       eq(roles.isActive, true),
       eq(tiers.isActive, true),
+      lte(userMemberships.startedAt, new Date()),
       or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
     ));
 
@@ -180,6 +181,7 @@ export async function getUserMembershipInfo(userId: string) {
       eq(userMemberships.isActive, true),
       eq(roles.isActive, true),
       eq(tiers.isActive, true),
+      lte(userMemberships.startedAt, new Date()),
       or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
     ))
     .limit(1);

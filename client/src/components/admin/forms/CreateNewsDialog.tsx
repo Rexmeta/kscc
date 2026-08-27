@@ -19,6 +19,7 @@ import { type NewsFormData } from '@/lib/adminPostMappers';
 import { newsSchema, type NewsFormValues } from '../adminSchemas';
 import { setImagePublicAcl, getUploadParameters } from '../uploadHelpers';
 import { useCreateNewsPost } from '@/hooks/useAdminMutations';
+import { enforceCreatePublishPermission } from '@/lib/adminPermissions';
 
 export function CreateNewsDialog({
   onSuccess,
@@ -33,7 +34,8 @@ export function CreateNewsDialog({
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
 
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canPublish = isAdmin || hasPermission('news.publish');
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<NewsFormValues>({
     resolver: zodResolver(newsSchema),
@@ -77,7 +79,7 @@ export function CreateNewsDialog({
       content: base.content || '',
       category: base.category || '',
       featuredImage: base.featuredImage,
-      isPublished: base.isPublished ?? false,
+      isPublished: enforceCreatePublishPermission(canPublish, base.isPublished ?? false),
       publishedAt: base.publishedAt,
       images: mediaItems.filter(m => m.type === 'image').map(m => m.url),
       videos: mediaItems.filter(m => m.type === 'video').map(m => m.url),
@@ -178,6 +180,7 @@ export function CreateNewsDialog({
                   <Switch
                     checked={isPublished}
                     onCheckedChange={(checked) => setValue('isPublished', checked)}
+                    disabled={!canPublish}
                     data-testid="switch-news-published"
                   />
                   <span className={`text-sm font-medium ${isPublished ? 'text-green-600' : 'text-muted-foreground'}`}>

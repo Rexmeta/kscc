@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resourceSchema } from "@/components/admin/adminSchemas";
-import { mapPostToResourceForm, mapResourceFormToPost } from "./adminPostMappers";
+import { mapEventFormToPost, mapPostToResourceForm, mapResourceFormToPost } from "./adminPostMappers";
+import { enforceCreatePublishPermission } from "./adminPermissions";
+
+test("event creation without publish permission always produces a draft", () => {
+  const mapped = mapEventFormToPost({
+    title: "Operator event draft",
+    description: "Draft created by an operator",
+    content: "",
+    eventDate: "2026-09-01T10:00",
+    location: "Seoul",
+    category: "networking",
+    eventType: "offline",
+    fee: 0,
+    images: [],
+    isPublic: true,
+    isPublished: enforceCreatePublishPermission(false, true),
+  }, "operator-id");
+
+  assert.equal(mapped.post.status, "draft");
+  assert.equal(mapped.post.publishedAt, null);
+});
 
 test("resource form accepts and maps every administrator visibility choice", () => {
   for (const visibility of ["public", "members", "premium"] as const) {

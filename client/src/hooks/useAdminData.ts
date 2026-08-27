@@ -75,11 +75,12 @@ export function useAdminPartners(activeTab: string) {
 type InquiriesResponse = { inquiries: InquiryWithReplies[]; total: number; page: number; totalPages: number };
 
 export function useAdminInquiries(activeTab: string) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
+  const canRead = isAdmin || hasPermission('inquiry.read');
   return useQuery<InquiriesResponse>({
     queryKey: ['/api/inquiries'],
     queryFn: () => fetchJson<InquiriesResponse>('/api/inquiries'),
-    enabled: isAdmin && activeTab === 'inquiries',
+    enabled: canRead && activeTab === 'inquiries',
   });
 }
 

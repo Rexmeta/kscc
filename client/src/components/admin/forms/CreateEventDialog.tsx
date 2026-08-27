@@ -11,6 +11,7 @@ import RichTextEditor from '@/components/RichTextEditor';
 import { type EventFormData } from '@/lib/adminPostMappers';
 import { eventSchema } from '../adminSchemas';
 import { useCreateEventPost } from '@/hooks/useAdminMutations';
+import { enforceCreatePublishPermission } from '@/lib/adminPermissions';
 
 interface CreateEventDialogProps {
   onSuccess: () => void;
@@ -19,7 +20,8 @@ interface CreateEventDialogProps {
 }
 
 export function CreateEventDialog({ onSuccess, open, onOpenChange }: CreateEventDialogProps) {
-  const { user } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canPublish = isAdmin || hasPermission('event.publish');
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -37,7 +39,7 @@ export function CreateEventDialog({ onSuccess, open, onOpenChange }: CreateEvent
       registrationDeadline: '',
       images: [],
       isPublic: true,
-      isPublished: true,
+      isPublished: canPublish,
     }
   });
 
@@ -53,7 +55,10 @@ export function CreateEventDialog({ onSuccess, open, onOpenChange }: CreateEvent
   });
 
   const onSubmit = (data: EventFormData) => {
-    createMutation.mutate(data);
+    createMutation.mutate({
+      ...data,
+      isPublished: enforceCreatePublishPermission(canPublish, data.isPublished),
+    });
   };
 
   return (
@@ -144,7 +149,7 @@ export function CreateEventDialog({ onSuccess, open, onOpenChange }: CreateEvent
           </div>
 
           <div className="flex items-center space-x-2">
-            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} data-testid="switch-event-published" />
+            <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} disabled={!canPublish} data-testid="switch-event-published" />
             <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
           </div>
 

@@ -17,7 +17,13 @@ export default function Header() {
   const [location] = useLocation();
   const { user, logout, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const canAccessAdmin = isAdmin || hasAnyPermission(['news.read', 'event.read', 'resource.read']);
+  const canAccessAdmin = isAdmin || hasAnyPermission([
+    'news.read',
+    'event.read',
+    'resource.read',
+    'inquiry.read',
+  ]);
+  const adminMenuLabel = isAdmin ? t('nav.admin') : '운영자 페이지';
 
   const navigation = [
     { name: t('nav.home'), href: '/' },
@@ -104,7 +110,7 @@ export default function Header() {
                   {canAccessAdmin && (
                     <Link href="/admin">
                       <DropdownMenuItem>
-                        {t('nav.admin')}
+                        {adminMenuLabel}
                       </DropdownMenuItem>
                     </Link>
                   )}
@@ -180,7 +186,7 @@ export default function Header() {
                       {canAccessAdmin && (
                         <Link href="/admin" onClick={() => setMobileOpen(false)}>
                           <Button variant="ghost" className="w-full justify-start">
-                            {t('nav.admin')}
+                            {adminMenuLabel}
                           </Button>
                         </Link>
                       )}

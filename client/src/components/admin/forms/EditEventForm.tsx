@@ -15,7 +15,8 @@ import type { PostWithTranslations } from '@shared/schema';
 import { useUpdateEventPost } from '@/hooks/useAdminMutations';
 
 export function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSuccess: () => void }) {
-  const { user } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canPublish = isAdmin || hasPermission('event.publish');
   const [, setLocation] = useLocation();
 
   const translation = event.translations?.[0];
@@ -146,7 +147,7 @@ export function EditEventForm({ event, onSuccess }: { event: PostWithTranslation
         </div>
       </div>
       <div className="flex items-center space-x-2">
-        <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} />
+        <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} disabled={!canPublish} />
         <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
       </div>
       <div className="flex gap-2">

@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Eye, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useAuth } from '@/hooks/useAuth';
 import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { InquiryWithReplies } from '@shared/schema';
 import { useAdminInquiries } from '@/hooks/useAdminData';
@@ -13,6 +14,7 @@ import { useAdminInquiries } from '@/hooks/useAdminData';
 export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryWithReplies | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
@@ -41,26 +43,28 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
               >
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (confirm('정말 이 문의를 삭제하시겠습니까?')) {
-                    try {
-                      const response = await apiRequest('DELETE', `/api/inquiries/${inquiry.id}`, null);
-                      if (response.ok) {
-                        toast({ title: "문의가 삭제되었습니다" });
-                        queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (confirm('정말 이 문의를 삭제하시겠습니까?')) {
+                      try {
+                        const response = await apiRequest('DELETE', `/api/inquiries/${inquiry.id}`, null);
+                        if (response.ok) {
+                          toast({ title: "문의가 삭제되었습니다" });
+                          queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                        }
+                      } catch (error) {
+                        toast({ title: "삭제 실패", variant: "destructive" });
                       }
-                    } catch (error) {
-                      toast({ title: "삭제 실패", variant: "destructive" });
                     }
-                  }
-                }}
-                data-testid={`button-delete-inquiry-${inquiry.id}`}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+                  }}
+                  data-testid={`button-delete-inquiry-${inquiry.id}`}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         ))}

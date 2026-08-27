@@ -83,10 +83,16 @@ const profileUpdateSchema = z.object({
 type ProfileUpdateFormData = z.infer<typeof profileUpdateSchema>;
 
 export default function Dashboard() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
   const { toast } = useToast();
   const { language } = useLanguage();
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const canAccessAdmin = isAdmin || hasAnyPermission([
+    'news.read',
+    'event.read',
+    'resource.read',
+    'inquiry.read',
+  ]);
 
   const { data: registrations } = useQuery({
     queryKey: ['/api/auth/registrations'],
@@ -230,6 +236,28 @@ export default function Dashboard() {
               프로필 수정
             </Button>
           </div>
+
+          {canAccessAdmin && (
+            <Card className="mt-6">
+              <CardContent className="flex items-center justify-between gap-4 p-6">
+                <div>
+                  <h2 className="font-semibold text-foreground">
+                    {isAdmin ? '관리자 페이지' : '운영자 페이지'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {isAdmin
+                      ? '사이트 운영에 필요한 모든 관리 기능을 이용할 수 있습니다.'
+                      : '권한이 부여된 콘텐츠와 문의를 관리할 수 있습니다.'}
+                  </p>
+                </div>
+                <Link href="/admin">
+                  <Button variant="outline" data-testid="button-open-admin">
+                    {isAdmin ? '관리자 페이지 열기' : '운영자 페이지 열기'}
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
 

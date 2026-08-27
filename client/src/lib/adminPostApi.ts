@@ -4,10 +4,8 @@ import type { InsertPost, InsertPostTranslation, InsertPostMeta } from '@shared/
 /**
  * Admin Post API Orchestration
  * 
- * These helpers orchestrate 3-step API calls for creating/updating posts:
- * 1. Create/update base post
- * 2. Upsert translation
- * 3. Batch update meta
+ * Creation is sent as one permission-checked request. Updates retain the
+ * existing stepwise flow because each step requires update permission.
  */
 
 interface CreatePostPayload {
@@ -24,27 +22,12 @@ interface UpdatePostPayload {
 }
 
 /**
- * Create a new post with translation and meta
- * 3-step orchestration:
- * 1. POST /api/posts (create base post)
- * 2. POST /api/posts/:id/translations (create translation)
- * 3. For each meta: POST /api/posts/:id/meta (create meta)
+ * Create a complete post in one request so create-only operators do not need
+ * update permission merely to attach the initial translation and metadata.
  */
 export async function createPost({ post, translation, meta }: CreatePostPayload) {
-  // Step 1: Create base post
-  const createResponse = await apiRequest('POST', '/api/posts', post);
-  const createdPost = await createResponse.json();
-  const postId = createdPost.id;
-
-  // Step 2: Create translation
-  await apiRequest('POST', `/api/posts/${postId}/translations`, translation);
-
-  // Step 3: Create meta (batch)
-  for (const metaItem of meta) {
-    await apiRequest('POST', `/api/posts/${postId}/meta`, metaItem);
-  }
-
-  return createdPost;
+  const response = await apiRequest('POST', '/api/posts', { post, translation, meta });
+  return response.json();
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -7,9 +7,14 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { Mail, Send } from 'lucide-react';
 import type { InquiryWithReplies, InquiryReply } from '@shared/schema';
+import { useAuth } from '@/hooks/useAuth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; onClose: () => void }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { isAdmin, hasPermission } = useAuth();
+  const canRespond = isAdmin || hasPermission('inquiry.respond');
   const [replyMessage, setReplyMessage] = useState('');
   const [sendEmail, setSendEmail] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -20,6 +25,19 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
       const response = await apiRequest('GET', `/api/inquiries/${inquiryId}`);
       if (!response.ok) throw new Error('Failed to load inquiry details');
       return response.json();
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (status: string) =>
+      apiRequest('PUT', `/api/inquiries/${inquiryId}`, { status }),
+    onSuccess: () => {
+      toast({ title: '문의 상태가 변경되었습니다.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+      refetch();
+    },
+    onError: () => {
+      toast({ title: '문의 상태 변경에 실패했습니다.', variant: 'destructive' });
     },
   });
 
@@ -107,14 +125,33 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
           </div>
           <div className="flex items-center gap-2 mt-3">
             <Badge variant="outline">{inquiry.category}</Badge>
-            <Badge variant={
-              inquiry.status === 'resolved' ? 'default' :
-              inquiry.status === 'in_progress' ? 'secondary' :
-              'destructive'
-            }>
-              {inquiry.status === 'resolved' ? '해결됨' :
-               inquiry.status === 'in_progress' ? '처리중' : '새 문의'}
-            </Badge>
+            {canRespond ? (
+              <Select
+                value={inquiry.status}
+                onValueChange={(status) => statusMutation.mutate(status)}
+                disabled={statusMutation.isPending}
+              >
+                <SelectTrigger className="h-8 w-28" data-testid="select-inquiry-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">새 문의</SelectItem>
+                  <SelectItem value="pending">대기</SelectItem>
+                  <SelectItem value="in_progress">처리중</SelectItem>
+                  <SelectItem value="resolved">해결됨</SelectItem>
+                  <SelectItem value="closed">종료</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <Badge variant={
+                inquiry.status === 'resolved' ? 'default' :
+                inquiry.status === 'in_progress' ? 'secondary' :
+                'destructive'
+              }>
+                {inquiry.status === 'resolved' ? '해결됨' :
+                 inquiry.status === 'in_progress' ? '처리중' : '새 문의'}
+              </Badge>
+            )}
             <span className="text-xs text-muted-foreground ml-auto">
               {new Date(inquiry.createdAt).toLocaleDateString('ko-KR', { 
                 year: 'numeric', 
@@ -160,7 +197,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
       )}
 
       {/* New Reply Form */}
-      <div className="space-y-3 border-t pt-4">
+      {canRespond && <div className="space-y-3 border-t pt-4">
         <h3 className="font-semibold text-lg">새 답변 작성</h3>
         <Textarea
           value={replyMessage}
@@ -203,7 +240,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
             </Button>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
