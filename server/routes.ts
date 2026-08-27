@@ -2,10 +2,10 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { canReadPost, publicPostAccess } from "./postAccess";
-import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, userMemberships, type User } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, userMemberships, roles, tiers, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, or, isNull, gt } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission, requireAnyPermission } from "./permissions";
@@ -371,8 +371,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { role, userType, membershipTier, isActive, name, email } = req.body;
       const updateData: any = {};
+      const accountRole = role === undefined
+        ? undefined
+        : z.enum(['admin', 'operator', 'user']).parse(role);
       
-      if (role) updateData.role = role;
+      if (accountRole) updateData.role = accountRole;
       if (userType) updateData.userType = userType;
       if (membershipTier) updateData.membershipTier = membershipTier;
       if (typeof isActive === 'boolean') updateData.isActive = isActive;
@@ -390,13 +393,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No fields to update" });
       }
       
-      const updatedUser = await storage.updateUser(req.params.id, updateData);
+      const updatedUser = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(users)
+          .set({ ...updateData, updatedAt: new Date() })
+          .where(eq(users.id, req.params.id))
+          .returning();
+
+        if (!updated || !accountRole) return updated;
+
+        const aclRoleCode = accountRole === 'user' ? 'member' : accountRole;
+        const effectiveMemberships = await tx
+          .select({
+            id: userMemberships.id,
+            tierId: userMemberships.tierId,
+            roleCode: roles.code,
+          })
+          .from(userMemberships)
+          .innerJoin(roles, eq(userMemberships.roleId, roles.id))
+          .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+          .where(and(
+            eq(userMemberships.userId, req.params.id),
+            eq(userMemberships.isActive, true),
+            eq(roles.isActive, true),
+            eq(tiers.isActive, true),
+            or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
+          ));
+
+        const matchingMembership = effectiveMemberships.find(
+          (membership) => membership.roleCode === aclRoleCode,
+        );
+
+        await tx
+          .update(userMemberships)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(and(
+            eq(userMemberships.userId, req.params.id),
+            eq(userMemberships.isActive, true),
+          ));
+
+        if (matchingMembership) {
+          await tx
+            .update(userMemberships)
+            .set({ isActive: true, updatedAt: new Date() })
+            .where(eq(userMemberships.id, matchingMembership.id));
+          return updated;
+        }
+
+        const [targetRole] = await tx
+          .select({ id: roles.id })
+          .from(roles)
+          .where(and(eq(roles.code, aclRoleCode), eq(roles.isActive, true)))
+          .limit(1);
+        const fallbackTierCode = accountRole === 'user' ? 'MEMBER' : 'ADMIN';
+        const existingTierId = effectiveMemberships.find(
+          (membership) => membership.tierId,
+        )?.tierId;
+        const [fallbackTier] = existingTierId
+          ? []
+          : await tx
+              .select({ id: tiers.id })
+              .from(tiers)
+              .where(and(eq(tiers.code, fallbackTierCode), eq(tiers.isActive, true)))
+              .limit(1);
+        const targetTierId = existingTierId || fallbackTier?.id;
+
+        if (!targetRole || !targetTierId) {
+          throw new Error(`ACL role or tier is not configured for ${accountRole}`);
+        }
+
+        await tx.insert(userMemberships).values({
+          userId: req.params.id,
+          tierId: targetTierId,
+          roleId: targetRole.id,
+          isActive: true,
+          startedAt: new Date(),
+          notes: 'Synchronized from account role',
+        });
+
+        return updated;
+      });
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
       
       res.json({ ...updatedUser, password: undefined });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid user role", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });

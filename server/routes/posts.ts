@@ -15,37 +15,6 @@ import "../types";
 
 const router = Router();
 
-const postPermissionKeys = {
-  news: {
-    read: "news.read",
-    create: "news.create",
-    update: "news.update",
-    delete: "news.delete",
-    publish: "news.publish",
-  },
-  event: {
-    read: "event.read",
-    create: "event.create",
-    update: "event.update",
-    delete: "event.delete",
-    publish: "event.publish",
-  },
-  resource: {
-    read: "resource.read",
-    create: "resource.upload",
-    update: "resource.update",
-    delete: "resource.delete",
-    publish: "resource.publish",
-  },
-  page: {
-    read: undefined,
-    create: undefined,
-    update: undefined,
-    delete: undefined,
-    publish: undefined,
-  },
-} as const;
-
 async function canManagePost(
   req: Request,
   postType: string,
@@ -145,7 +114,7 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
     
     // Parse tags from comma-separated string
@@ -183,73 +152,73 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
 router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
-    
     const locale = localeQuerySchema.parse(req.query.locale);
     const adminMode = req.query.admin === "true";
-    let adminPostType: string | undefined;
+
+    if (adminMode) {
+      const adminPost = await storage.getPostBySlug(slug);
+      if (!adminPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      if (!await requirePostPermission(req, res, adminPost.postType, "read")) return;
+    }
+
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin" || adminMode,
+    );
+    const post = await storage.getPostBySlugWithTranslations(slug, locale, access);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.json(post);
+  } catch (error) {
+    console.error("[Posts API] Error fetching post by slug:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/posts/:id - Get single post by ID with translations
+router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = postIdSchema.parse(req.params);
+    const locale = localeQuerySchema.parse(req.query.locale);
+    const adminMode = req.query.admin === "true";
+
     if (adminMode) {
       const adminPost = await storage.getPost(id);
       if (!adminPost) {
         return res.status(404).json({ message: "Post not found" });
       }
-      adminPostType = adminPost.postType;
-      if (!await requirePostPermission(req, res, adminPostType, "read")) return;
+      if (!await requirePostPermission(req, res, adminPost.postType, "read")) return;
     }
+
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
-    const post = await storage.getPostWithTranslations(id, undefined, access);
-    
-    res.status(201).json(post);
+    const post = await storage.getPostWithTranslations(id, locale, access);
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.json(post);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid post data", errors: error.errors });
+      return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
-    console.error("[Posts API] Error creating post:", error);
+    console.error("[Posts API] Error fetching post:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
+// POST /api/posts/:id/register - Register for an event
+router.post("/:id/register", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
-    const locale = localeQuerySchema.parse(req.query.locale);
-    const adminMode = req.query.admin === "true";
-    let adminPostType: string | undefined;
-    if (adminMode) {
-      const adminPost = await storage.getPost(id);
-      if (!adminPost) {
-        return res.status(404).json({ message: "Post not found" });
-      }
-      adminPostType = adminPost.postType;
-      if (!await requirePostPermission(req, res, adminPostType, "read")) return;
-    }
-    const access = await storage.getPostAccessContext(
-      req.user?.id,
-      req.user?.role === "admin",
-    );
-    
-    const post = await storage.getPostWithTranslations(id, undefined, access);
-    
-    res.status(201).json(post);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid post data", errors: error.errors });
-    }
-    console.error("[Posts API] Error creating post:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-// PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
-  try {
-    const { id } = postIdSchema.parse(req.params);
-    if (!await requirePostPermission(req, res, "event", "attendeeManage")) return;
-    
-    // Check if post exists and is an event
     const access = await storage.getPostAccessContext(
       req.user?.id,
       req.user?.role === "admin",
@@ -357,7 +326,11 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
       ? postData.slug 
       : generateSlug(postData.postType);
     
-    const post = await storage.getPostWithTranslations(id, undefined, access);
+    const post = await storage.createPost({
+      ...postData,
+      slug,
+      authorId,
+    });
     
     res.status(201).json(post);
   } catch (error) {
@@ -388,23 +361,23 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
       existingPost.status !== "published" &&
       !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
     
-    const updatedPost = await storage.getPost(id);
+    const updatedPost = await storage.updatePost(id, updateData);
     if (updatedPost) {
       await syncResourceObjectAcl(updatedPost, req.user!.id);
     }
     
-    res.json({ success: true });
+    res.json(updatedPost);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid meta data", errors: error.errors });
+      return res.status(400).json({ message: "Invalid update data", errors: error.errors });
     }
-    console.error("[Posts API] Error setting post meta:", error);
+    console.error("[Posts API] Error updating post:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// POST /api/posts/:id/meta/increment - Increment numeric meta value
-router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+// DELETE /api/posts/:id - Delete post
+router.delete("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -472,7 +445,7 @@ router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Res
     
     if (key) {
       // Get specific meta value
-    let value: any = metaData.value;
+      const value = await storage.getPostMeta(id, key);
       res.json({ key, value });
     } else {
       // Get all meta for post
@@ -555,24 +528,3 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
 });
 
 export default router;
-
-type StandardPostAction = keyof typeof postPermissionKeys.news;
-
-type PostAction = StandardPostAction | "attendeeManage";
-
-type ManagedPostType = keyof typeof postPermissionKeys;
-
-function isManagedPostType(postType: string): postType is ManagedPostType {
-  return postType in postPermissionKeys;
-}
-
-function getPostPermissionKey(
-  postType: ManagedPostType,
-  action: PostAction,
-): string | undefined {
-  if (action === "attendeeManage") {
-    return postType === "event" ? "event.attendee.manage" : undefined;
-  }
-
-  return postPermissionKeys[postType][action as StandardPostAction];
-}
