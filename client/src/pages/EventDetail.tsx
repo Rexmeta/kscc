@@ -25,8 +25,8 @@ export default function EventDetailPage() {
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(id || '', language),
-    queryFn: async () => {
-      const response = await fetch(`/api/posts/${id}?locale=${language}`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/posts/${id}?locale=${language}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch post');
       return response.json();
     },

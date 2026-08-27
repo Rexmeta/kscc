@@ -59,8 +59,8 @@ export default function ContactPage() {
   
   const { data: page } = useQuery<PostWithTranslations>({
     queryKey: ['/api/posts/slug', 'contact', language],
-    queryFn: async () => {
-      const response = await fetch(`/api/posts/slug/contact?locale=${language}`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/posts/slug/contact?locale=${language}`, { signal });
       if (!response.ok) throw new Error('Page not found');
       return response.json();
     },

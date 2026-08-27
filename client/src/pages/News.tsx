@@ -24,7 +24,7 @@ export default function NewsPage() {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'news', page, category, search, language, limit: 14 }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         postType: 'news',
         status: 'published',
@@ -36,7 +36,7 @@ export default function NewsPage() {
         compact: 'true',
       });
       
-      const response = await fetch(`/api/posts?${params}`);
+      const response = await fetch(`/api/posts?${params}`, { signal });
       
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {

@@ -26,6 +26,13 @@ const memberQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(12),
 });
 
+const inquiryQuerySchema = z.object({
+  status: z.string().trim().max(30).optional(),
+  category: z.string().trim().max(50).optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
 // Auth middleware
 export function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
@@ -529,23 +536,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/inquiries", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { status, category, page = "1", limit = "20" } = req.query;
-      const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
+      const { status, category, page, limit } = inquiryQuerySchema.parse(req.query);
+      const offset = (page - 1) * limit;
       
       const result = await storage.getInquiries({
-        status: status as string,
-        category: category as string,
-        limit: parseInt(limit as string),
+        status,
+        category,
+        limit,
         offset,
       });
       
       res.json({
         inquiries: result.inquiries,
         total: result.total,
-        page: parseInt(page as string),
-        totalPages: Math.ceil(result.total / parseInt(limit as string)),
+        page,
+        totalPages: Math.ceil(result.total / limit),
       });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid inquiry query", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });

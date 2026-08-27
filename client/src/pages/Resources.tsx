@@ -60,7 +60,7 @@ export default function ResourcesPage() {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'resource', page, category, language, limit: 20 }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         postType: 'resource',
         status: 'published',
@@ -72,6 +72,7 @@ export default function ResourcesPage() {
       });
       
       const response = await fetch(`/api/posts?${params}`, {
+        signal,
         headers: isAuthenticated ? {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         } : {}
@@ -94,8 +95,8 @@ export default function ResourcesPage() {
 
   const { data: resourceDetail } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(selectedResource?.id || '', language),
-    queryFn: async () => {
-      const response = await fetch(`/api/posts/${selectedResource!.id}?locale=${language}`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/posts/${selectedResource!.id}?locale=${language}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch resource');
       return response.json();
     },

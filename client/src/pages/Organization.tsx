@@ -148,8 +148,8 @@ export default function Organization() {
 
   const { data: members, isLoading } = useQuery<OrganizationMember[]>({
     queryKey: ['/api/organization-members'],
-    queryFn: async () => {
-      const response = await fetch('/api/organization-members?isActive=true');
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/organization-members?isActive=true', { signal });
       if (!response.ok) throw new Error('Failed to fetch');
       return response.json();
     },

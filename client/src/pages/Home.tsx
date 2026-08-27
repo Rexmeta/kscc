@@ -32,8 +32,8 @@ export default function Home() {
   // Fetch upcoming events
   const { data: eventsData } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, limit: 3, language }),
-    queryFn: async () => {
-      const response = await fetch(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`, { signal });
       return response.json();
     },
   });
@@ -41,8 +41,8 @@ export default function Home() {
   // Fetch latest news
   const { data: newsData } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'news', limit: 3, language }),
-    queryFn: async () => {
-      const response = await fetch(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`);
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`, { signal });
       return response.json();
     },
   });
@@ -50,8 +50,8 @@ export default function Home() {
   // Fetch the partner cards and the total count in one bounded response.
   const { data: membersData } = useQuery({
     queryKey: queryKeys.members.list({ isPublic: true, limit: 12 }),
-    queryFn: async () => {
-      const response = await fetch('/api/members?limit=12');
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/members?limit=12', { signal });
       return response.json();
     },
   });

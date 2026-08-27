@@ -454,11 +454,14 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [totalResult] = await countQuery;
-    const inquiriesResult = await query
-      .orderBy(desc(inquiries.createdAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
+    const [totalResults, inquiriesResult] = await Promise.all([
+      countQuery,
+      query
+        .orderBy(desc(inquiries.createdAt))
+        .limit(filters?.limit || 50)
+        .offset(filters?.offset || 0),
+    ]);
+    const [totalResult] = totalResults;
 
     return {
       inquiries: inquiriesResult,

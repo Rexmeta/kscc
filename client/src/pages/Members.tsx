@@ -33,7 +33,7 @@ export default function MembersPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.members.list({ page, search: debouncedSearch, country, industry, membershipLevel, limit: 12 }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '12',
@@ -42,7 +42,7 @@ export default function MembersPage() {
         ...(industry && { industry }),
         ...(membershipLevel && { membershipLevel }),
       });
-      const response = await fetch(`/api/members?${params}`);
+      const response = await fetch(`/api/members?${params}`, { signal });
       return response.json();
     },
   });

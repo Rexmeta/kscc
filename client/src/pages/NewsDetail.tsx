@@ -25,12 +25,12 @@ export default function NewsDetail() {
 
   const { data: post, isLoading } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(id || '', language),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // Try slug first, then fall back to ID
-      let response = await fetch(`/api/posts/slug/${id}?locale=${language}`);
+      let response = await fetch(`/api/posts/slug/${id}?locale=${language}`, { signal });
       if (!response.ok) {
         // Fall back to ID-based lookup
-        response = await fetch(`/api/posts/${id}?locale=${language}`);
+        response = await fetch(`/api/posts/${id}?locale=${language}`, { signal });
       }
       if (!response.ok) {
         throw new Error('News not found');

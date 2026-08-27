@@ -78,7 +78,10 @@ export const inquiries = pgTable("inquiries", {
   message: text("message").notNull(),
   status: text("status").notNull().default("new"), // new, in_progress, resolved
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  statusCreatedIdx: index("inquiries_status_created_idx").on(table.status, table.createdAt.desc()),
+  categoryCreatedIdx: index("inquiries_category_created_idx").on(table.category, table.createdAt.desc()),
+}));
 
 export const inquiryReplies = pgTable("inquiry_replies", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -22,7 +22,7 @@ export default function EventsPage() {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'event', page, category, upcoming, limit, language }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const offset = (page - 1) * limit;
       const params = new URLSearchParams({
         postType: 'event',
@@ -34,7 +34,7 @@ export default function EventsPage() {
         ...(category && { tags: category }),
         ...(upcoming === 'true' && { upcoming: 'true' }),
       });
-      const response = await fetch(`/api/posts?${params}`);
+      const response = await fetch(`/api/posts?${params}`, { signal });
       return response.json();
     },
   });
