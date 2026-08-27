@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +16,7 @@ import RichTextEditor from '@/components/RichTextEditor';
 import type { UploadResult } from '@uppy/core';
 import { type ResourceFormData } from '@/lib/adminPostMappers';
 import { resourceSchema } from '../adminSchemas';
-import { getUploadParameters, setImagePublicAcl } from '../uploadHelpers';
+import { getResourceObjectAclVisibility, getUploadParameters, setObjectAcl } from '../uploadHelpers';
 import { useCreateResourcePost } from '@/hooks/useAdminMutations';
 
 interface CreateResourceDialogProps {
@@ -37,17 +38,19 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
       content: '',
       tags: [],
       fileUrl: '',
+      visibility: 'public',
       isPublished: false,
     }
   });
 
   const isPublished = watch('isPublished');
+  const visibility = watch('visibility');
 
   const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
       const objectPath = window.__lastUploadObjectPath || '';
       if (objectPath) {
-        await setImagePublicAcl(objectPath);
+        await setObjectAcl(objectPath, getResourceObjectAclVisibility(visibility, isPublished));
         setFileUrl(objectPath);
         setValue('fileUrl', objectPath);
         toast({ title: '파일 업로드 완료!' });
@@ -121,6 +124,26 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
           <div className="flex items-center space-x-2">
             <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} data-testid="switch-resource-published" />
             <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+          </div>
+
+          <div>
+            <label className="form-label">공개 범위</label>
+            <Select value={visibility} onValueChange={(value) => {
+              setValue('visibility', value as 'public' | 'members' | 'premium');
+              if (fileUrl) {
+                void setObjectAcl(fileUrl, getResourceObjectAclVisibility(value as 'public' | 'members' | 'premium', isPublished));
+              }
+            }}>
+              <SelectTrigger data-testid="select-resource-visibility">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="public">공개</SelectItem>
+                <SelectItem value="members">회원 전용</SelectItem>
+                <SelectItem value="premium">프리미엄 회원 전용</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.visibility && <p className="text-sm text-destructive mt-1">{errors.visibility.message}</p>}
           </div>
 
           <div className="flex gap-2">

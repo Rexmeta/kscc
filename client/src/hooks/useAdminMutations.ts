@@ -227,6 +227,7 @@ export function useUpdateResourcePost(options: {
         post: {
           status: formData.isPublished ? 'published' : 'draft',
           publishedAt: formData.isPublished ? new Date() : null,
+          visibility: formData.visibility,
           tags: formData.tags || [],
         },
         translation: {

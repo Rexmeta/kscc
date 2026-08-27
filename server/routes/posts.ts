@@ -1,6 +1,8 @@
 import { Router, type Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { insertPostSchema, insertPostTranslationSchema, insertEventRegistrationSchema } from "@shared/schema";
+import { ObjectStorageService, getResourceObjectAclVisibility } from "../objectStorage";
+import type { Post } from "@shared/schema";
 import { z } from "zod";
 import { authenticateToken, optionalAuthenticateToken } from "../routes";
 import "../types";
@@ -43,6 +45,22 @@ const postMetaPayloadSchema = z.object({
   valueBoolean: z.boolean().nullable().optional(),
   valueTimestamp: z.coerce.date().nullable().optional(),
 });
+
+async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<void> {
+  if (post.postType !== "resource") return;
+
+  const fileMeta = await storage.getPostMeta(post.id, "resource.fileUrl");
+  const fileUrl = fileMeta?.valueText ||
+    (typeof fileMeta?.value === "string" ? fileMeta.value : "");
+  if (!fileUrl) return;
+
+  const objectStorageService = new ObjectStorageService();
+  await objectStorageService.updateObjectEntityAclVisibility(
+    fileUrl,
+    getResourceObjectAclVisibility(post),
+    ownerId,
+  );
+}
 
 // GET /api/posts - List posts with filters
 router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) => {
@@ -272,6 +290,10 @@ router.patch("/:id", authenticateToken, requireAdmin, async (req: Request, res: 
     
     const updatedPost = await storage.updatePost(id, updateData);
     
+    if (updatedPost) {
+      await syncResourceObjectAcl(updatedPost, req.user!.id);
+    }
+
     res.json(updatedPost);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -391,6 +413,10 @@ router.post("/:id/meta", authenticateToken, requireAdmin, async (req: Request, r
     }
     
     await storage.setPostMeta(id, metaData.key, value);
+    const updatedPost = await storage.getPost(id);
+    if (updatedPost) {
+      await syncResourceObjectAcl(updatedPost, req.user!.id);
+    }
     
     res.json({ success: true });
   } catch (error) {

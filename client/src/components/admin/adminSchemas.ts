@@ -36,6 +36,7 @@ export const resourceSchema = z.object({
   content: z.string().optional(),
   tags: z.array(z.string()).optional(),
   fileUrl: z.string().optional(),
+  visibility: z.enum(['public', 'members', 'premium']).default('public'),
   isPublished: z.boolean().default(false),
 });
 export type ResourceFormValues = z.infer<typeof resourceSchema>;

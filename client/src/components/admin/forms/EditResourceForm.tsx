@@ -6,25 +6,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import RichTextEditor from '@/components/RichTextEditor';
 import type { UploadResult } from '@uppy/core';
 import { resourceSchema, type ResourceFormValues } from '../adminSchemas';
-import { getUploadParameters } from '../uploadHelpers';
+import { getResourceObjectAclVisibility, getUploadParameters, setObjectAcl } from '../uploadHelpers';
 import type { PostWithTranslations } from '@shared/schema';
 import { useUpdateResourcePost } from '@/hooks/useAdminMutations';
 
 export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTranslations; onSuccess: () => void }) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const [fileUrl, setFileUrl] = useState('');
 
   const translation = resource.translations?.[0];
   const fileUrlMeta = resource.meta?.find((m) => m.key === 'resource.fileUrl');
-  const existingFileUrl: string = (fileUrlMeta as { value?: string })?.value || '';
+  const existingFileUrl: string = fileUrlMeta?.valueText ||
+    (typeof fileUrlMeta?.value === 'string' ? fileUrlMeta.value : '') || '';
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceSchema),
@@ -34,33 +34,19 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
       content: translation?.content || '',
       tags: (resource.tags as string[]) || [],
       fileUrl: existingFileUrl,
+      visibility: resource.visibility === 'members' || resource.visibility === 'premium' ? resource.visibility : 'public',
       isPublished: resource.status === 'published',
     }
   });
 
   const isPublished = watch('isPublished');
-
-  const setFilePublicAcl = async (objectPath: string) => {
-    const token = localStorage.getItem('token');
-    try {
-      await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ imageURL: objectPath }),
-      });
-    } catch (e) {
-      console.error('Failed to set file ACL:', e);
-    }
-  };
+  const visibility = watch('visibility');
 
   const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
       const objectPath = window.__lastUploadObjectPath || '';
       if (objectPath) {
-        await setFilePublicAcl(objectPath);
+        await setObjectAcl(objectPath, getResourceObjectAclVisibility(visibility, isPublished));
         setFileUrl(objectPath);
         setValue('fileUrl', objectPath);
         toast({ title: '파일 업로드 완료!' });
@@ -113,6 +99,27 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
       <div className="flex items-center space-x-2">
         <Switch checked={isPublished} onCheckedChange={(c) => setValue('isPublished', c)} />
         <span className="text-sm">{isPublished ? '발행됨' : '초안'}</span>
+      </div>
+      <div>
+        <label className="form-label">공개 범위</label>
+        <Select value={visibility} onValueChange={(value) => {
+          const nextVisibility = value as 'public' | 'members' | 'premium';
+          setValue('visibility', nextVisibility);
+          const objectPath = fileUrl || existingFileUrl;
+          if (objectPath) {
+            void setObjectAcl(objectPath, getResourceObjectAclVisibility(nextVisibility, isPublished));
+          }
+        }}>
+          <SelectTrigger data-testid="select-resource-visibility-edit">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="public">공개</SelectItem>
+            <SelectItem value="members">회원 전용</SelectItem>
+            <SelectItem value="premium">프리미엄 회원 전용</SelectItem>
+          </SelectContent>
+        </Select>
+        {errors.visibility && <p className="text-sm text-destructive mt-1">{errors.visibility.message}</p>}
       </div>
       <div className="flex gap-2">
         <Button type="submit" disabled={updateMutation.isPending}>{updateMutation.isPending ? '수정 중...' : '수정'}</Button>

@@ -285,6 +285,7 @@ export interface ResourceFormData {
   content?: string;
   tags?: string[];
   fileUrl?: string;
+  visibility: 'public' | 'members' | 'premium';
   isPublished: boolean;
 }
 
@@ -303,7 +304,7 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
       primaryLocale: 'ko',
       authorId,
       status: formData.isPublished ? 'published' : 'draft',
-      visibility: 'public',
+      visibility: formData.visibility,
       isFeatured: false,
       tags: formData.tags || [],
       publishedAt: formData.isPublished ? new Date() : null,
@@ -327,13 +328,15 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
 
 export function mapPostToResourceForm(post: PostWithTranslations): ResourceFormData {
   const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
+  const fileUrlMeta = post.meta?.find(meta => meta.key === 'resource.fileUrl');
   
   return {
     title: translation?.title || post.slug,
     excerpt: translation?.excerpt || '',
     content: translation?.content || '',
     tags: (Array.isArray(post.tags) ? post.tags : []) || [],
-    fileUrl: '',
+    fileUrl: fileUrlMeta?.valueText || (typeof fileUrlMeta?.value === 'string' ? fileUrlMeta.value : ''),
+    visibility: post.visibility === 'members' || post.visibility === 'premium' ? post.visibility : 'public',
     isPublished: post.status === 'published',
   };
 }

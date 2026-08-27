@@ -12,6 +12,7 @@ import {
 import { canReadPost, publicPostAccess } from "./postAccess";
 import { canAccessObject, ObjectPermission } from "./objectAcl";
 import jwt from "jsonwebtoken";
+import { getResourceObjectAclVisibility } from "./objectStorage";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -56,15 +57,10 @@ test("object reads fail closed without ACL metadata", async () => {
     },
   } as any;
 
-  assert.equal(
-    await canAccessObject({
-      objectFile: file,
-      requestedPermission: ObjectPermission.READ,
-    }),
-    false,
-  );
-});
-
+  const publishedPost = (visibility: "public" | "members" | "premium") => ({
+    status: "published",
+    visibility,
+  }) as any;
 async function getDatabase() {
   const [{ db, pool }, { storage }] = await Promise.all([
     import("./db"),

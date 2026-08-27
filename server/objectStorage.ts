@@ -9,8 +9,17 @@ import {
   getObjectAclPolicy,
   setObjectAclPolicy,
 } from "./objectAcl";
+import type { Post } from "@shared/schema";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+
+export function getResourceObjectAclVisibility(
+  post: Pick<Post, "status" | "visibility">,
+): ObjectAclPolicy["visibility"] {
+  return post.status === "published" && post.visibility === "public"
+    ? "public"
+    : "private";
+}
 
 export const objectStorageClient = new Storage({
   credentials: {
@@ -247,6 +256,26 @@ export class ObjectStorageService {
 
     const objectFile = await this.getObjectEntityFile(normalizedPath);
     await setObjectAclPolicy(objectFile, aclPolicy);
+    return normalizedPath;
+  }
+
+  async updateObjectEntityAclVisibility(
+    rawPath: string,
+    visibility: ObjectAclPolicy["visibility"],
+    ownerId: string,
+  ): Promise<string> {
+    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
+    if (!normalizedPath.startsWith("/")) {
+      return normalizedPath;
+    }
+
+    const objectFile = await this.getObjectEntityFile(normalizedPath);
+    const existingPolicy = await getObjectAclPolicy(objectFile);
+    await setObjectAclPolicy(objectFile, {
+      owner: existingPolicy?.owner || ownerId,
+      visibility,
+      aclRules: existingPolicy?.aclRules,
+    });
     return normalizedPath;
   }
 
