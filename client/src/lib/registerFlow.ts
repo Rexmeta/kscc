@@ -41,6 +41,10 @@ interface SubmitRegistrationOptions {
   registerUser: RegisterUser;
   toast: (toast: RegisterToast) => unknown;
   setLocation: (location: string) => unknown;
+  setFieldError?: (
+    field: "companyName" | "business",
+    message: string,
+  ) => unknown;
 }
 
 export function getRegisterErrorMessage(error: unknown): string {
@@ -68,7 +72,35 @@ export async function submitRegistration({
   registerUser,
   toast,
   setLocation,
+  setFieldError,
 }: SubmitRegistrationOptions): Promise<boolean> {
+  if (userType === "company") {
+    const companyErrors: Array<{
+      field: "companyName" | "business";
+      message: string;
+    }> = [];
+
+    if (!data.companyName || data.companyName.length < 2) {
+      companyErrors.push({
+        field: "companyName",
+        message: "회사명은 2자 이상이어야 합니다",
+      });
+    }
+    if (!data.business || data.business.length < 2) {
+      companyErrors.push({
+        field: "business",
+        message: "사업 내용을 입력해주세요",
+      });
+    }
+
+    if (companyErrors.length > 0) {
+      for (const { field, message } of companyErrors) {
+        setFieldError?.(field, message);
+      }
+      return false;
+    }
+  }
+
   try {
     if (userType === "company") {
       await registerUser(

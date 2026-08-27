@@ -182,6 +182,82 @@ test("company registration forwards company information", async () => {
   ]);
 });
 
+async function runInvalidCompanyRegistration(
+  data: RegisterSubmissionData,
+) {
+  const calls: unknown[][] = [];
+  const fieldErrors: Record<string, string> = {};
+
+  const result = await submitRegistration({
+    data,
+    userType: "company",
+    registerUser: async (...args) => {
+      calls.push(args);
+    },
+    toast: () => undefined,
+    setLocation: () => undefined,
+    setFieldError: (field, message) => {
+      fieldErrors[field] = message;
+    },
+  });
+
+  return { result, calls, fieldErrors };
+}
+
+test("company registration rejects a missing company name before calling registerUser", async () => {
+  const { result, calls, fieldErrors } = await runInvalidCompanyRegistration({
+    ...registrationData,
+    business: "무역",
+  });
+
+  assert.equal(result, false);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(fieldErrors, {
+    companyName: "회사명은 2자 이상이어야 합니다",
+  });
+});
+
+test("company registration rejects a too-short company name before calling registerUser", async () => {
+  const { result, calls, fieldErrors } = await runInvalidCompanyRegistration({
+    ...registrationData,
+    companyName: "회",
+    business: "무역",
+  });
+
+  assert.equal(result, false);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(fieldErrors, {
+    companyName: "회사명은 2자 이상이어야 합니다",
+  });
+});
+
+test("company registration rejects missing business information before calling registerUser", async () => {
+  const { result, calls, fieldErrors } = await runInvalidCompanyRegistration({
+    ...registrationData,
+    companyName: "테스트 회사",
+  });
+
+  assert.equal(result, false);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(fieldErrors, {
+    business: "사업 내용을 입력해주세요",
+  });
+});
+
+test("company registration rejects too-short business information before calling registerUser", async () => {
+  const { result, calls, fieldErrors } = await runInvalidCompanyRegistration({
+    ...registrationData,
+    companyName: "테스트 회사",
+    business: "무",
+  });
+
+  assert.equal(result, false);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(fieldErrors, {
+    business: "사업 내용을 입력해주세요",
+  });
+});
+
 test("API errors preserve their structured body", async () => {
   installLocalStorage();
   globalThis.fetch = async () =>

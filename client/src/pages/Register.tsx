@@ -59,25 +59,14 @@ export default function RegisterPage() {
   };
 
   const onSubmit = async (data: RegisterForm) => {
-    if (userType === 'company') {
-      let hasError = false;
-      if (!data.companyName || data.companyName.length < 2) {
-        setError('companyName', { type: 'manual', message: '회사명은 2자 이상이어야 합니다' });
-        hasError = true;
-      }
-      if (!data.business || data.business.length < 2) {
-        setError('business', { type: 'manual', message: '사업 내용을 입력해주세요' });
-        hasError = true;
-      }
-      if (hasError) return;
-    }
-
     await submitRegistration({
       data,
       userType,
       registerUser: registerUser,
       toast,
       setLocation,
+      setFieldError: (field, message) =>
+        setError(field, { type: 'manual', message }),
     });
   };
 
