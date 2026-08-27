@@ -114,7 +114,7 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
     
     // Parse tags from comma-separated string
@@ -156,7 +156,7 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
     const adminMode = req.query.admin === "true";
 
     if (adminMode) {
-      const adminPost = await storage.getPost(id);
+      const adminPost = await storage.getPostBySlug(slug);
       if (!adminPost) {
         return res.status(404).json({ message: "Post not found" });
       }
@@ -165,39 +165,25 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
-    const post = await storage.getPostWithTranslations(id, undefined, access);
-    createdPostId = post.id;
-
-    if (completeCreate) {
-      await storage.upsertPostTranslation({
-        postId: post.id,
-        ...completeCreate.translation,
-      });
-      for (const metaData of completeCreate.meta) {
-        await storage.setPostMeta(post.id, metaData.key, getPostMetaValue(metaData));
-      }
-      await syncResourceObjectAcl(post, req.user!.id);
+    const post = await storage.getPostBySlugWithTranslations(slug, locale, access);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(201).json(post);
+    res.json(post);
   } catch (error) {
-    if (createdPostId) {
-      await storage.deletePost(createdPostId).catch((cleanupError) => {
-        console.error("[Posts API] Failed to clean up partial post creation:", cleanupError);
-      });
-    }
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid post data", errors: error.errors });
+      return res.status(400).json({ message: "Invalid locale", errors: error.errors });
     }
-    console.error("[Posts API] Error creating post:", error);
+    console.error("[Posts API] Error fetching post by slug:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
+// GET /api/posts/:id - Get single post by ID with translations
+router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     const locale = localeQuerySchema.parse(req.query.locale);
@@ -213,39 +199,25 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      req.user?.role === "admin" || adminMode,
     );
-    const post = await storage.getPostWithTranslations(id, undefined, access);
-    createdPostId = post.id;
-
-    if (completeCreate) {
-      await storage.upsertPostTranslation({
-        postId: post.id,
-        ...completeCreate.translation,
-      });
-      for (const metaData of completeCreate.meta) {
-        await storage.setPostMeta(post.id, metaData.key, getPostMetaValue(metaData));
-      }
-      await syncResourceObjectAcl(post, req.user!.id);
+    const post = await storage.getPostWithTranslations(id, locale, access);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(201).json(post);
+    res.json(post);
   } catch (error) {
-    if (createdPostId) {
-      await storage.deletePost(createdPostId).catch((cleanupError) => {
-        console.error("[Posts API] Failed to clean up partial post creation:", cleanupError);
-      });
-    }
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid post data", errors: error.errors });
+      return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
-    console.error("[Posts API] Error creating post:", error);
+    console.error("[Posts API] Error fetching post:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// PATCH /api/posts/:id - Update post
-router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
+// POST /api/posts/:id/register - Register for an event
+router.post("/:id/register", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     const access = await storage.getPostAccessContext(
@@ -351,7 +323,28 @@ function getPostMetaValue(metaData: z.infer<typeof postMetaPayloadSchema>) {
   }
   return metaData.value;
 }
-    const postData = completeCreate?.post ?? insertPostSchema.parse(req.body);
+
+const postCreateDataSchema = insertPostSchema.extend({
+  publishedAt: z.coerce.date().nullable().optional(),
+  scheduledAt: z.coerce.date().nullable().optional(),
+  expiresAt: z.coerce.date().nullable().optional(),
+});
+
+const completePostCreateSchema = z.object({
+  post: postCreateDataSchema,
+  translation: insertPostTranslationSchema.omit({ postId: true }),
+  meta: z.array(postMetaPayloadSchema),
+});
+
+// POST /api/posts - Create a post with its initial translation and metadata
+router.post("/", authenticateToken, async (req: Request, res: Response) => {
+  let createdPostId: string | undefined;
+
+  try {
+    const completeCreate = req.body?.post
+      ? completePostCreateSchema.parse(req.body)
+      : undefined;
+    const postData = completeCreate?.post ?? postCreateDataSchema.parse(req.body);
     if (!await requirePostPermission(req, res, postData.postType, "create")) return;
     if (postData.status === "published" &&
       !await requirePostPermission(req, res, postData.postType, "publish")) return;
@@ -367,7 +360,11 @@ function getPostMetaValue(metaData: z.infer<typeof postMetaPayloadSchema>) {
       ? postData.slug 
       : generateSlug(postData.postType);
     
-    const post = await storage.getPostWithTranslations(id, undefined, access);
+    const post = await storage.createPost({
+      ...postData,
+      slug,
+      authorId,
+    });
     createdPostId = post.id;
 
     if (completeCreate) {
@@ -415,23 +412,23 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
       existingPost.status !== "published" &&
       !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
     
-    const updatedPost = await storage.getPost(id);
+    const updatedPost = await storage.updatePost(id, updateData);
     if (updatedPost) {
       await syncResourceObjectAcl(updatedPost, req.user!.id);
     }
     
-    res.json({ success: true });
+    res.json(updatedPost);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: "Invalid meta data", errors: error.errors });
+      return res.status(400).json({ message: "Invalid update data", errors: error.errors });
     }
-    console.error("[Posts API] Error setting post meta:", error);
+    console.error("[Posts API] Error updating post:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// POST /api/posts/:id/meta/increment - Increment numeric meta value
-router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+// DELETE /api/posts/:id - Delete post
+router.delete("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
     
@@ -528,7 +525,8 @@ router.post("/:id/meta", authenticateToken, async (req: Request, res: Response) 
     if (!await requirePostPermission(req, res, existingPost.postType, "update")) return;
     
     const metaData = postMetaPayloadSchema.parse(req.body);
-      const value = await storage.getPostMeta(id, key);
+    const value = getPostMetaValue(metaData);
+    await storage.setPostMeta(id, metaData.key, value);
     const updatedPost = await storage.getPost(id);
     if (updatedPost) {
       await syncResourceObjectAcl(updatedPost, req.user!.id);
@@ -569,15 +567,3 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
 });
 
 export default router;
-
-    const completeCreate = req.body?.post
-      ? completePostCreateSchema.parse(req.body)
-      : undefined;
-
-  let createdPostId: string | undefined;
-
-const completePostCreateSchema = z.object({
-  post: insertPostSchema,
-  translation: insertPostTranslationSchema.omit({ postId: true }),
-  meta: z.array(postMetaPayloadSchema),
-});

@@ -7,4 +7,4 @@ Initial post creation, its primary translation, and initial metadata must be acc
 
 **Why:** A multi-request creation flow can save the base row, then fail when the translation or metadata endpoint requires update permission. This leaves a partial untitled record and prevents valid create-only roles from completing their work.
 
-**How to apply:** When changing post creation payloads or adding initial child records, validate the complete payload before saving, authorize the operation with the scoped create permission, and clean up the base post if persistence fails.
+**How to apply:** Validate the complete payload before saving, including coercing HTTP ISO timestamp strings to dates. Authorize with the scoped create permission and clean up the base post if child persistence fails.
