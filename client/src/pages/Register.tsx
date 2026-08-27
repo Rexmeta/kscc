@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
-import { ApiRequestError } from '@/lib/queryClient';
+import { submitRegistration } from '@/lib/registerFlow';
 
 const companySchema = z.object({
   name: z.string().min(2, '이름은 2자 이상이어야 합니다'),
@@ -30,27 +30,6 @@ const companySchema = z.object({
 });
 
 type RegisterForm = z.infer<typeof companySchema>;
-
-const DEFAULT_REGISTER_ERROR = "회원가입 중 오류가 발생했습니다.";
-
-function getRegisterErrorMessage(error: unknown): string {
-  if (!(error instanceof ApiRequestError)) {
-    return DEFAULT_REGISTER_ERROR;
-  }
-
-  const responseBody = error.responseBody;
-  if (
-    responseBody !== null &&
-    typeof responseBody === "object" &&
-    "message" in responseBody &&
-    typeof responseBody.message === "string" &&
-    responseBody.message.trim()
-  ) {
-    return responseBody.message;
-  }
-
-  return DEFAULT_REGISTER_ERROR;
-}
 
 export default function RegisterPage() {
   const [userType, setUserType] = useState<'staff' | 'company'>('staff');
@@ -93,37 +72,13 @@ export default function RegisterPage() {
       if (hasError) return;
     }
 
-    try {
-      if (userType === 'company') {
-        await registerUser(
-          data.name,
-          data.email,
-          data.password,
-          'company',
-          {
-            companyName: data.companyName!,
-            business: data.business!,
-            contactEmail: data.contactEmail || undefined,
-            contactPhone: data.contactPhone || undefined,
-          },
-          data.weixin || undefined
-        );
-      } else {
-        await registerUser(data.name, data.email, data.password, 'staff', undefined, data.weixin || undefined);
-      }
-
-      toast({
-        title: "회원가입 성공",
-        description: "환영합니다! 계정이 생성되었습니다.",
-      });
-      setLocation('/dashboard');
-    } catch (error) {
-      toast({
-        title: "회원가입 실패",
-        description: getRegisterErrorMessage(error),
-        variant: "destructive",
-      });
-    }
+    await submitRegistration({
+      data,
+      userType,
+      registerUser: registerUser,
+      toast,
+      setLocation,
+    });
   };
 
   return (
