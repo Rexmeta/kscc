@@ -90,6 +90,9 @@ function MemberCard({ member, language }: { member: OrganizationMember; language
           src={member.photo} 
           alt={name}
           className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+          width={64}
+          height={64}
+          loading="lazy"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
           }}

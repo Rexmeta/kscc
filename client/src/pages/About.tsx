@@ -26,9 +26,9 @@ export default function AboutPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const { data: page, isLoading } = useQuery<PostWithTranslations>({
-    queryKey: ['/api/posts/slug', 'about'],
+    queryKey: ['/api/posts/slug', 'about', language],
     queryFn: async () => {
-      const response = await fetch('/api/posts/slug/about');
+      const response = await fetch(`/api/posts/slug/about?locale=${language}`);
       if (!response.ok) throw new Error('Page not found');
       return response.json();
     },

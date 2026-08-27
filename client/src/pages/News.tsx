@@ -168,6 +168,9 @@ export default function NewsPage() {
                                 src={featuredImage} 
                                 alt={translation?.title || ''} 
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                width={800}
+                                height={600}
+                                loading="eager"
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
@@ -228,6 +231,9 @@ export default function NewsPage() {
                                 src={featuredImage} 
                                 alt={translation?.title || ''} 
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                width={224}
+                                height={160}
+                                loading="lazy"
                               />
                             </div>
                           )}
@@ -262,6 +268,9 @@ export default function NewsPage() {
                               src={featuredImage} 
                               alt={translation?.title || ''} 
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              width={640}
+                              height={400}
+                              loading="lazy"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">

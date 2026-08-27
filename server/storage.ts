@@ -75,7 +75,7 @@ export interface IStorage {
   // Posts
   getPost(id: string): Promise<Post | undefined>;
   getPostBySlug(slug: string): Promise<Post | undefined>;
-  getPostBySlugWithTranslations(slug: string): Promise<PostWithTranslations | undefined>;
+  getPostBySlugWithTranslations(slug: string, locale?: string): Promise<PostWithTranslations | undefined>;
   getPostWithTranslations(id: string, locale?: string): Promise<PostWithTranslations | undefined>;
   getPosts(filters?: {
     postType?: string;
@@ -335,7 +335,8 @@ export class DatabaseStorage implements IStorage {
       .where(eq(eventRegistrations.userId, userId))
       .orderBy(desc(eventRegistrations.createdAt));
 
-    // Batch fetch event posts with translations for all registrations
+    // Fetch all related event data in three bounded queries instead of one
+    // post/meta/translation query per registration.
     const eventIds = registrations.map(r => r.eventId).filter(Boolean) as string[];
     
     if (eventIds.length === 0) {
@@ -345,12 +346,30 @@ export class DatabaseStorage implements IStorage {
       }));
     }
 
-    // Fetch all events with their translations and meta in parallel
-    const eventsPromises = eventIds.map(id => this.getPostWithTranslations(id));
-    const events = await Promise.all(eventsPromises);
+    const [eventPosts, translations, meta] = await Promise.all([
+      db.select().from(posts).where(inArray(posts.id, eventIds)),
+      db.select().from(postTranslations).where(inArray(postTranslations.postId, eventIds)),
+      db.select().from(postMeta).where(inArray(postMeta.postId, eventIds)),
+    ]);
 
-    // Create a map for quick lookup
-    const eventsMap = new Map(events.filter(e => e !== null).map((e) => [e!.id, e!]));
+    const translationsByPost = new Map<string, PostTranslation[]>();
+    for (const translation of translations) {
+      const existing = translationsByPost.get(translation.postId) || [];
+      translationsByPost.set(translation.postId, [...existing, translation]);
+    }
+    const metaByPost = new Map<string, PostMeta[]>();
+    for (const item of meta) {
+      const existing = metaByPost.get(item.postId) || [];
+      metaByPost.set(item.postId, [...existing, item]);
+    }
+    const eventsMap = new Map(eventPosts.map(event => [
+      event.id,
+      {
+        ...event,
+        translations: translationsByPost.get(event.id) || [],
+        meta: metaByPost.get(event.id) || [],
+      },
+    ]));
 
     // Merge registrations with their event data
     return registrations.map(registration => ({
@@ -545,16 +564,42 @@ export class DatabaseStorage implements IStorage {
     return post || undefined;
   }
 
-  async getPostBySlugWithTranslations(slug: string): Promise<PostWithTranslations | undefined> {
-    const post = await this.getPostBySlug(slug);
-    if (!post) return undefined;
+  private async getLocalizedPostTranslations(postId: string, primaryLocale: string, locale?: string): Promise<PostTranslation[]> {
+    if (!locale) {
+      return db
+        .select()
+        .from(postTranslations)
+        .where(eq(postTranslations.postId, postId));
+    }
 
+    const locales = Array.from(new Set([locale, primaryLocale]));
     const translations = await db
       .select()
       .from(postTranslations)
-      .where(eq(postTranslations.postId, post.id));
+      .where(and(
+        eq(postTranslations.postId, postId),
+        inArray(postTranslations.locale, locales as any),
+      ));
 
-    const meta = await this.getPostMetaAll(post.id);
+    // Preserve the old "first available translation" fallback for incomplete content.
+    if (translations.length === 0) {
+      return db
+        .select()
+        .from(postTranslations)
+        .where(eq(postTranslations.postId, postId))
+        .limit(1);
+    }
+    return translations;
+  }
+
+  async getPostBySlugWithTranslations(slug: string, locale?: string): Promise<PostWithTranslations | undefined> {
+    const post = await this.getPostBySlug(slug);
+    if (!post) return undefined;
+
+    const [translations, meta] = await Promise.all([
+      this.getLocalizedPostTranslations(post.id, post.primaryLocale, locale),
+      this.getPostMetaAll(post.id),
+    ]);
 
     return {
       ...post,
@@ -567,23 +612,10 @@ export class DatabaseStorage implements IStorage {
     const post = await this.getPost(id);
     if (!post) return undefined;
 
-    let translations;
-    if (locale) {
-      translations = await db
-        .select()
-        .from(postTranslations)
-        .where(and(
-          eq(postTranslations.postId, id),
-          eq(postTranslations.locale, locale as any)
-        ));
-    } else {
-      translations = await db
-        .select()
-        .from(postTranslations)
-        .where(eq(postTranslations.postId, id));
-    }
-
-    const meta = await this.getPostMetaAll(id);
+    const [translations, meta] = await Promise.all([
+      this.getLocalizedPostTranslations(id, post.primaryLocale, locale),
+      this.getPostMetaAll(id),
+    ]);
 
     return {
       ...post,
@@ -671,7 +703,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(sql`EXISTS (
         SELECT 1 FROM ${postMeta}
         WHERE ${postMeta.postId} = ${posts.id}
-          AND ${postMeta.key} = 'event.date'
+          AND ${postMeta.key} IN ('event.eventDate', 'event.date')
           AND ${postMeta.valueText} IS NOT NULL
           AND ${postMeta.valueText}::date >= CURRENT_DATE
       )`);
@@ -734,11 +766,22 @@ export class DatabaseStorage implements IStorage {
           .from(postTranslations)
           .where(and(...translationConditions));
     
-    // Fetch all meta
+    // Public cards only need the metadata used to render the list.
+    const compactMetaKeys = filters?.postType === 'news'
+      ? ['news.category', 'category', 'news.images']
+      : filters?.postType === 'event'
+        ? ['event.eventDate', 'event.date', 'event.endDate', 'event.location', 'event.category', 'event.eventType', 'event.capacity', 'event.fee', 'event.registrationDeadline', 'event.images']
+        : filters?.postType === 'resource'
+          ? ['resource.fileUrl', 'resource.fileName', 'resource.fileType', 'resource.fileSize', 'resource.category', 'resource.accessLevel', 'resource.downloadCount']
+          : undefined;
+    const metaConditions = [inArray(postMeta.postId, postIds)];
+    if (filters?.compact && compactMetaKeys) {
+      metaConditions.push(inArray(postMeta.key, compactMetaKeys));
+    }
     const allMeta = await db
       .select()
       .from(postMeta)
-      .where(inArray(postMeta.postId, postIds));
+      .where(and(...metaConditions));
     
     // Group translations and meta by postId
     const translationsByPost = new Map<string, typeof allTranslations>();
@@ -761,11 +804,12 @@ export class DatabaseStorage implements IStorage {
       meta: metaByPost.get(post.id) || [],
     }));
 
-    // Application-layer sorting for upcoming events (by event.date ASC)
+    // Application-layer sorting for upcoming events (by event date ASC).
+    // Support the legacy event.date key while preferring event.eventDate.
     if (filters?.upcoming && filters?.postType === 'event') {
       hydratedPosts.sort((a, b) => {
-        const aDateMeta = a.meta.find(m => m.key === 'event.date');
-        const bDateMeta = b.meta.find(m => m.key === 'event.date');
+        const aDateMeta = a.meta.find(m => m.key === 'event.eventDate' || m.key === 'event.date');
+        const bDateMeta = b.meta.find(m => m.key === 'event.eventDate' || m.key === 'event.date');
         const aDate = aDateMeta?.valueText || aDateMeta?.valueTimestamp;
         const bDate = bDateMeta?.valueText || bDateMeta?.valueTimestamp;
         if (!aDate) return 1;  // nulls last

@@ -128,6 +128,9 @@ export default function Home() {
                         src={latestNewsImage}
                         alt={latestNewsTranslation?.title || latestNews.slug}
                         className="h-48 w-full object-cover md:h-56"
+                        width={800}
+                        height={448}
+                        loading="lazy"
                       />
                     </div>
                   )}
@@ -250,6 +253,9 @@ export default function Home() {
                         src={member.logo} 
                         alt={member.companyName} 
                         className="h-12 w-auto mx-auto object-contain"
+                        width={160}
+                        height={48}
+                        loading="lazy"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                           const fallback = e.currentTarget.nextElementSibling;
@@ -363,6 +369,9 @@ export default function Home() {
                   src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600" 
                   alt="Professional business team meeting" 
                   className="h-full w-full object-cover"
+                  width={800}
+                  height={600}
+                  loading="lazy"
                 />
               </div>
               

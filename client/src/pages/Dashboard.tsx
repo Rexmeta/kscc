@@ -257,11 +257,11 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">계정 유형</label>
-                    <p className="text-foreground">
+                    <div className="text-foreground">
                       <Badge variant="secondary">
                         {user?.role === 'admin' ? '관리자' : '회원'}
                       </Badge>
-                    </p>
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">가입일</label>

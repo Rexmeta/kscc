@@ -92,6 +92,17 @@ export default function ResourcesPage() {
     },
   });
 
+  const { data: resourceDetail } = useQuery<PostWithTranslations>({
+    queryKey: queryKeys.posts.detail(selectedResource?.id || '', language),
+    queryFn: async () => {
+      const response = await fetch(`/api/posts/${selectedResource!.id}?locale=${language}`);
+      if (!response.ok) throw new Error('Failed to fetch resource');
+      return response.json();
+    },
+    enabled: !!selectedResource?.id,
+  });
+  const resourceForDialog = resourceDetail || selectedResource;
+
   const deleteMutation = useMutation({
     mutationFn: (resourceId: string) => deletePost(resourceId),
     onSuccess: () => {
@@ -484,11 +495,11 @@ export default function ResourcesPage() {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              {selectedResource && getTranslation(selectedResource, language)?.title}
+              {resourceForDialog && getTranslation(resourceForDialog, language)?.title}
             </DialogTitle>
           </DialogHeader>
           
-          {selectedResource && (
+          {resourceForDialog && (
             <div className="space-y-6">
               {/* File Info */}
               <Card className="p-4 bg-muted/50">
@@ -496,20 +507,20 @@ export default function ResourcesPage() {
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 형식</p>
                     <Badge variant="secondary">
-                      {(getMetaValue(selectedResource.meta || [], 'resource.fileType') || 'PDF')?.toUpperCase()}
+                      {(getMetaValue(resourceForDialog.meta || [], 'resource.fileType') || 'PDF')?.toUpperCase()}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 크기</p>
                     <p className="font-medium">
-                      {Math.round((getMetaValue(selectedResource.meta || [], 'resource.fileSize') || 0) / 1024)} KB
+                      {Math.round((getMetaValue(resourceForDialog.meta || [], 'resource.fileSize') || 0) / 1024)} KB
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">카테고리</p>
                     <Badge variant="outline">
                       {(() => {
-                        const cat = getMetaValue(selectedResource.meta || [], 'resource.category') || 'reports';
+                        const cat = getMetaValue(resourceForDialog.meta || [], 'resource.category') || 'reports';
                         if (cat === 'reports') return '보고서';
                         if (cat === 'forms') return '양식';
                         if (cat === 'presentations') return '발표자료';
@@ -520,13 +531,13 @@ export default function ResourcesPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">접근 권한</p>
-                    {getAccessBadge(getMetaValue(selectedResource.meta || [], 'resource.accessLevel') || 'public')}
+                    {getAccessBadge(getMetaValue(resourceForDialog.meta || [], 'resource.accessLevel') || 'public')}
                   </div>
                 </div>
               </Card>
 
               {/* Description */}
-              {getTranslation(selectedResource, language)?.content && (
+              {getTranslation(resourceForDialog, language)?.content && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -534,7 +545,7 @@ export default function ResourcesPage() {
                   </h4>
                   <div 
                     className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: getTranslation(selectedResource, language)?.content || '' }}
+                    dangerouslySetInnerHTML={{ __html: getTranslation(resourceForDialog, language)?.content || '' }}
                   />
                 </div>
               )}
@@ -546,7 +557,7 @@ export default function ResourcesPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">등록일</p>
                     <p className="font-medium">
-                      {new Date(selectedResource.createdAt).toLocaleDateString('ko-KR', {
+                      {new Date(resourceForDialog.createdAt).toLocaleDateString('ko-KR', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'
@@ -559,7 +570,7 @@ export default function ResourcesPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">다운로드</p>
                     <p className="font-medium">
-                      {getMetaValue(selectedResource.meta || [], 'resource.downloadCount') || 0}회
+                      {getMetaValue(resourceForDialog.meta || [], 'resource.downloadCount') || 0}회
                     </p>
                   </div>
                 </div>
@@ -568,10 +579,10 @@ export default function ResourcesPage() {
               {/* Actions */}
               <div className="space-y-3 pt-4 border-t">
                 <div className="flex gap-2">
-                  {canAccess(selectedResource) ? (
+                  {canAccess(resourceForDialog) ? (
                     <Button
                       className="flex-1"
-                      onClick={(e) => handleDownload(selectedResource, e)}
+                      onClick={(e) => handleDownload(resourceForDialog, e)}
                       disabled={downloadMutation.isPending}
                       data-testid="button-download-dialog"
                     >
@@ -599,7 +610,7 @@ export default function ResourcesPage() {
                     <Button
                       variant="outline"
                       className="flex-1"
-                      onClick={() => handleEdit(selectedResource.id)}
+                      onClick={() => handleEdit(resourceForDialog.id)}
                       data-testid="button-edit-resource"
                     >
                       <Edit className="h-4 w-4 mr-2" />
@@ -608,7 +619,7 @@ export default function ResourcesPage() {
                     <Button
                       variant="destructive"
                       className="flex-1"
-                      onClick={() => handleDelete(selectedResource.id)}
+                      onClick={() => handleDelete(resourceForDialog.id)}
                       disabled={deleteMutation.isPending}
                       data-testid="button-delete-resource"
                     >

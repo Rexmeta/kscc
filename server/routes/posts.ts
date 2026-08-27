@@ -33,6 +33,7 @@ const postQuerySchema = z.object({
 const postIdSchema = z.object({
   id: z.string().uuid(),
 });
+const localeQuerySchema = z.enum(['ko', 'en', 'zh']).optional();
 
 const postMetaPayloadSchema = z.object({
   key: z.string().trim().min(1).max(100),
@@ -83,7 +84,8 @@ router.get("/slug/:slug", async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
     
-    const post = await storage.getPostBySlugWithTranslations(slug);
+    const locale = localeQuerySchema.parse(req.query.locale);
+    const post = await storage.getPostBySlugWithTranslations(slug, locale);
     
     if (!post) {
       return res.status(404).json({ message: "Post not found" });
@@ -100,7 +102,7 @@ router.get("/slug/:slug", async (req: Request, res: Response) => {
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
-    const locale = req.query.locale as 'ko' | 'en' | 'zh' | undefined;
+    const locale = localeQuerySchema.parse(req.query.locale);
     
     const post = await storage.getPostWithTranslations(id, locale);
     
