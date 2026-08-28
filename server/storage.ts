@@ -24,6 +24,20 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
 
+function getPostMetaValueColumns(value: any): Pick<
+  PostMeta,
+  "value" | "valueText" | "valueNumber" | "valueBoolean" | "valueTimestamp"
+> {
+  const isDate = value instanceof Date;
+  return {
+    value: value !== null && typeof value === "object" && !isDate ? value : null,
+    valueText: typeof value === "string" ? value : null,
+    valueNumber: typeof value === "number" ? value : null,
+    valueBoolean: typeof value === "boolean" ? value : null,
+    valueTimestamp: isDate ? value : null,
+  };
+}
+
 export type { PostAccessContext } from "./postAccess";
 
 function boundedPageSize(limit: number | undefined, max: number): number {
@@ -128,6 +142,12 @@ export interface IStorage {
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
+  updatePostComplete(
+    id: string,
+    updates: Partial<Post>,
+    translation: InsertPostTranslation,
+    metadata: Array<{ key: string; value?: any }>,
+  ): Promise<Post | undefined>;
   deletePost(id: string): Promise<void>;
 
   // Post Translations
@@ -1041,6 +1061,61 @@ export class DatabaseStorage implements IStorage {
     return post || undefined;
   }
 
+  async updatePostComplete(
+    id: string,
+    updates: Partial<Post>,
+    translation: InsertPostTranslation,
+    metadata: Array<{ key: string; value?: any }>,
+  ): Promise<Post | undefined> {
+    return db.transaction(async (tx) => {
+      const [updatedPost] = await tx
+        .update(posts)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(posts.id, id))
+        .returning();
+
+      if (!updatedPost) return undefined;
+
+      const [existingTranslation] = await tx
+        .select()
+        .from(postTranslations)
+        .where(and(
+          eq(postTranslations.postId, id),
+          eq(postTranslations.locale, translation.locale as any),
+        ))
+        .limit(1);
+
+      if (existingTranslation) {
+        await tx
+          .update(postTranslations)
+          .set({ ...translation, updatedAt: new Date() })
+          .where(eq(postTranslations.id, existingTranslation.id));
+      } else {
+        await tx
+          .insert(postTranslations)
+          .values(translation);
+      }
+
+      // An edit sends the complete intended metadata set. Replacing the
+      // existing rows makes omitted keys explicit deletions and lets the
+      // database transaction roll back the post and translation if any
+      // metadata row cannot be persisted.
+      const uniqueMetadata = new Map(metadata.map((item) => [item.key, item]));
+      await tx.delete(postMeta).where(eq(postMeta.postId, id));
+      if (uniqueMetadata.size > 0) {
+        await tx.insert(postMeta).values(
+          Array.from(uniqueMetadata.values()).map(({ key, value }) => ({
+            postId: id,
+            key,
+            ...getPostMetaValueColumns(value),
+          })) as any,
+        );
+      }
+
+      return updatedPost;
+    });
+  }
+
   async deletePost(id: string): Promise<void> {
     await db.delete(posts).where(eq(posts.id, id));
   }
@@ -1107,13 +1182,8 @@ export class DatabaseStorage implements IStorage {
   async setPostMeta(postId: string, key: string, value: any): Promise<PostMeta> {
     const existing = await this.getPostMeta(postId, key);
     
-    // Determine the appropriate column based on value type
-    const metaValue: Partial<PostMeta> = {
-      value: typeof value === 'object' ? value : undefined,
-      valueText: typeof value === 'string' ? value : undefined,
-      valueNumber: typeof value === 'number' ? value : undefined,
-      valueBoolean: typeof value === 'boolean' ? value : undefined,
-      valueTimestamp: value instanceof Date ? value : undefined,
+    const metaValue = {
+      ...getPostMetaValueColumns(value),
       updatedAt: new Date(),
     };
 

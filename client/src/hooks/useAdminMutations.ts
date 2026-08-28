@@ -5,6 +5,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 import { mapNewsFormToPost, mapEventFormToPost, mapResourceFormToPost, type NewsFormData, type EventFormData, type ResourceFormData } from '@/lib/adminPostMappers';
 import type { MemberFormValues, NewsFormValues, EventFormValues, ResourceFormValues } from '@/components/admin/adminSchemas';
+import { NEWS_META_KEYS, EVENT_META_KEYS, RESOURCE_META_KEYS } from '@shared/postMetaKeys';
 
 const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) =>
   queryClient.invalidateQueries({
@@ -70,9 +71,9 @@ export function useUpdateNewsPost(options: {
           content: formData.content || '',
         },
         meta: [
-          { key: 'category', value: formData.category },
-          ...(_mediaImages.length > 0 ? [{ key: 'news.images', value: _mediaImages }] : []),
-          ...(_mediaVideos.length > 0 ? [{ key: 'news.videos', value: _mediaVideos }] : []),
+          { key: NEWS_META_KEYS.category, value: formData.category },
+          ...(_mediaImages.length > 0 ? [{ key: NEWS_META_KEYS.images, value: _mediaImages }] : []),
+          ...(_mediaVideos.length > 0 ? [{ key: NEWS_META_KEYS.videos, value: _mediaVideos }] : []),
         ],
       });
     },
@@ -147,14 +148,21 @@ export function useUpdateEventPost(options: {
           content: formData.content || '',
         },
         meta: [
-          { key: 'event.eventDate', value: formData.eventDate },
-          { key: 'event.endDate', value: formData.endDate || '' },
-          { key: 'event.location', value: formData.location },
-          { key: 'event.category', value: formData.category },
-          { key: 'event.eventType', value: formData.eventType },
-          { key: 'event.capacity', value: String(formData.capacity || '') },
-          { key: 'event.fee', value: String(formData.fee || 0) },
-          { key: 'event.registrationDeadline', value: formData.registrationDeadline || '' },
+          { key: EVENT_META_KEYS.eventDate, valueTimestamp: new Date(formData.eventDate) },
+          ...(formData.endDate ? [{ key: EVENT_META_KEYS.endDate, valueTimestamp: new Date(formData.endDate) }] : []),
+          { key: EVENT_META_KEYS.location, valueText: formData.location },
+          { key: EVENT_META_KEYS.category, valueText: formData.category },
+          { key: EVENT_META_KEYS.eventType, valueText: formData.eventType },
+          ...(formData.capacity !== undefined ? [{ key: EVENT_META_KEYS.capacity, valueNumber: formData.capacity }] : []),
+          { key: EVENT_META_KEYS.fee, valueNumber: formData.fee ?? 0 },
+          ...(formData.registrationDeadline ? [{
+            key: EVENT_META_KEYS.registrationDeadline,
+            valueTimestamp: new Date(formData.registrationDeadline),
+          }] : []),
+          ...(formData.images && formData.images.length > 0 ? [{
+            key: EVENT_META_KEYS.images,
+            value: formData.images,
+          }] : []),
         ],
       });
     },
@@ -237,7 +245,7 @@ export function useUpdateResourcePost(options: {
           subtitle: formData.excerpt || '',
           content: formData.content || '',
         },
-        meta: finalFileUrl ? [{ key: 'resource.fileUrl', value: finalFileUrl }] : [],
+        meta: finalFileUrl ? [{ key: RESOURCE_META_KEYS.fileUrl, value: finalFileUrl }] : [],
       });
     },
     onSuccess: () => {

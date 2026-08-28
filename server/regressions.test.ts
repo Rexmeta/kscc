@@ -8,6 +8,7 @@ import {
   eventRegistrations,
   members,
   permissions,
+  postMeta,
   postTranslations,
   posts,
   rolePermissions,
@@ -447,6 +448,130 @@ test(
       } else {
         process.env.SESSION_SECRET = originalSessionSecret;
       }
+    }
+  },
+);
+
+test(
+  "complete post edits replace stale metadata and roll back for news, events, and resources",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const postTypes = ["news", "event", "resource"] as const;
+    const seededPosts = await db
+      .insert(posts)
+      .values(
+        postTypes.map((postType) => ({
+          postType,
+          status: "draft" as const,
+          visibility: "public" as const,
+          slug: `atomic-edit-${postType}-${randomUUID()}`,
+          primaryLocale: "ko" as const,
+        })),
+      )
+      .returning();
+
+    try {
+      await db.insert(postTranslations).values(
+        seededPosts.map((post) => ({
+          postId: post.id,
+          locale: "ko" as const,
+          title: `${post.postType} old title`,
+          excerpt: "old excerpt",
+          content: "old content",
+        })),
+      );
+      await db.insert(postMeta).values(
+        seededPosts.flatMap((post) => [
+          {
+            postId: post.id,
+            key: `${post.postType}.old`,
+            valueText: "stale value",
+          },
+          ...(post.postType === "resource"
+            ? [{
+              postId: post.id,
+              key: "resource.fileUrl",
+              valueText: "/objects/old-resource-file",
+            }]
+            : []),
+        ]),
+      );
+
+      for (const post of seededPosts) {
+        const updated = await storage.updatePostComplete(
+          post.id,
+          { status: "published", publishedAt: new Date(), visibility: "public" },
+          {
+            postId: post.id,
+            locale: "ko",
+            title: `${post.postType} new title`,
+            excerpt: "new excerpt",
+            content: "new content",
+          },
+          [{
+            key: `${post.postType}.current`,
+            value: "current value",
+          }, ...(post.postType === "resource"
+            ? [{
+              key: "resource.fileUrl",
+              value: "/objects/new-resource-file",
+            }]
+            : [])],
+        );
+
+        assert.equal(updated?.status, "published");
+        assert.equal(
+          (await storage.getPostTranslation(post.id, "ko"))?.title,
+          `${post.postType} new title`,
+        );
+        const currentMeta = await storage.getPostMetaAll(post.id);
+        assert.deepEqual(
+          currentMeta.map(({ key, valueText }) => ({ key, valueText })),
+          [
+            { key: `${post.postType}.current`, valueText: "current value" },
+            ...(post.postType === "resource"
+              ? [{ key: "resource.fileUrl", valueText: "/objects/new-resource-file" }]
+              : []),
+          ],
+        );
+        if (post.postType === "resource") {
+          assert.equal(await storage.getPostByObjectPath("/objects/old-resource-file"), undefined);
+          assert.equal((await storage.getPostByObjectPath("/objects/new-resource-file"))?.id, post.id);
+        }
+
+        await assert.rejects(
+          storage.updatePostComplete(
+            post.id,
+            { status: "draft", visibility: "members" },
+            {
+              postId: post.id,
+              locale: "invalid" as any,
+              title: "should not persist",
+              excerpt: "should not persist",
+              content: "should not persist",
+            },
+            [{ key: `${post.postType}.replacement`, value: "should not persist" }],
+          ),
+        );
+
+        const unchanged = await storage.getPost(post.id);
+        assert.equal(unchanged?.status, "published");
+        assert.equal(unchanged?.visibility, "public");
+        assert.equal(
+          (await storage.getPostTranslation(post.id, "ko"))?.title,
+          `${post.postType} new title`,
+        );
+        assert.deepEqual(
+          (await storage.getPostMetaAll(post.id)).map(({ key }) => key).sort(),
+          [
+            `${post.postType}.current`,
+            ...(post.postType === "resource" ? ["resource.fileUrl"] : []),
+          ].sort(),
+        );
+      }
+    } finally {
+      await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
     }
   },
 );

@@ -336,6 +336,12 @@ const completePostCreateSchema = z.object({
   meta: z.array(postMetaPayloadSchema),
 });
 
+const completePostUpdateSchema = z.object({
+  post: postCreateDataSchema.partial().omit({ postType: true }),
+  translation: insertPostTranslationSchema.omit({ postId: true }),
+  meta: z.array(postMetaPayloadSchema),
+});
+
 // POST /api/posts - Create a post with its initial translation and metadata
 router.post("/", authenticateToken, async (req: Request, res: Response) => {
   let createdPostId: string | undefined;
@@ -405,6 +411,39 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     }
     if (!await requirePostPermission(req, res, existingPost.postType, "update")) return;
     
+    const hasCompleteUpdateShape = req.body &&
+      typeof req.body === "object" &&
+      ("post" in req.body || "translation" in req.body || "meta" in req.body);
+    if (hasCompleteUpdateShape) {
+      const completeUpdate = completePostUpdateSchema.parse(req.body);
+      const updateData = completeUpdate.post;
+      const intendedStatus = updateData.status ?? existingPost.status;
+      if (intendedStatus === "published" &&
+        existingPost.status !== "published" &&
+        !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
+
+      const updatedPost = await storage.updatePostComplete(
+        id,
+        updateData,
+        {
+          postId: id,
+          ...completeUpdate.translation,
+        },
+        completeUpdate.meta.map((metaData) => ({
+          key: metaData.key,
+          value: getPostMetaValue(metaData),
+        })),
+      );
+      if (!updatedPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      await syncResourceObjectAcl(updatedPost, req.user!.id);
+      const access = await storage.getPostAccessContext(req.user?.id, true);
+      const completePost = await storage.getPostWithTranslations(id, undefined, access);
+      return res.json(completePost ?? updatedPost);
+    }
+
     // Validate update data (partial)
     const updateSchema = insertPostSchema.partial();
     const updateData = updateSchema.parse(req.body);
