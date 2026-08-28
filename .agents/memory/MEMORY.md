@@ -2,3 +2,4 @@
 - [Account role and ACL sync](account-role-acl-sync.md) — admin role edits must keep the account role and effective ACL membership aligned.
 - [Create-only post permissions](create-only-post-permissions.md) — initial post, translation, and metadata creation must share one create-authorized request.
 - [Organization member visibility](organization-member-visibility.md) — public reads are active-only; inactive records require current admin authorization.
+- [Production dependency audit](production-dependency-audit.md) — keep release audits strict and document only narrowly scoped, owner-backed compatibility exceptions.
