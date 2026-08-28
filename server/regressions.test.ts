@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
+import express from "express";
+import jwt from "jsonwebtoken";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
@@ -139,6 +141,7 @@ test(
     }
   },
 );
+
 
 test(
   "compact post lists select the requested locale and fall back to the primary locale",
@@ -328,6 +331,122 @@ test(
     } finally {
       await db.delete(members).where(inArray(members.id, seededMembers.map(({ id }) => id)));
       await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
+    }
+  },
+);
+
+test(
+  "organization member endpoints keep inactive records private",
+  { skip: !databaseAvailable },
+  async () => {
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `organization-member-test-${randomUUID()}`;
+    }
+    const [{ registerRoutes }, { storage }] = await Promise.all([
+      import("./routes"),
+      import("./storage"),
+    ]);
+    const activeMember = {
+      id: randomUUID(),
+      name: "Active Executive",
+      position: "Executive",
+      category: "executives",
+      isActive: true,
+    };
+    const inactiveMember = {
+      id: randomUUID(),
+      name: "Retired Executive",
+      position: "Executive",
+      category: "executives",
+      isActive: false,
+    };
+    const adminUserId = randomUUID();
+    const originalGetUser = storage.getUser;
+    const originalGetOrganizationMembers = storage.getOrganizationMembers;
+    const originalGetOrganizationMember = storage.getOrganizationMember;
+
+    storage.getUser = async (id) =>
+      id === adminUserId
+        ? ({
+            id: adminUserId,
+            email: "organization-admin@example.test",
+            name: "Organization Admin",
+            role: "admin",
+            userType: "staff",
+            membershipTier: "free",
+            isActive: true,
+          } as any)
+        : undefined;
+    storage.getOrganizationMembers = async (filters) =>
+      filters?.isActive === true ? [activeMember as any] : [activeMember as any, inactiveMember as any];
+    storage.getOrganizationMember = async (id) => {
+      if (id === activeMember.id) return activeMember as any;
+      if (id === inactiveMember.id) return inactiveMember as any;
+      return undefined;
+    };
+
+    const app = express();
+    const server = await registerRoutes(app);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const adminToken = jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!);
+      const request = async (path: string, token?: string) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        return { status: response.status, body: await response.json() };
+      };
+
+      const publicList = await request("/api/organization-members?isActive=true");
+      assert.equal(publicList.status, 200);
+      assert.deepEqual(publicList.body.map((member: any) => member.id), [activeMember.id]);
+
+      const inactiveListAttempt = await request("/api/organization-members?isActive=false");
+      assert.equal(inactiveListAttempt.status, 403);
+
+      const invalidFilter = await request("/api/organization-members?isActive=all");
+      assert.equal(invalidFilter.status, 400);
+
+      const publicActiveDetail = await request(`/api/organization-members/${activeMember.id}`);
+      assert.equal(publicActiveDetail.status, 200);
+      assert.equal(publicActiveDetail.body.id, activeMember.id);
+
+      const publicInactiveDetail = await request(`/api/organization-members/${inactiveMember.id}`);
+      assert.equal(publicInactiveDetail.status, 404);
+
+      const invalidId = await request("/api/organization-members/not-a-uuid");
+      assert.equal(invalidId.status, 400);
+
+      const adminList = await request("/api/organization-members?isActive=false", adminToken);
+      assert.equal(adminList.status, 200);
+      assert.deepEqual(
+        adminList.body.map((member: any) => member.id),
+        [activeMember.id, inactiveMember.id],
+      );
+
+      const adminInactiveDetail = await request(
+        `/api/organization-members/${inactiveMember.id}`,
+        adminToken,
+      );
+      assert.equal(adminInactiveDetail.status, 200);
+      assert.equal(adminInactiveDetail.body.id, inactiveMember.id);
+    } finally {
+      storage.getUser = originalGetUser;
+      storage.getOrganizationMembers = originalGetOrganizationMembers;
+      storage.getOrganizationMember = originalGetOrganizationMember;
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      if (originalSessionSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = originalSessionSecret;
+      }
     }
   },
 );

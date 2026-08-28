@@ -34,6 +34,24 @@ const inquiryQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+const organizationMemberCategories = [
+  'executives',
+  'honorary',
+  'vicepresidents',
+  'directors',
+  'advisors',
+  'secretariat',
+  'committees',
+  'organizations',
+] as const;
+
+const organizationMemberQuerySchema = z.object({
+  category: z.enum(organizationMemberCategories).optional(),
+  isActive: z.enum(['true', 'false']).optional(),
+}).strict();
+
+const organizationMemberIdSchema = z.string().uuid();
+
 function toPublicMember(member: import("@shared/schema").Member) {
   const {
     userId,
@@ -851,12 +869,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Organization Members routes
-  app.get("/api/organization-members", async (req, res) => {
+  app.get("/api/organization-members", optionalAuthenticateToken, async (req, res) => {
     try {
-      const { category, isActive } = req.query;
+      const parsedQuery = organizationMemberQuerySchema.safeParse(req.query);
+      if (!parsedQuery.success) {
+        return res.status(400).json({ message: "Invalid organization member query" });
+      }
+
+      const { category, isActive } = parsedQuery.data;
+      const isAdmin = req.user?.role === 'admin';
+      if (isActive === 'false' && !isAdmin) {
+        return res.status(403).json({ message: "Administrative access required" });
+      }
+
+      // The admin UI uses isActive=false to request the complete management
+      // list. Public and non-admin requests always remain active-only.
       const members = await storage.getOrganizationMembers({
-        category: category as string,
-        isActive: isActive === 'false' ? undefined : true,
+        category,
+        isActive: isAdmin && isActive === 'false' ? undefined : true,
       });
       res.json(members);
     } catch (error) {
@@ -864,10 +894,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/organization-members/:id", async (req, res) => {
+  app.get("/api/organization-members/:id", optionalAuthenticateToken, async (req, res) => {
     try {
+      const parsedId = organizationMemberIdSchema.safeParse(req.params.id);
+      if (!parsedId.success) {
+        return res.status(400).json({ message: "Invalid organization member id" });
+      }
+
       const member = await storage.getOrganizationMember(req.params.id);
-      if (!member) {
+      // Do not reveal whether an inactive record exists to public callers.
+      if (!member || (req.user?.role !== 'admin' && !member.isActive)) {
         return res.status(404).json({ message: "Organization member not found" });
       }
       res.json(member);
