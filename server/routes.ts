@@ -26,6 +26,7 @@ import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
 import { DuplicateInquiryError, EventRegistrationError, storage } from "./storage";
+import { insertUserSchema, insertMemberSchema, memberProfileSchema, memberAdminSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, type User } from "@shared/schema";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -37,6 +38,7 @@ const memberQuerySchema = z.object({
   industry: z.string().trim().max(100).optional(),
   membershipLevel: z.string().trim().max(50).optional(),
   search: z.string().trim().max(100).optional(),
+  admin: z.enum(["true", "false"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
 });
@@ -232,7 +234,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           contactPhone: companyData.contactPhone,
           membershipStatus: 'pending', // Awaiting admin approval
           membershipLevel: 'regular',
-          isPublic: true,
+          // A newly registered company is not publishable until an admin
+          // approves it and explicitly makes it public.
+          isPublic: false,
         });
 
         // Create user and member atomically
@@ -516,7 +520,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Members routes
   app.get("/api/members", optionalAuthenticateToken, async (req, res) => {
     try {
-      const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema.parse(req.query);
+      const { country, industry, membershipLevel, search, admin, page, limit } = memberQuerySchema.parse(req.query);
+      const adminRequested = admin === "true";
+      if (adminRequested && req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
       const offset = (page - 1) * limit;
       
       const result = await storage.getMembers({
@@ -524,12 +532,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         industry,
         membershipLevel,
         search,
+        admin: adminRequested,
         limit,
         offset,
       });
       
       res.json({
-        members: req.user?.role === "admin"
+        members: adminRequested
           ? result.members
           : result.members.map(toPublicMember),
         total: result.total,
@@ -544,29 +553,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/members/me", authenticateToken, async (req, res) => {
+    try {
+      const member = await storage.getMemberByUserId(req.user!.id);
+      if (!member) {
+        return res.status(404).json({ message: "Member profile not found" });
+      }
+      res.json(member);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/members/:id", optionalAuthenticateToken, async (req, res) => {
     try {
-      const member = await storage.getMember(req.params.id);
+      const memberId = z.string().uuid().parse(req.params.id);
+      const member = await storage.getMember(memberId);
       if (!member) {
         return res.status(404).json({ message: "Member not found" });
       }
 
-      const canViewPrivateMember =
-        req.user?.role === "admin" || member.userId === req.user?.id;
-      if (!member.isPublic && !canViewPrivateMember) {
+      // This is the public directory detail endpoint. Owners can use /me for
+      // their private profile; they must not make pending/inactive records
+      // observable through a public UUID lookup.
+      if (req.user?.role !== "admin"
+        && (!member.isPublic || member.membershipStatus !== "active")) {
         return res.status(404).json({ message: "Member not found" });
       }
 
-      res.json(canViewPrivateMember ? member : toPublicMember(member));
+      res.json(req.user?.role === "admin" ? member : toPublicMember(member));
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid member ID" });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
   app.post("/api/members", authenticateToken, async (req, res) => {
     try {
-      const memberData = insertMemberSchema.parse({ ...req.body, userId: req.user!.id });
-      const member = await storage.createMember(memberData);
+      const profileData = memberProfileSchema.parse(req.body);
+      const member = await storage.createMember({
+        ...profileData,
+        userId: req.user!.id,
+        membershipStatus: "pending",
+        membershipLevel: "regular",
+        isPublic: false,
+      });
       res.status(201).json(member);
     } catch (error) {
       res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
@@ -575,18 +608,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/members/:id", authenticateToken, async (req, res) => {
     try {
-      const member = await storage.getMember(req.params.id);
+      const memberId = z.string().uuid().parse(req.params.id);
+      const member = await storage.getMember(memberId);
       if (!member) {
         return res.status(404).json({ message: "Member not found" });
       }
       
-      // Check if user owns this member record or is admin
-      if (member.userId !== req.user!.id && req.user!.role !== 'admin') {
+      // Admin lifecycle mutations use /api/admin/members/:id. Keeping this
+      // route owner-only prevents a broad insert schema from becoming an
+      // accidental authorization API.
+      if (member.userId !== req.user!.id) {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      const updateData = insertMemberSchema.partial().parse(req.body);
-      const updatedMember = await storage.updateMember(req.params.id, updateData);
+      const updateData = memberProfileSchema.partial().parse(req.body);
+      const updatedMember = await storage.updateMember(memberId, updateData);
+      res.json(updatedMember);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+    }
+  });
+
+  app.get("/api/admin/members", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema
+        .parse(req.query);
+      const result = await storage.getMembers({
+        country,
+        industry,
+        membershipLevel,
+        search,
+        admin: true,
+        limit,
+        offset: (page - 1) * limit,
+      });
+      res.json({
+        members: result.members,
+        total: result.total,
+        page,
+        totalPages: Math.ceil(result.total / limit),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid member query", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/admin/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const memberId = z.string().uuid().parse(req.params.id);
+      const member = await storage.getMember(memberId);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+      res.json(member);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid member ID" });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/admin/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const memberId = z.string().uuid().parse(req.params.id);
+      const member = await storage.getMember(memberId);
+      if (!member) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+      const updateData = memberAdminSchema.partial().parse(req.body);
+      const updatedMember = await storage.updateMember(memberId, updateData);
       res.json(updatedMember);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -917,7 +1014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const adminPostAccess = await storage.getPostAccessContext(req.user!.id, true);
       const [membersResult, eventsResult, newsResult, inquiriesResult] = await Promise.all([
-        storage.getMembers({ limit: 1 }),
+        storage.getMembers({ admin: true, limit: 1 }),
         storage.getPosts({ postType: 'event', limit: 1, access: adminPostAccess }),
         storage.getPosts({ postType: 'news', limit: 1, access: adminPostAccess }),
         storage.getInquiries({ limit: 1 }),

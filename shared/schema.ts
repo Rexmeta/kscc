@@ -347,6 +347,24 @@ export const insertMemberSchema = createInsertSchema(members).omit({
   updatedAt: true,
 });
 
+export const memberProfileSchema = z.object({
+  companyName: z.string(),
+  companyNameEn: z.string().optional().nullable(),
+  companyNameZh: z.string().optional().nullable(),
+  industry: z.string(),
+  country: z.string(),
+  city: z.string(),
+  address: z.string(),
+  phone: z.string().optional().nullable(),
+  website: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  descriptionEn: z.string().optional().nullable(),
+  descriptionZh: z.string().optional().nullable(),
+  logo: z.string().optional().nullable(),
+  contactPerson: z.string(),
+  contactEmail: z.string().email(),
+  contactPhone: z.string().optional().nullable(),
+}).strict();
 export const insertEventRegistrationSchema = createInsertSchema(eventRegistrations).omit({
   id: true,
   createdAt: true,
@@ -450,6 +468,7 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Member = typeof members.$inferSelect;
 export type InsertMember = z.infer<typeof insertMemberSchema>;
 
+export type MemberProfile = z.infer<typeof memberProfileSchema>;
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSchema>;
 
@@ -531,3 +550,11 @@ export const insertOrganizationMemberSchema = createInsertSchema(organizationMem
 
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
+
+export const memberAdminSchema = memberProfileSchema.extend({
+  membershipLevel: z.enum(["regular", "premium", "sponsor"]),
+  membershipStatus: z.enum(["pending", "active", "inactive"]),
+  isPublic: z.boolean(),
+}).strict();
+
+export type MemberAdminUpdate = z.infer<typeof memberAdminSchema>;

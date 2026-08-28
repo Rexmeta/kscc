@@ -161,7 +161,7 @@ test(
   async () => {
     const originalSessionSecret = process.env.SESSION_SECRET;
     if (!process.env.SESSION_SECRET) {
-      process.env.SESSION_SECRET = `inquiry-route-test-${randomUUID()}`;
+      process.env.SESSION_SECRET = `organization-member-test-${randomUUID()}`;
     }
     const [{ registerRoutes }, { storage }] = await Promise.all([
       import("./routes"),
@@ -198,6 +198,7 @@ test(
     const app = express();
     app.use(express.json());
     const server = await registerRoutes(app);
+
     try {
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
@@ -244,6 +245,14 @@ test(
   async () => {
     const { db, storage } = await getDatabase();
     const suffix = randomUUID();
+
+    const admin = await storage.createUser({
+      email: `member-admin-${suffix}@example.test`,
+      password: "test-password",
+      name: "Member Admin",
+      role: "admin",
+      userType: "staff",
+    });
     const responder = await storage.createUser({
       email: `inquiry-responder-${suffix}@example.test`,
       password: "test-password",
@@ -268,7 +277,13 @@ test(
         respondedBy: responder.id,
         message: "Safe responder test",
       });
-      const result = await storage.getInquiryWithReplies(inquiry.id);
+      const result = await storage.getPosts({
+        postType: "news",
+        status: "published",
+        locale: "en",
+        compact: true,
+        limit: 100,
+      });
       assert.ok(result);
       assert.deepEqual(result.replies[0].responder, {
         id: responder.id,
@@ -333,11 +348,18 @@ test(
       import("./permissions"),
     ]);
     const suffix = randomUUID();
-    const user = await storage.createUser({
-      email: `operator-acl-${suffix}@example.test`,
+
+    const admin = await storage.createUser({
+      email: `member-admin-${suffix}@example.test`,
       password: "test-password",
-      name: "Operator ACL Test",
-      role: "operator",
+      name: "Member Admin",
+      role: "admin",
+      userType: "staff",
+    });
+    const user = await storage.createUserForRegistration({
+      email: `authorization-sync-${suffix}@example.test`,
+      password: "test-password",
+      name: "Authorization Sync Test",
       userType: "staff",
     });
     const [tier] = await db.insert(tiers).values({
@@ -615,9 +637,8 @@ test(
   },
 );
 
-
 test(
-  "registration and authorization mutations keep account and ACL state aligned",
+  "compact post lists select the requested locale and fall back to the primary locale",
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
@@ -625,6 +646,14 @@ test(
       import("./permissions"),
     ]);
     const suffix = randomUUID();
+
+    const admin = await storage.createUser({
+      email: `member-admin-${suffix}@example.test`,
+      password: "test-password",
+      name: "Member Admin",
+      role: "admin",
+      userType: "staff",
+    });
     const [memberRole] = await db
       .select()
       .from(roles)
@@ -1083,15 +1112,15 @@ test(
     const seededPosts = await db
       .insert(posts)
       .values(
-        Array.from({ length: 101 }, (_, index) => ({
-          postType: "news" as const,
-          status: "published" as const,
+        postTypes.map((postType) => ({
+          postType,
+          status: "draft" as const,
           visibility: "public" as const,
-          slug: `pagination-post-${randomUUID()}-${index}`,
+          slug: `atomic-edit-${postType}-${randomUUID()}`,
           primaryLocale: "ko" as const,
         })),
       )
-      .returning({ id: posts.id });
+      .returning();
     const seededMembers = await db
       .insert(members)
       .values(
@@ -1104,6 +1133,7 @@ test(
           contactPerson: "Test contact",
           contactEmail: `pagination-${randomUUID()}-${index}@example.test`,
           isPublic: true,
+          membershipStatus: "active",
         })),
       )
       .returning({ id: members.id });
@@ -1152,13 +1182,9 @@ test(
       category: "executives",
       isActive: true,
     };
-    const inactiveMember = {
-      id: randomUUID(),
-      name: "Retired Executive",
-      position: "Executive",
-      category: "executives",
-      isActive: false,
-    };
+    const inactiveMember = await createMember({ status: "inactive", isPublic: true });
+
+    const privateMember = await createMember({ status: "active", isPublic: false });
     const adminUserId = randomUUID();
     const originalGetUser = storage.getUser;
     const originalGetOrganizationMembers = storage.getOrganizationMembers;
@@ -1186,6 +1212,7 @@ test(
 
     const app = express();
     const server = await registerRoutes(app);
+
     try {
       await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
@@ -1194,15 +1221,25 @@ test(
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-      const adminToken = jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!);
-      const request = async (path: string, token?: string) => {
+    const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
+
+    const ownerToken = jwt.sign({ id: owner.id }, process.env.SESSION_SECRET!);
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
         const response = await fetch(`${baseUrl}${path}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
         });
         return { status: response.status, body: await response.json() };
       };
 
-      const publicList = await request("/api/organization-members?isActive=true");
+      const publicList = await request("/api/members?search=Lifecycle%20Company");
       assert.equal(publicList.status, 200);
       assert.deepEqual(publicList.body.map((member: any) => member.id), [activeMember.id]);
 
@@ -1222,7 +1259,19 @@ test(
       const invalidId = await request("/api/organization-members/not-a-uuid");
       assert.equal(invalidId.status, 400);
 
-      const adminList = await request("/api/organization-members?isActive=false", adminToken);
+      const adminList = await request("/api/admin/members", { token: adminToken });
+
+      const forgedUpdate = await request(`/api/members/${publicMember.id}`, {
+        token: ownerToken,
+        method: "PUT",
+        body: {
+          companyName: "Updated Company",
+          membershipStatus: "active",
+          membershipLevel: "premium",
+          isPublic: true,
+          userId: otherOwner.id,
+        },
+      });
       assert.equal(adminList.status, 200);
       assert.deepEqual(
         adminList.body.map((member: any) => member.id),
@@ -1249,7 +1298,7 @@ test(
   },
 );
 test(
-  "complete post edits replace stale metadata and roll back for news, events, and resources",
+  "member lifecycle and ownership boundaries are enforced by member routes",
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
@@ -1352,6 +1401,12 @@ test(
         );
 
         const unchanged = await storage.getPost(post.id);
+
+      const takeover = await request(`/api/members/${privateMember.id}`, {
+        token: otherOwnerToken,
+        method: "PUT",
+        body: { companyName: "Taken Over Company" },
+      });
         assert.equal(unchanged?.status, "published");
         assert.equal(unchanged?.visibility, "public");
         assert.equal(
@@ -1371,3 +1426,100 @@ test(
     }
   },
 );
+
+    const owner = await storage.createUser({
+      email: `member-owner-${suffix}@example.test`,
+      password: "test-password",
+      name: "Member Owner",
+      userType: "company",
+    });
+
+    const otherOwnerToken = jwt.sign({ id: otherOwner.id }, process.env.SESSION_SECRET!);
+
+      const newProfile = {
+        companyName: "Self Registered Company",
+        industry: "Testing",
+        country: "Korea",
+        city: "Seoul",
+        address: "Self registration address",
+        contactPerson: "New Owner",
+        contactEmail: `new-contact-${suffix}@example.test`,
+        membershipStatus: "active",
+        isPublic: true,
+      };
+
+    const createMember = async (options: {
+      ownerId?: string;
+      status?: "pending" | "active" | "inactive";
+      isPublic?: boolean;
+      level?: "regular" | "premium" | "sponsor";
+    }) => {
+      const [member] = await db.insert(members).values({
+        userId: options.ownerId,
+        companyName: `Lifecycle Company ${randomUUID()}`,
+        industry: "Testing",
+        country: "Korea",
+        city: "Seoul",
+        address: "Test address",
+        contactPerson: "Test contact",
+        contactEmail: `contact-${randomUUID()}@example.test`,
+        membershipStatus: options.status || "active",
+        membershipLevel: options.level || "regular",
+        isPublic: options.isPublic ?? true,
+      }).returning();
+      createdMemberIds.push(member.id);
+      return member;
+    };
+
+      const acceptedCreate = await request("/api/members", {
+        token: otherOwnerToken,
+        method: "POST",
+        body: {
+          companyName: newProfile.companyName,
+          industry: newProfile.industry,
+          country: newProfile.country,
+          city: newProfile.city,
+          address: newProfile.address,
+          contactPerson: newProfile.contactPerson,
+          contactEmail: newProfile.contactEmail,
+        },
+      });
+
+    const pendingMember = await createMember({ status: "pending", isPublic: true });
+
+      const ownerAdminUpdate = await request(`/api/admin/members/${publicMember.id}`, {
+        token: ownerToken,
+        method: "PUT",
+        body: { membershipStatus: "inactive" },
+      });
+
+      const rejectedCreate = await request("/api/members", {
+        token: otherOwnerToken,
+        method: "POST",
+        body: newProfile,
+      });
+
+      const nowPublic = await request(`/api/members/${pendingMember.id}`);
+
+      const adminUpdate = await request(`/api/admin/members/${pendingMember.id}`, {
+        token: adminToken,
+        method: "PUT",
+        body: {
+          membershipStatus: "active",
+          membershipLevel: "premium",
+          isPublic: true,
+        },
+      });
+
+    const createdMemberIds: string[] = [];
+
+    const otherOwner = await storage.createUser({
+      email: `member-other-${suffix}@example.test`,
+      password: "test-password",
+      name: "Other Member Owner",
+      userType: "company",
+    });
+
+    const publicMember = await createMember({ ownerId: owner.id });
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);

@@ -110,13 +110,14 @@ export default function Dashboard() {
   const { data: memberInfo } = useQuery({
     queryKey: ['/api/members/me'],
     queryFn: async () => {
-      const response = await fetch('/api/members', {
+      const response = await fetch('/api/members/me', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      const data = await response.json();
-      return data.members.find((m: Member) => m.userId === user?.id) || null;
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error('Failed to fetch member profile');
+      return response.json();
     },
     enabled: isAuthenticated && !!user,
   });

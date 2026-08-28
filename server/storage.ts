@@ -118,6 +118,7 @@ export interface IStorage {
     industry?: string;
     membershipLevel?: string;
     search?: string;
+    admin?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ members: Member[]; total: number }>;
@@ -625,6 +626,7 @@ export class DatabaseStorage implements IStorage {
     industry?: string;
     membershipLevel?: string;
     search?: string;
+    admin?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<{ members: Member[]; total: number }> {
@@ -633,7 +635,11 @@ export class DatabaseStorage implements IStorage {
     const limit = boundedPageSize(filters?.limit, MAX_MEMBER_PAGE_SIZE);
     const offset = boundedOffset(filters?.offset);
 
-    const conditions = [eq(members.isPublic, true)];
+    // Public reads must never rely on the caller filtering lifecycle state.
+    // The admin flag is only exposed by authenticated admin routes.
+    const conditions = filters?.admin
+      ? []
+      : [eq(members.isPublic, true), eq(members.membershipStatus, "active")];
 
     if (filters?.country) {
       conditions.push(eq(members.country, filters.country));

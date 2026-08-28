@@ -284,7 +284,7 @@ export function useUpdateMember(options: {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: MemberFormValues) => {
-      return apiRequest('PUT', `/api/members/${options.memberId}`, {
+      return apiRequest('PUT', `/api/admin/members/${options.memberId}`, {
         ...data,
         logo: options.logoUrl || data.logo,
       });

@@ -4,6 +4,7 @@ import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Eye, Edit, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { Member } from '@shared/schema';
@@ -29,7 +30,13 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
         {membersData?.members?.map((member: Member) => (
           <div key={member.id} className="flex justify-between items-center p-4 border rounded">
             <div className="flex-1">
-              <p className="font-medium">{member.companyName}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium">{member.companyName}</p>
+                <Badge variant={member.membershipStatus === 'active' ? 'default' : member.membershipStatus === 'inactive' ? 'destructive' : 'secondary'}>
+                  {member.membershipStatus === 'active' ? '활성' : member.membershipStatus === 'inactive' ? '비활성' : '승인 대기'}
+                </Badge>
+                {!member.isPublic && <Badge variant="outline">비공개</Badge>}
+              </div>
               <p className="text-sm text-muted-foreground">{member.industry} • {member.country} {member.city}</p>
             </div>
             <div className="flex space-x-2">

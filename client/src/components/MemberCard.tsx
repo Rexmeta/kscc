@@ -26,17 +26,6 @@ export default function MemberCard({ member }: MemberCardProps) {
     return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>;
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusMap = {
-      active: { variant: 'default' as const, label: '활성', className: 'badge-primary' },
-      pending: { variant: 'secondary' as const, label: '승인대기', className: 'badge-secondary' },
-      inactive: { variant: 'destructive' as const, label: '비활성', className: '' },
-    };
-    
-    const config = statusMap[status as keyof typeof statusMap] || { variant: 'outline' as const, label: status, className: '' };
-    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>;
-  };
-
   const getCountryFlag = (country: string) => {
     const flags = {
       Korea: '🇰🇷',
@@ -55,10 +44,9 @@ export default function MemberCard({ member }: MemberCardProps) {
       return;
     }
     
-    // Implementation for contact functionality
     toast({
       title: "연락처 정보",
-      description: `${member.companyName} 담당자: ${member.contactPerson}`,
+      description: `${member.companyName}의 연락처는 로그인 후 문의를 통해 확인하실 수 있습니다.`,
     });
   };
 
@@ -99,7 +87,6 @@ export default function MemberCard({ member }: MemberCardProps) {
                 {getCountryFlag(member.country)}
               </span>
             </div>
-            {getStatusBadge(member.membershipStatus)}
           </div>
         </div>
         
@@ -130,10 +117,10 @@ export default function MemberCard({ member }: MemberCardProps) {
           {member.description || '회사 소개가 없습니다.'}
         </p>
         
-        {/* Contact Person */}
+        {/* Contact information is intentionally not part of the public member DTO. */}
         <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-          <div className="text-xs text-muted-foreground mb-1">담당자</div>
-          <div className="font-medium text-sm">{member.contactPerson}</div>
+          <div className="text-xs text-muted-foreground mb-1">회원사 문의</div>
+          <div className="font-medium text-sm">로그인 후 문의를 이용해 주세요.</div>
           {member.website && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
               <Globe className="h-3 w-3" />

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { memberSchema, type MemberFormValues } from '../adminSchemas';
 import type { Member } from '@shared/schema';
 import { useUpdateMember } from '@/hooks/useAdminMutations';
@@ -17,7 +18,7 @@ interface EditMemberFormProps {
 export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
   const [logoUrl, setLogoUrl] = useState(member.logo || '');
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<MemberFormValues>({
-    resolver: zodResolver(memberSchema),
+    resolver: zodResolver(memberSchema) as any,
     defaultValues: {
       companyName: member.companyName,
       industry: member.industry,
@@ -29,6 +30,10 @@ export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
       description: member.description || '',
       logo: member.logo || '',
       membershipLevel: member.membershipLevel || 'regular',
+      membershipStatus: (member.membershipStatus === 'active' || member.membershipStatus === 'inactive'
+        ? member.membershipStatus
+        : 'pending'),
+      isPublic: member.isPublic,
       contactPerson: member.contactPerson,
       contactEmail: member.contactEmail,
     }
@@ -113,6 +118,32 @@ export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
             <SelectItem value="sponsor">후원</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div>
+        <label className="form-label">승인 상태</label>
+        <Select defaultValue={member.membershipStatus} onValueChange={(value) => setValue('membershipStatus', value as MemberFormValues['membershipStatus'])}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">승인 대기</SelectItem>
+            <SelectItem value="active">활성</SelectItem>
+            <SelectItem value="inactive">비활성</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border p-3">
+        <div>
+          <label className="form-label mb-0">디렉터리 공개</label>
+          <p className="text-xs text-muted-foreground">활성 상태인 회원만 공개됩니다.</p>
+        </div>
+        <Switch
+          checked={member.isPublic}
+          onCheckedChange={(checked) => setValue('isPublic', checked)}
+          data-testid="switch-member-public"
+        />
       </div>
 
       <div className="flex gap-2">

@@ -47,9 +47,9 @@ type MembersResponse = { members: Member[]; total: number; page: number; totalPa
 export function useAdminMembers(activeTab: string) {
   const { isAdmin } = useAuth();
   return useQuery<MembersResponse>({
-    queryKey: ['/api/members', { admin: true }],
+    queryKey: ['/api/admin/members'],
     queryFn: () =>
-      fetchJson<MembersResponse>('/api/members?admin=true'),
+      fetchJson<MembersResponse>('/api/admin/members'),
     enabled: isAdmin && activeTab === 'members',
   });
 }

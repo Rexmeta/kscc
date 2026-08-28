@@ -52,6 +52,8 @@ export const memberSchema = z.object({
   description: z.string().optional(),
   logo: z.string().optional(),
   membershipLevel: z.string(),
+  membershipStatus: z.enum(['pending', 'active', 'inactive']),
+  isPublic: z.boolean(),
   contactPerson: z.string(),
   contactEmail: z.string().email(),
 });
