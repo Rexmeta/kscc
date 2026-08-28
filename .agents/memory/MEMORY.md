@@ -3,3 +3,4 @@
 - [Create-only post permissions](create-only-post-permissions.md) — initial post, translation, and metadata creation must share one create-authorized request.
 - [Organization member visibility](organization-member-visibility.md) — public reads are active-only; inactive records require current admin authorization.
 - [Production dependency audit](production-dependency-audit.md) — keep release audits strict and document only narrowly scoped, owner-backed compatibility exceptions.
+- [Event registration invariants](event-registration-invariants.md) — availability and capacity decisions must stay inside the same event-locked transaction as registration changes.

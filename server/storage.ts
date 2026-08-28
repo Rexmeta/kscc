@@ -12,7 +12,7 @@ import {
   type OrganizationMember, type InsertOrganizationMember
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
   canReadPost,
@@ -23,6 +23,21 @@ import {
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
+
+export type EventRegistrationErrorCode =
+  | "EVENT_NOT_FOUND"
+  | "NOT_AN_EVENT"
+  | "EVENT_NOT_PUBLISHED"
+  | "EVENT_NOT_STARTED"
+  | "EVENT_EXPIRED"
+  | "EVENT_CLOSED"
+  | "EVENT_CAPACITY_REACHED"
+  | "EVENT_CONFIGURATION_INVALID"
+  | "REGISTRATION_DUPLICATE"
+  | "REGISTRATION_NOT_FOUND"
+  | "REGISTRATION_NOT_OWNER"
+  | "REGISTRATION_ALREADY_CANCELLED"
+  | "REGISTRATION_ATTENDED";
 
 export type AccountRole = "admin" | "operator" | "user";
 
@@ -58,6 +73,15 @@ function boundedOffset(offset: number | undefined): number {
   return Math.max(Math.trunc(offset), 0);
 }
 
+function getEventMetaValue(meta: PostMeta[], keys: string[]): unknown {
+  const item = meta.find(({ key }) => keys.includes(key));
+  if (!item) return undefined;
+  if (item.valueText !== null) return item.valueText;
+  if (item.valueNumber !== null) return item.valueNumber;
+  if (item.valueBoolean !== null) return item.valueBoolean;
+  if (item.valueTimestamp !== null) return item.valueTimestamp;
+  return item.value ?? undefined;
+}
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -98,6 +122,8 @@ export interface IStorage {
   getEventRegistrations(eventId: string): Promise<EventRegistration[]>;
   getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]>;
   createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration | undefined>;
+  registerForEvent(registration: InsertEventRegistration): Promise<EventRegistration>;
+  cancelEventRegistration(id: string, userId: string): Promise<EventRegistration>;
   updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined>;
 
   // Inquiries
@@ -766,6 +792,157 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newRegistration || undefined;
+  }
+
+  async registerForEvent(registration: InsertEventRegistration): Promise<EventRegistration> {
+    if (!registration.eventId || !registration.userId) {
+      throw new EventRegistrationError("EVENT_NOT_FOUND", "Event and user are required");
+    }
+    const eventId = registration.eventId;
+    const userId = registration.userId;
+
+    return db.transaction(async (tx) => {
+      // Serialize all registration and cancellation decisions for this event.
+      // The lock is held until the transaction commits, so a capacity check and
+      // the subsequent insert/reactivation are one atomic decision.
+      await tx.execute(sql`SELECT ${posts.id} FROM ${posts} WHERE ${posts.id} = ${eventId} FOR UPDATE`);
+
+      const [event] = await tx
+        .select()
+        .from(posts)
+        .where(eq(posts.id, eventId));
+      if (!event) {
+        throw new EventRegistrationError("EVENT_NOT_FOUND", "Event not found");
+      }
+
+      const meta = await tx
+        .select()
+        .from(postMeta)
+        .where(eq(postMeta.postId, eventId));
+      const now = new Date();
+
+      const [existingRegistration] = await tx
+        .select()
+        .from(eventRegistrations)
+        .where(and(
+          eq(eventRegistrations.eventId, eventId),
+          eq(eventRegistrations.userId, userId),
+        ));
+
+      const [{ activeCount }] = await tx
+        .select({
+          activeCount: count(),
+        })
+        .from(eventRegistrations)
+        .where(and(
+          eq(eventRegistrations.eventId, eventId),
+          ne(eventRegistrations.status, "cancelled"),
+        ));
+
+      validateEventRegistrationAvailability(event, meta, now);
+
+      if (existingRegistration) {
+        if (existingRegistration.status === "cancelled") {
+          validateEventCapacity(meta, activeCount);
+          const [reactivated] = await tx
+            .update(eventRegistrations)
+            .set({ status: "registered" })
+            .where(eq(eventRegistrations.id, existingRegistration.id))
+            .returning();
+          return reactivated;
+        }
+        throw new EventRegistrationError(
+          "REGISTRATION_DUPLICATE",
+          "Already registered for this event",
+        );
+      }
+
+      validateEventCapacity(meta, activeCount);
+      const [created] = await tx
+        .insert(eventRegistrations)
+        .values({
+          eventId,
+          userId,
+          attendeeName: registration.attendeeName,
+          attendeeEmail: registration.attendeeEmail,
+          attendeePhone: registration.attendeePhone,
+          companyName: registration.companyName,
+          // These fields are deliberately assigned here rather than accepting
+          // values from the registration request.
+          status: "registered",
+          paymentStatus: "free",
+        })
+        .onConflictDoNothing({
+          target: [eventRegistrations.eventId, eventRegistrations.userId],
+        })
+        .returning();
+
+      if (!created) {
+        throw new EventRegistrationError(
+          "REGISTRATION_DUPLICATE",
+          "Already registered for this event",
+        );
+      }
+      return created;
+    });
+  }
+
+  async cancelEventRegistration(id: string, userId: string): Promise<EventRegistration> {
+    return db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(eventRegistrations)
+        .where(eq(eventRegistrations.id, id));
+      if (!current) {
+        throw new EventRegistrationError("REGISTRATION_NOT_FOUND", "Registration not found");
+      }
+      if (current.userId !== userId) {
+        throw new EventRegistrationError(
+          "REGISTRATION_NOT_OWNER",
+          "You can only cancel your own registrations",
+        );
+      }
+
+      // Use the same event lock as registration so a cancellation cannot race
+      // a capacity decision for the same event.
+      if (current.eventId) {
+        await tx.execute(sql`SELECT ${posts.id} FROM ${posts} WHERE ${posts.id} = ${current.eventId} FOR UPDATE`);
+      }
+
+      const [locked] = await tx
+        .select()
+        .from(eventRegistrations)
+        .where(eq(eventRegistrations.id, id))
+        .for("update");
+      if (!locked) {
+        throw new EventRegistrationError("REGISTRATION_NOT_FOUND", "Registration not found");
+      }
+      if (locked.userId !== userId) {
+        throw new EventRegistrationError(
+          "REGISTRATION_NOT_OWNER",
+          "You can only cancel your own registrations",
+        );
+      }
+      if (locked.status === "cancelled") {
+        throw new EventRegistrationError(
+          "REGISTRATION_ALREADY_CANCELLED",
+          "Registration is already cancelled",
+        );
+      }
+      if (locked.status === "attended") {
+        throw new EventRegistrationError(
+          "REGISTRATION_ATTENDED",
+          "Cannot cancel attended event",
+        );
+      }
+
+      const [cancelled] = await tx
+        .update(eventRegistrations)
+        .set({ status: "cancelled" })
+        .where(eq(eventRegistrations.id, id))
+        .returning();
+      return cancelled;
+    });
   }
 
   async updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined> {
@@ -1570,3 +1747,109 @@ const ACL_ROLE_TO_ACCOUNT_ROLE: Record<AclRoleCode, AccountRole> = {
   member: "user",
   guest: "user",
 };
+
+function validateEventCapacity(meta: PostMeta[], activeRegistrationCount: number): void {
+  const capacityValue = getEventMetaValue(meta, ["event.capacity"]);
+  const capacity = parseEventCapacity(capacityValue);
+  if (capacityValue !== undefined && capacity === undefined) {
+    throw new EventRegistrationError(
+      "EVENT_CONFIGURATION_INVALID",
+      "Event capacity is not configured correctly",
+    );
+  }
+  if (capacity !== undefined && activeRegistrationCount >= capacity) {
+    throw new EventRegistrationError("EVENT_CAPACITY_REACHED", "Event is at capacity");
+  }
+}
+
+function isEventClosed(meta: PostMeta[]): boolean {
+  const closedValue = getEventMetaValue(meta, [
+    "event.registrationClosed",
+    "event.closed",
+    "registrationClosed",
+    "closed",
+  ]);
+  if (closedValue === true) return true;
+  if (typeof closedValue === "string") {
+    return ["true", "1", "yes", "closed"].includes(closedValue.trim().toLowerCase());
+  }
+
+  const registrationStatus = getEventMetaValue(meta, [
+    "event.registrationStatus",
+    "registrationStatus",
+  ]);
+  return typeof registrationStatus === "string" &&
+    registrationStatus.trim().toLowerCase() === "closed";
+}
+
+function parseEventDate(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function parseEventCapacity(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return undefined;
+  return parsed;
+}
+
+export class EventRegistrationError extends Error {
+  constructor(
+    public readonly code: EventRegistrationErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "EventRegistrationError";
+  }
+}
+
+function validateEventRegistrationAvailability(
+  event: Post,
+  meta: PostMeta[],
+  now: Date,
+): void {
+  if (event.postType !== "event") {
+    throw new EventRegistrationError("NOT_AN_EVENT", "Post is not an event");
+  }
+  if (event.status !== "published") {
+    throw new EventRegistrationError("EVENT_NOT_PUBLISHED", "Event is not published");
+  }
+  if (event.publishedAt && event.publishedAt > now) {
+    throw new EventRegistrationError("EVENT_NOT_PUBLISHED", "Event is not published yet");
+  }
+  if (event.expiresAt && event.expiresAt <= now) {
+    throw new EventRegistrationError("EVENT_EXPIRED", "Event has expired");
+  }
+  if (isEventClosed(meta)) {
+    throw new EventRegistrationError("EVENT_CLOSED", "Event registration is closed");
+  }
+
+  const eventDate = parseEventDate(getEventMetaValue(meta, ["event.eventDate", "event.date"]));
+  if (!eventDate) {
+    throw new EventRegistrationError(
+      "EVENT_CONFIGURATION_INVALID",
+      "Event date is not configured",
+    );
+  }
+  if (eventDate <= now) {
+    throw new EventRegistrationError("EVENT_NOT_STARTED", "Event has already started");
+  }
+
+  const endDate = parseEventDate(getEventMetaValue(meta, ["event.endDate"]));
+  if (endDate && endDate <= now) {
+    throw new EventRegistrationError("EVENT_EXPIRED", "Event has ended");
+  }
+
+  const registrationDeadline = parseEventDate(
+    getEventMetaValue(meta, ["event.registrationDeadline"]),
+  );
+  if (registrationDeadline && registrationDeadline <= now) {
+    throw new EventRegistrationError("EVENT_CLOSED", "Event registration is closed");
+  }
+
+}

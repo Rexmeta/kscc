@@ -18,7 +18,7 @@ import {
   users,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
-import { AuthorizationStateError } from "./storage";
+import { AuthorizationStateError, EventRegistrationError } from "./storage";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -144,6 +144,222 @@ test(
   },
 );
 
+test(
+  "event registration enforces publication, timing, closure, capacity, and server-owned state",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const eventIds: string[] = [];
+    const userIds: string[] = [];
+    const now = Date.now();
+
+    const createEvent = async (options: {
+      status?: "draft" | "published" | "archived";
+      publishedAt?: Date | null;
+      expiresAt?: Date | null;
+      eventDate?: Date;
+      registrationDeadline?: Date;
+      capacity?: number;
+      closed?: boolean;
+    } = {}) => {
+      const [event] = await db
+        .insert(posts)
+        .values({
+          postType: "event",
+          status: options.status || "published",
+          visibility: "public",
+          slug: `registration-rules-${randomUUID()}`,
+          primaryLocale: "ko",
+          publishedAt: options.publishedAt === undefined
+            ? new Date(now - 60_000)
+            : options.publishedAt,
+          expiresAt: options.expiresAt,
+        })
+        .returning();
+      eventIds.push(event.id);
+
+      const meta = [
+        {
+          postId: event.id,
+          key: "event.eventDate",
+          valueTimestamp: options.eventDate || new Date(now + 3_600_000),
+        },
+        ...(options.registrationDeadline
+          ? [{
+              postId: event.id,
+              key: "event.registrationDeadline",
+              valueTimestamp: options.registrationDeadline,
+            }]
+          : []),
+        ...(options.capacity !== undefined
+          ? [{
+              postId: event.id,
+              key: "event.capacity",
+              valueNumber: options.capacity,
+            }]
+          : []),
+        ...(options.closed
+          ? [{
+              postId: event.id,
+              key: "event.registrationClosed",
+              valueBoolean: true,
+            }]
+          : []),
+      ];
+      await db.insert(postMeta).values(meta as any);
+      return event;
+    };
+
+    const createUser = async () => {
+      const [user] = await db
+        .insert(users)
+        .values({
+          email: `event-rules-${randomUUID()}@example.test`,
+          password: "test-password",
+          name: "Event Rules Test User",
+        })
+        .returning();
+      userIds.push(user.id);
+      return user;
+    };
+
+    const assertRejected = async (
+      eventOptions: Parameters<typeof createEvent>[0],
+      code: EventRegistrationError["code"],
+    ) => {
+      const event = await createEvent(eventOptions);
+      const user = await createUser();
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: user.id,
+          attendeeName: user.name,
+          attendeeEmail: user.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError && error.code === code,
+      );
+    };
+
+    try {
+      await assertRejected({ status: "draft" }, "EVENT_NOT_PUBLISHED");
+      await assertRejected(
+        { publishedAt: new Date(now + 60_000) },
+        "EVENT_NOT_PUBLISHED",
+      );
+      await assertRejected(
+        { expiresAt: new Date(now - 60_000) },
+        "EVENT_EXPIRED",
+      );
+      await assertRejected(
+        { eventDate: new Date(now - 60_000) },
+        "EVENT_NOT_STARTED",
+      );
+      await assertRejected(
+        { registrationDeadline: new Date(now - 60_000) },
+        "EVENT_CLOSED",
+      );
+      await assertRejected({ closed: true }, "EVENT_CLOSED");
+
+      const event = await createEvent({ capacity: 1 });
+      const firstUser = await createUser();
+      const secondUser = await createUser();
+      const firstRegistration = await storage.registerForEvent({
+        eventId: event.id,
+        userId: firstUser.id,
+        attendeeName: "Submitted name",
+        attendeeEmail: "submitted@example.test",
+        status: "attended",
+        paymentStatus: "paid",
+      });
+      assert.equal(firstRegistration.status, "registered");
+      assert.equal(firstRegistration.paymentStatus, "free");
+
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: secondUser.id,
+          attendeeName: secondUser.name,
+          attendeeEmail: secondUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "EVENT_CAPACITY_REACHED",
+      );
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: firstUser.id,
+          attendeeName: firstUser.name,
+          attendeeEmail: firstUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "REGISTRATION_DUPLICATE",
+      );
+
+      const concurrentEvent = await createEvent({ capacity: 1 });
+      const concurrentUsers = await Promise.all([createUser(), createUser()]);
+      const concurrentResults = await Promise.allSettled(
+        concurrentUsers.map((user) => storage.registerForEvent({
+          eventId: concurrentEvent.id,
+          userId: user.id,
+          attendeeName: user.name,
+          attendeeEmail: user.email,
+        })),
+      );
+      assert.equal(
+        concurrentResults.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(
+        concurrentResults.filter(
+          (result) =>
+            result.status === "rejected" &&
+            result.reason instanceof EventRegistrationError &&
+            result.reason.code === "EVENT_CAPACITY_REACHED",
+        ).length,
+        1,
+      );
+
+      const cancelled = await storage.cancelEventRegistration(
+        firstRegistration.id,
+        firstUser.id,
+      );
+      assert.equal(cancelled.status, "cancelled");
+
+      const secondRegistration = await storage.registerForEvent({
+        eventId: event.id,
+        userId: secondUser.id,
+        attendeeName: secondUser.name,
+        attendeeEmail: secondUser.email,
+      });
+      assert.equal(secondRegistration.status, "registered");
+
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: firstUser.id,
+          attendeeName: firstUser.name,
+          attendeeEmail: firstUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "EVENT_CAPACITY_REACHED",
+      );
+    } finally {
+      if (eventIds.length > 0) {
+        await db.delete(eventRegistrations).where(inArray(eventRegistrations.eventId, eventIds));
+        await db.delete(postMeta).where(inArray(postMeta.postId, eventIds));
+        await db.delete(posts).where(inArray(posts.id, eventIds));
+      }
+      if (userIds.length > 0) {
+        await db.delete(users).where(inArray(users.id, userIds));
+      }
+    }
+  },
+);
+
 
 test(
   "registration and authorization mutations keep account and ACL state aligned",
@@ -250,6 +466,222 @@ test(
       assert.equal(finalUser?.role, "admin");
     } finally {
       await db.delete(users).where(eq(users.id, user.id));
+    }
+  },
+);
+
+test(
+  "event registration enforces publication, timing, closure, capacity, and server-owned state",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const eventIds: string[] = [];
+    const userIds: string[] = [];
+    const now = Date.now();
+
+    const createEvent = async (options: {
+      status?: "draft" | "published" | "archived";
+      publishedAt?: Date | null;
+      expiresAt?: Date | null;
+      eventDate?: Date;
+      registrationDeadline?: Date;
+      capacity?: number;
+      closed?: boolean;
+    } = {}) => {
+      const [event] = await db
+        .insert(posts)
+        .values({
+          postType: "event",
+          status: options.status || "published",
+          visibility: "public",
+          slug: `registration-rules-${randomUUID()}`,
+          primaryLocale: "ko",
+          publishedAt: options.publishedAt === undefined
+            ? new Date(now - 60_000)
+            : options.publishedAt,
+          expiresAt: options.expiresAt,
+        })
+        .returning();
+      eventIds.push(event.id);
+
+      const meta = [
+        {
+          postId: event.id,
+          key: "event.eventDate",
+          valueTimestamp: options.eventDate || new Date(now + 3_600_000),
+        },
+        ...(options.registrationDeadline
+          ? [{
+              postId: event.id,
+              key: "event.registrationDeadline",
+              valueTimestamp: options.registrationDeadline,
+            }]
+          : []),
+        ...(options.capacity !== undefined
+          ? [{
+              postId: event.id,
+              key: "event.capacity",
+              valueNumber: options.capacity,
+            }]
+          : []),
+        ...(options.closed
+          ? [{
+              postId: event.id,
+              key: "event.registrationClosed",
+              valueBoolean: true,
+            }]
+          : []),
+      ];
+      await db.insert(postMeta).values(meta as any);
+      return event;
+    };
+
+    const createUser = async () => {
+      const [user] = await db
+        .insert(users)
+        .values({
+          email: `event-rules-${randomUUID()}@example.test`,
+          password: "test-password",
+          name: "Event Rules Test User",
+        })
+        .returning();
+      userIds.push(user.id);
+      return user;
+    };
+
+    const assertRejected = async (
+      eventOptions: Parameters<typeof createEvent>[0],
+      code: EventRegistrationError["code"],
+    ) => {
+      const event = await createEvent(eventOptions);
+      const user = await createUser();
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: user.id,
+          attendeeName: user.name,
+          attendeeEmail: user.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError && error.code === code,
+      );
+    };
+
+    try {
+      await assertRejected({ status: "draft" }, "EVENT_NOT_PUBLISHED");
+      await assertRejected(
+        { publishedAt: new Date(now + 60_000) },
+        "EVENT_NOT_PUBLISHED",
+      );
+      await assertRejected(
+        { expiresAt: new Date(now - 60_000) },
+        "EVENT_EXPIRED",
+      );
+      await assertRejected(
+        { eventDate: new Date(now - 60_000) },
+        "EVENT_NOT_STARTED",
+      );
+      await assertRejected(
+        { registrationDeadline: new Date(now - 60_000) },
+        "EVENT_CLOSED",
+      );
+      await assertRejected({ closed: true }, "EVENT_CLOSED");
+
+      const event = await createEvent({ capacity: 1 });
+      const firstUser = await createUser();
+      const secondUser = await createUser();
+      const firstRegistration = await storage.registerForEvent({
+        eventId: event.id,
+        userId: firstUser.id,
+        attendeeName: "Submitted name",
+        attendeeEmail: "submitted@example.test",
+        status: "attended",
+        paymentStatus: "paid",
+      });
+      assert.equal(firstRegistration.status, "registered");
+      assert.equal(firstRegistration.paymentStatus, "free");
+
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: secondUser.id,
+          attendeeName: secondUser.name,
+          attendeeEmail: secondUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "EVENT_CAPACITY_REACHED",
+      );
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: firstUser.id,
+          attendeeName: firstUser.name,
+          attendeeEmail: firstUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "REGISTRATION_DUPLICATE",
+      );
+
+      const concurrentEvent = await createEvent({ capacity: 1 });
+      const concurrentUsers = await Promise.all([createUser(), createUser()]);
+      const concurrentResults = await Promise.allSettled(
+        concurrentUsers.map((user) => storage.registerForEvent({
+          eventId: concurrentEvent.id,
+          userId: user.id,
+          attendeeName: user.name,
+          attendeeEmail: user.email,
+        })),
+      );
+      assert.equal(
+        concurrentResults.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(
+        concurrentResults.filter(
+          (result) =>
+            result.status === "rejected" &&
+            result.reason instanceof EventRegistrationError &&
+            result.reason.code === "EVENT_CAPACITY_REACHED",
+        ).length,
+        1,
+      );
+
+      const cancelled = await storage.cancelEventRegistration(
+        firstRegistration.id,
+        firstUser.id,
+      );
+      assert.equal(cancelled.status, "cancelled");
+
+      const secondRegistration = await storage.registerForEvent({
+        eventId: event.id,
+        userId: secondUser.id,
+        attendeeName: secondUser.name,
+        attendeeEmail: secondUser.email,
+      });
+      assert.equal(secondRegistration.status, "registered");
+
+      await assert.rejects(
+        () => storage.registerForEvent({
+          eventId: event.id,
+          userId: firstUser.id,
+          attendeeName: firstUser.name,
+          attendeeEmail: firstUser.email,
+        }),
+        (error: unknown) =>
+          error instanceof EventRegistrationError &&
+          error.code === "EVENT_CAPACITY_REACHED",
+      );
+    } finally {
+      if (eventIds.length > 0) {
+        await db.delete(eventRegistrations).where(inArray(eventRegistrations.eventId, eventIds));
+        await db.delete(postMeta).where(inArray(postMeta.postId, eventIds));
+        await db.delete(posts).where(inArray(posts.id, eventIds));
+      }
+      if (userIds.length > 0) {
+        await db.delete(users).where(inArray(users.id, userIds));
+      }
     }
   },
 );
@@ -561,7 +993,6 @@ test(
     }
   },
 );
-
 test(
   "complete post edits replace stale metadata and roll back for news, events, and resources",
   { skip: !databaseAvailable },

@@ -1,6 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
 import { canReadPost, publicPostAccess } from "./postAccess";
 import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
@@ -13,6 +12,7 @@ import { AuthorizationStateError, type AccountRole } from "./storage";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
+import { EventRegistrationError, storage } from "./storage";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -339,33 +339,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const uuidSchema = z.string().uuid();
       const validatedId = uuidSchema.parse(id);
 
-      const registration = await storage.getEventRegistrationById(validatedId);
-      
-      if (!registration) {
-        return res.status(404).json({ message: "Registration not found" });
-      }
-
-      // Verify ownership
-      if (registration.userId !== req.user!.id) {
-        return res.status(403).json({ message: "You can only cancel your own registrations" });
-      }
-
-      // Check if already cancelled or attended
-      if (registration.status === 'cancelled') {
-        return res.status(409).json({ message: "Registration is already cancelled" });
-      }
-      if (registration.status === 'attended') {
-        return res.status(409).json({ message: "Cannot cancel attended event" });
-      }
-
-      const updatedRegistration = await storage.updateEventRegistration(validatedId, {
-        status: 'cancelled'
-      });
-
+      // The storage command locks the event and registration rows and repeats
+      // ownership/state checks inside the transaction.
+      const updatedRegistration = await storage.cancelEventRegistration(
+        validatedId,
+        req.user!.id,
+      );
       res.json(updatedRegistration);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid registration ID" });
+      }
+      if (error instanceof EventRegistrationError) {
+        const status = error.code === "REGISTRATION_NOT_FOUND" ? 404
+          : error.code === "REGISTRATION_NOT_OWNER" ? 403
+            : 409;
+        return res.status(status).json({ message: error.message, code: error.code });
       }
       res.status(500).json({ message: "Internal server error" });
     }

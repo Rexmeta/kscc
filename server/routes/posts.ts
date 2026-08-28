@@ -1,6 +1,6 @@
 import { Router, type Request, Response } from "express";
-import { storage } from "../storage";
-import { insertPostSchema, insertPostTranslationSchema, insertEventRegistrationSchema } from "@shared/schema";
+import { EventRegistrationError, storage } from "../storage";
+import { insertPostSchema, insertPostTranslationSchema } from "@shared/schema";
 import { ObjectStorageService, getResourceObjectAclVisibility } from "../objectStorage";
 import type { Post } from "@shared/schema";
 import { z } from "zod";
@@ -83,6 +83,13 @@ const postMetaPayloadSchema = z.object({
   valueBoolean: z.boolean().nullable().optional(),
   valueTimestamp: z.coerce.date().nullable().optional(),
 });
+
+const eventRegistrationRequestSchema = z.object({
+  attendeeName: z.string().trim().min(1).max(200),
+  attendeeEmail: z.string().trim().email().max(320),
+  attendeePhone: z.string().trim().max(50).optional(),
+  companyName: z.string().trim().max(200).optional(),
+}).strict();
 
 async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<void> {
   if (post.postType !== "resource") return;
@@ -220,6 +227,7 @@ router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response
 router.post("/:id/register", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
+    const attendee = eventRegistrationRequestSchema.parse(req.body);
     const access = await storage.getPostAccessContext(
       req.user?.id,
       req.user?.role === "admin",
@@ -232,37 +240,33 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
     if (post.postType !== 'event') {
       return res.status(400).json({ message: "Post is not an event" });
     }
-    
-    // Check for existing registration
-    const existingRegistration = await storage.getEventRegistration(id, req.user!.id);
-    
-    if (existingRegistration) {
-      // If cancelled, reactivate it
-      if (existingRegistration.status === 'cancelled') {
-        const reactivated = await storage.updateEventRegistration(existingRegistration.id, {
-          status: 'registered',
-        });
-        return res.status(200).json(reactivated);
-      }
-      // Otherwise, already registered
-      return res.status(400).json({ message: "Already registered for this event" });
+
+    // The visibility read preserves the existing public/member boundary. The
+    // command repeats mutable availability checks while holding the event lock.
+    const user = await storage.getUser(req.user!.id);
+    if (!user) {
+      return res.status(401).json({ message: "Authentication required" });
     }
-    
-    // Create new registration
-    const registrationData = insertEventRegistrationSchema.parse({
-      ...req.body,
+    const existingRegistration = await storage.getEventRegistration(id, user.id);
+    const registration = await storage.registerForEvent({
       eventId: id,
-      userId: req.user!.id,
+      userId: user.id,
+      attendeeName: user.name,
+      attendeeEmail: user.email,
+      attendeePhone: attendee.attendeePhone,
+      companyName: attendee.companyName,
     });
-    
-    const registration = await storage.createEventRegistration(registrationData);
-    if (!registration) {
-      return res.status(400).json({ message: "Already registered for this event" });
-    }
-    res.status(201).json(registration);
+    res.status(existingRegistration?.status === "cancelled" ? 200 : 201).json(registration);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid registration data", errors: error.errors });
+    }
+    if (error instanceof EventRegistrationError) {
+      const status = error.code === "EVENT_NOT_FOUND" ? 404
+        : error.code === "NOT_AN_EVENT" ? 400
+          : error.code === "REGISTRATION_DUPLICATE" ? 409
+            : 409;
+      return res.status(status).json({ message: error.message, code: error.code });
     }
     console.error("[Posts API] Error registering for event:", error);
     res.status(500).json({ message: "Internal server error" });
