@@ -14,6 +14,7 @@ import { CreateEventDialog } from '../forms/CreateEventDialog';
 import { EditEventForm } from '../forms/EditEventForm';
 import { EventRegistrationsDialog } from '../forms/EventRegistrationsDialog';
 import { useAdminPosts } from '@/hooks/useAdminData';
+import { PostPublicationToggle } from '../PostPublicationToggle';
 
 interface EventsTabProps {
   activeTab: string;
@@ -32,7 +33,8 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
   const { data: eventsData } = useAdminPosts('event', activeTab);
   const canCreate = isAdmin || hasPermission('event.create');
   const canUpdate = isAdmin || hasPermission('event.update');
-  const canDelete = isAdmin || hasPermission('event.delete');
+  const canPublish = isAdmin || hasPermission('event.publish');
+  const canDelete = isAdmin;
   const canManageAttendees = isAdmin || hasPermission('event.attendee.manage');
 
   const formatDate = (dateStr: string | undefined) => {
@@ -103,12 +105,14 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
                       정원 {String(eventCapacity)}명
                     </span>
                   )}
-                  <Badge variant={event.status === 'published' ? 'default' : 'secondary'}>
-                    {event.status === 'published' ? '게시됨' : '임시저장'}
-                  </Badge>
                 </div>
               </div>
               <div className="flex space-x-2">
+                <PostPublicationToggle
+                  post={event}
+                  postType="event"
+                  canPublish={canPublish}
+                />
                 {canManageAttendees && <Button
                   size="sm"
                   variant="outline"

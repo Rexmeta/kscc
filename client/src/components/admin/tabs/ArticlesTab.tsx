@@ -13,6 +13,7 @@ import type { PostWithTranslations } from '@shared/schema';
 import { CreateNewsDialog } from '../forms/CreateNewsDialog';
 import { EditNewsForm } from '../forms/EditNewsForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
+import { PostPublicationToggle } from '../PostPublicationToggle';
 
 export function ArticlesTab({
   activeTab,
@@ -33,7 +34,8 @@ export function ArticlesTab({
   const { data: newsData } = useAdminPosts('news', activeTab);
   const canCreate = isAdmin || hasPermission('news.create');
   const canUpdate = isAdmin || hasPermission('news.update');
-  const canDelete = isAdmin || hasPermission('news.delete');
+  const canPublish = isAdmin || hasPermission('news.publish');
+  const canDelete = isAdmin;
 
   return (
     <TabsContent value="articles" className="space-y-6">
@@ -82,10 +84,14 @@ export function ArticlesTab({
               <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{article.translations?.[0]?.excerpt || '설명 없음'}</p>
               <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                 <span>{new Date(article.publishedAt || article.createdAt).toLocaleDateString()}</span>
-                <Badge variant="secondary">{article.status}</Badge>
               </div>
             </div>
             <div className="flex space-x-2">
+              <PostPublicationToggle
+                post={article}
+                postType="news"
+                canPublish={canPublish}
+              />
               {canUpdate && <Button
                 size="sm"
                 variant="outline"

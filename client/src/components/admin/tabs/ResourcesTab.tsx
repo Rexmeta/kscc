@@ -12,6 +12,7 @@ import type { PostWithTranslations } from '@shared/schema';
 import { CreateResourceDialog } from '../forms/CreateResourceDialog';
 import { EditResourceForm } from '../forms/EditResourceForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
+import { PostPublicationToggle } from '../PostPublicationToggle';
 
 interface ResourcesTabProps {
   activeTab: string;
@@ -29,7 +30,8 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
   const { data: resourcesData } = useAdminPosts('resource', activeTab);
   const canCreate = isAdmin || hasPermission('resource.upload');
   const canUpdate = isAdmin || hasPermission('resource.update');
-  const canDelete = isAdmin || hasPermission('resource.delete');
+  const canPublish = isAdmin || hasPermission('resource.publish');
+  const canDelete = isAdmin;
 
   const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
 
@@ -60,10 +62,14 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
               <p className="text-sm text-muted-foreground mb-2">{resource.translations?.[0]?.excerpt || '설명 없음'}</p>
               <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                 <Badge variant="outline">{(resource.tags as string[])?.[0] || '기타'}</Badge>
-                <Badge variant="secondary">{resource.status}</Badge>
               </div>
             </div>
             <div className="flex space-x-2">
+              <PostPublicationToggle
+                post={resource}
+                postType="resource"
+                canPublish={canPublish}
+              />
               {canUpdate && <Button
                 size="sm"
                 variant="outline"

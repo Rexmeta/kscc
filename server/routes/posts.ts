@@ -361,6 +361,10 @@ const completePostUpdateSchema = z.object({
   meta: z.array(postMetaPayloadSchema),
 });
 
+const postStatusUpdateSchema = z.object({
+  status: z.enum(["draft", "published"]),
+});
+
 // POST /api/posts - Create a post with its initial translation and metadata
 router.post("/", authenticateToken, async (req: Request, res: Response) => {
   let createdPostId: string | undefined;
@@ -418,6 +422,45 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
+// PATCH /api/posts/:id/status - Update only the publication state
+router.patch("/:id/status", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = postIdSchema.parse(req.params);
+    const { status } = postStatusUpdateSchema.parse(req.body);
+    const existingPost = await storage.getPost(id);
+    if (!existingPost) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    if (!await requirePostPermission(req, res, existingPost.postType, "publish")) return;
+    if (existingPost.status === "archived") {
+      return res.status(409).json({ message: "Archived posts cannot be published from the list" });
+    }
+
+    if (existingPost.status === status) {
+      return res.json(existingPost);
+    }
+
+    const updatedPost = await storage.updatePost(id, {
+      status,
+      publishedAt: status === "published"
+        ? existingPost.publishedAt ?? new Date()
+        : null,
+    });
+    if (!updatedPost) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    await syncResourceObjectAcl(updatedPost, req.user!.id);
+    res.json(updatedPost);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid post status", errors: error.errors });
+    }
+    console.error("[Posts API] Error updating post status:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // PATCH /api/posts/:id - Update post
 router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
   try {
@@ -437,9 +480,13 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
       const completeUpdate = completePostUpdateSchema.parse(req.body);
       const updateData = completeUpdate.post;
       const intendedStatus = updateData.status ?? existingPost.status;
-      if (intendedStatus === "published" &&
-        existingPost.status !== "published" &&
+      if (intendedStatus !== existingPost.status &&
         !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
+      if (intendedStatus !== existingPost.status) {
+        updateData.publishedAt = intendedStatus === "published"
+          ? updateData.publishedAt ?? existingPost.publishedAt ?? new Date()
+          : null;
+      }
 
       const updatedPost = await storage.updatePostComplete(
         id,
@@ -466,9 +513,14 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     // Validate update data (partial)
     const updateSchema = insertPostSchema.partial();
     const updateData = updateSchema.parse(req.body);
-    if (updateData.status === "published" &&
-      existingPost.status !== "published" &&
+    if (updateData.status !== undefined &&
+      updateData.status !== existingPost.status &&
       !await requirePostPermission(req, res, existingPost.postType, "publish")) return;
+    if (updateData.status !== undefined && updateData.status !== existingPost.status) {
+      updateData.publishedAt = updateData.status === "published"
+        ? updateData.publishedAt ?? existingPost.publishedAt ?? new Date()
+        : null;
+    }
     
     const updatedPost = await storage.updatePost(id, updateData);
     if (updatedPost) {
@@ -495,7 +547,9 @@ router.delete("/:id", authenticateToken, async (req: Request, res: Response) => 
     if (!existingPost) {
       return res.status(404).json({ message: "Post not found" });
     }
-    if (!await requirePostPermission(req, res, existingPost.postType, "delete")) return;
+    if (req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Only administrators can delete posts" });
+    }
     
     await storage.deletePost(id);
     

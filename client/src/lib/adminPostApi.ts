@@ -20,6 +20,8 @@ interface UpdatePostPayload {
   meta: Omit<InsertPostMeta, 'id' | 'postId'>[];
 }
 
+export type PostPublicationStatus = 'draft' | 'published';
+
 /**
  * Create a complete post in one request so create-only operators do not need
  * update permission merely to attach the initial translation and metadata.
@@ -42,6 +44,14 @@ export async function updatePost({ postId, post, translation, meta }: UpdatePost
     translation,
     meta,
   });
+  return response.json();
+}
+
+export async function updatePostStatus(
+  postId: string,
+  status: PostPublicationStatus,
+) {
+  const response = await apiRequest('PATCH', `/api/posts/${postId}/status`, { status });
   return response.json();
 }
 
