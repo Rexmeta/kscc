@@ -22,6 +22,13 @@ const categoryIcons = {
   guides: BookOpen,
 };
 
+const resourceCategoryCards = [
+  { key: 'reports', title: 'resources.categories.reports', icon: FileText, cardClass: 'from-primary/5 to-primary/10 border-primary/20', iconClass: 'bg-primary/10', textClass: 'text-primary' },
+  { key: 'forms', title: 'resources.categories.forms', icon: File, cardClass: 'from-secondary/5 to-secondary/10 border-secondary/20', iconClass: 'bg-secondary/10', textClass: 'text-secondary' },
+  { key: 'presentations', title: 'resources.categories.presentations', icon: Presentation, cardClass: 'from-accent/5 to-accent/10 border-accent/20', iconClass: 'bg-accent/10', textClass: 'text-accent' },
+  { key: 'guides', title: 'resources.categories.guides', icon: BookOpen, cardClass: 'from-foreground/5 to-foreground/10 border-foreground/20', iconClass: 'bg-foreground/10', textClass: 'text-foreground' },
+] as const;
+
 const getCategoryIcon = (category: string) => {
   return categoryIcons[category as keyof typeof categoryIcons] || FileText;
 };
@@ -57,6 +64,20 @@ export default function ResourcesPage() {
   const { toast } = useToast();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
+
+  const { data: categoryData } = useQuery<{ categories: Record<string, number> }>({
+    queryKey: ['/api/posts/resource/categories', isAuthenticated ? 'authenticated' : 'public'],
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/posts/resource/categories', {
+        signal,
+        headers: isAuthenticated ? {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        } : {},
+      });
+      if (!response.ok) throw new Error('Failed to fetch resource categories');
+      return response.json();
+    },
+  });
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'resource', page, category, language, limit: 20 }),
@@ -112,11 +133,11 @@ export default function ResourcesPage() {
         description: "자료가 성공적으로 삭제되었습니다.",
       });
       // Invalidate all posts-related queries
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey[0];
-          return key === '/api/posts';
-        }
+          return key === '/api/posts' || key === '/api/posts/resource/categories';
+        },
       });
       setSelectedResource(null);
     },
@@ -236,8 +257,11 @@ export default function ResourcesPage() {
     }
   };
 
+  const getResourceAccessLevel = (resource: PostWithTranslations) =>
+    resource.visibility || getMetaValue(resource.meta || [], 'resource.accessLevel') || 'unknown';
+
   const canAccess = (resource: PostWithTranslations) => {
-    const accessLevel = getMetaValue(resource.meta || [], 'resource.accessLevel') || 'public';
+    const accessLevel = getResourceAccessLevel(resource);
     if (accessLevel === 'public') return true;
     if (accessLevel === 'members' && isAuthenticated) return true;
     if (accessLevel === 'premium' && isAdmin) return true;
@@ -260,53 +284,22 @@ export default function ResourcesPage() {
       <section className="py-16 bg-background dark:bg-background">
         <div className="container">
           <div className="mb-12 grid gap-6 md:grid-cols-4">
-            <Card className="card-hover p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold">{t('resources.categories.reports')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">사천·충칭 시장 동향 및 산업 분석 자료</p>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">15</span>
-                <span className="text-sm">자료</span>
-              </div>
-            </Card>
-            
-            <Card className="card-hover p-6 bg-gradient-to-br from-secondary/5 to-secondary/10 border-secondary/20">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/10">
-                <File className="h-6 w-6 text-secondary" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold">{t('resources.categories.forms')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">회원 가입 및 행사 신청 서식</p>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">8</span>
-                <span className="text-sm">양식</span>
-              </div>
-            </Card>
-            
-            <Card className="card-hover p-6 bg-gradient-to-br from-accent/5 to-accent/10 border-accent/20">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-accent/10">
-                <Presentation className="h-6 w-6 text-accent" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold">{t('resources.categories.presentations')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">세미나 및 행사 프레젠테이션</p>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">24</span>
-                <span className="text-sm">파일</span>
-              </div>
-            </Card>
-            
-            <Card className="card-hover p-6 bg-gradient-to-br from-foreground/5 to-foreground/10 border-foreground/20">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-foreground/10">
-                <BookOpen className="h-6 w-6 text-foreground" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold">{t('resources.categories.guides')}</h3>
-              <p className="text-sm text-muted-foreground mb-4">투자 및 진출 가이드 문서</p>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">12</span>
-                <span className="text-sm">문서</span>
-              </div>
-            </Card>
+            {resourceCategoryCards.map(({ key, title, icon: Icon, cardClass, iconClass, textClass }) => {
+              const count = categoryData?.categories?.[key] || 0;
+              return (
+                <Card key={key} className={`card-hover p-6 bg-gradient-to-br ${cardClass}`}>
+                  <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${iconClass}`}>
+                    <Icon className={`h-6 w-6 ${textClass}`} />
+                  </div>
+                  <h3 className="mb-2 text-xl font-bold">{t(title)}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">현재 등록된 자료</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-bold">{count}</span>
+                    <span className="text-sm">자료</span>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
 
           {/* Filter */}
@@ -366,10 +359,10 @@ export default function ResourcesPage() {
               ) : resources.length > 0 ? (
                 resources.map((resource: PostWithTranslations) => {
                   const translation = getTranslation(resource, language);
-                  const categoryValue = getMetaValue(resource.meta || [], 'resource.category') || 'reports';
-                  const fileType = getMetaValue(resource.meta || [], 'resource.fileType') || 'pdf';
-                  const fileSize = getMetaValue(resource.meta || [], 'resource.fileSize') || 0;
-                  const accessLevel = getMetaValue(resource.meta || [], 'resource.accessLevel') || 'public';
+                   const categoryValue = getMetaValue(resource.meta || [], 'resource.category') || 'uncategorized';
+                   const fileType = getMetaValue(resource.meta || [], 'resource.fileType');
+                   const fileSize = getMetaValue(resource.meta || [], 'resource.fileSize');
+                   const accessLevel = getResourceAccessLevel(resource);
                   const IconComponent = getCategoryIcon(categoryValue);
                   const accessible = canAccess(resource);
                   
@@ -396,7 +389,11 @@ export default function ResourcesPage() {
                                 <File className="h-4 w-4" />
                                 <span>{new Date(resource.createdAt).toLocaleDateString()}</span>
                               </span>
-                              <span>{fileType?.toUpperCase()} · {Math.round(fileSize / 1024)}KB</span>
+                               <span>
+                                 {fileType ? String(fileType).toUpperCase() : '파일 형식 정보 없음'}
+                                 {' · '}
+                                 {typeof fileSize === 'number' ? `${Math.round(fileSize / 1024)}KB` : '크기 정보 없음'}
+                               </span>
                               {getAccessBadge(accessLevel)}
                             </div>
                           </div>
@@ -508,31 +505,35 @@ export default function ResourcesPage() {
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 형식</p>
                     <Badge variant="secondary">
-                      {(getMetaValue(resourceForDialog.meta || [], 'resource.fileType') || 'PDF')?.toUpperCase()}
+                        {getMetaValue(resourceForDialog.meta || [], 'resource.fileType')
+                          ? String(getMetaValue(resourceForDialog.meta || [], 'resource.fileType')).toUpperCase()
+                          : '정보 없음'}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 크기</p>
                     <p className="font-medium">
-                      {Math.round((getMetaValue(resourceForDialog.meta || [], 'resource.fileSize') || 0) / 1024)} KB
+                      {typeof getMetaValue(resourceForDialog.meta || [], 'resource.fileSize') === 'number'
+                        ? `${Math.round(getMetaValue(resourceForDialog.meta || [], 'resource.fileSize') / 1024)} KB`
+                        : '정보 없음'}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">카테고리</p>
                     <Badge variant="outline">
                       {(() => {
-                        const cat = getMetaValue(resourceForDialog.meta || [], 'resource.category') || 'reports';
+                        const cat = getMetaValue(resourceForDialog.meta || [], 'resource.category') || 'uncategorized';
                         if (cat === 'reports') return '보고서';
                         if (cat === 'forms') return '양식';
                         if (cat === 'presentations') return '발표자료';
                         if (cat === 'guides') return '가이드북';
-                        return cat;
+                        return cat === 'uncategorized' ? '미분류' : cat;
                       })()}
                     </Badge>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">접근 권한</p>
-                    {getAccessBadge(getMetaValue(resourceForDialog.meta || [], 'resource.accessLevel') || 'public')}
+                    {getAccessBadge(getResourceAccessLevel(resourceForDialog))}
                   </div>
                 </div>
               </Card>

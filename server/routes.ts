@@ -12,6 +12,8 @@ import {
   insertOrganizationMemberSchema,
   inquiryCategorySchema,
   inquiryStatusSchema,
+  memberProfileSchema,
+  memberAdminSchema,
   users,
   type User,
 } from "@shared/schema";
@@ -21,12 +23,16 @@ import { sql, eq } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, requirePermission, requireAnyPermission } from "./permissions";
-import { AuthorizationStateError, type AccountRole } from "./storage";
+import {
+  AuthorizationStateError,
+  DuplicateInquiryError,
+  EventRegistrationError,
+  storage,
+  type AccountRole,
+} from "./storage";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
-import { DuplicateInquiryError, EventRegistrationError, storage } from "./storage";
-import { insertUserSchema, insertMemberSchema, memberProfileSchema, memberAdminSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, type User } from "@shared/schema";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
