@@ -21,6 +21,7 @@ import {
   users,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
+import { canReadPost, publicPostAccess, type PostAccessContext } from "./postAccess";
 import {
   AuthorizationStateError,
   DuplicateInquiryError,
@@ -299,6 +300,226 @@ test(
     } finally {
       await db.delete(inquiries).where(eq(inquiries.id, inquiry.id));
       await db.delete(users).where(eq(users.id, responder.id));
+    }
+  },
+);
+
+test("post visibility policy separates administrator and editor access", () => {
+  const now = new Date();
+  const editor: PostAccessContext = {
+    userId: randomUUID(),
+    isAdmin: false,
+    isEditor: true,
+    managedPostTypes: new Set(["news"]),
+    canReadMembers: false,
+    canReadPremium: false,
+  };
+  const memberEditor: PostAccessContext = {
+    ...editor,
+    canReadMembers: true,
+    canReadPremium: true,
+  };
+  const admin: PostAccessContext = {
+    userId: randomUUID(),
+    isAdmin: true,
+    isEditor: false,
+    managedPostTypes: new Set(["news", "event", "resource", "page"]),
+    canReadMembers: true,
+    canReadPremium: true,
+  };
+  const post = (overrides: Record<string, unknown> = {}) => ({
+    id: randomUUID(),
+    postType: "news",
+    status: "draft",
+    visibility: "public",
+    slug: "policy-test",
+    primaryLocale: "ko",
+    publishedAt: now,
+    expiresAt: null,
+    ...overrides,
+  } as any);
+
+  assert.equal(canReadPost(post(), editor), true);
+  assert.equal(canReadPost(post({ postType: "event" }), editor), false);
+  assert.equal(canReadPost(post({ status: "archived" }), editor), false);
+  assert.equal(canReadPost(post({ visibility: "members" }), editor), false);
+  assert.equal(canReadPost(post({ visibility: "members" }), memberEditor), true);
+  assert.equal(canReadPost(post({ visibility: "premium" }), memberEditor), true);
+  assert.equal(canReadPost(post({ visibility: "internal" }), memberEditor), false);
+  assert.equal(canReadPost(post({
+    status: "published",
+    publishedAt: new Date(now.getTime() + 60_000),
+  }), editor), false);
+  assert.equal(canReadPost(post({
+    status: "draft",
+    publishedAt: new Date(now.getTime() + 60_000),
+  }), editor), true);
+  assert.equal(canReadPost(post({
+    postType: "resource",
+    status: "draft",
+    visibility: "internal",
+  }), admin), true);
+  assert.equal(canReadPost(post({ status: "archived", visibility: "internal" }), admin), true);
+  assert.equal(canReadPost(post({ status: "draft" }), publicPostAccess), false);
+});
+
+test(
+  "ACL-derived editor contexts scope post lists and details without admin escalation",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const suffix = randomUUID();
+    const [newsReadPermission] = await db
+      .select()
+      .from(permissions)
+      .where(eq(permissions.key, "news.read"))
+      .limit(1);
+    const [editorTier] = await db
+      .select()
+      .from(tiers)
+      .where(eq(tiers.code, "MEMBER"))
+      .limit(1);
+    const [memberRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.code, "member"))
+      .limit(1);
+    assert.ok(newsReadPermission, "ACL seed must include news.read");
+    assert.ok(editorTier, "ACL seed must include the MEMBER tier");
+    assert.ok(memberRole, "ACL seed must include the member role");
+
+    const [editorRole] = await db.insert(roles).values({
+      code: `news-editor-${suffix}`,
+      name: "News-only editor regression role",
+    }).returning();
+    await db.insert(rolePermissions).values({
+      roleId: editorRole.id,
+      permissionId: newsReadPermission.id,
+    });
+    const editorUser = await storage.createUser({
+      email: `news-editor-${suffix}@example.test`,
+      password: "test-password",
+      name: "News-only editor",
+      role: "operator",
+      userType: "staff",
+    });
+    const adminUser = await storage.createUser({
+      email: `post-admin-${suffix}@example.test`,
+      password: "test-password",
+      name: "Post administrator",
+      role: "admin",
+      userType: "staff",
+    });
+    const regularUser = await storage.createUser({
+      email: `post-member-${suffix}@example.test`,
+      password: "test-password",
+      name: "Regular member",
+      role: "user",
+      userType: "staff",
+    });
+    const [membership] = await db.insert(userMemberships).values({
+      userId: editorUser.id,
+      tierId: editorTier.id,
+      roleId: editorRole.id,
+    }).returning();
+    const [regularMembership] = await db.insert(userMemberships).values({
+      userId: regularUser.id,
+      tierId: editorTier.id,
+      roleId: memberRole.id,
+    }).returning();
+
+    const postOptions = [
+      { postType: "news", status: "draft", visibility: "public" },
+      { postType: "news", status: "published", visibility: "public" },
+      { postType: "news", status: "published", visibility: "members" },
+      { postType: "news", status: "published", visibility: "premium" },
+      { postType: "news", status: "published", visibility: "internal" },
+      { postType: "news", status: "archived", visibility: "public" },
+      { postType: "event", status: "draft", visibility: "public" },
+    ] as const;
+    const seededPosts = await db.insert(posts).values(
+      postOptions.map((options) => ({
+        ...options,
+        slug: `post-access-${suffix}-${options.postType}-${options.status}-${options.visibility}`,
+        primaryLocale: "ko" as const,
+        publishedAt: options.status === "published"
+          ? new Date(Date.now() - 60_000)
+          : new Date(Date.now() + 60_000),
+      })),
+    ).returning();
+
+    try {
+      const editorAccess = await storage.getPostAccessContext(editorUser.id, true);
+      assert.equal(editorAccess.isAdmin, false);
+      assert.equal(editorAccess.isEditor, true);
+      assert.deepEqual([...editorAccess.managedPostTypes], ["news"]);
+
+      const normalEditorAccess = await storage.getPostAccessContext(editorUser.id, false);
+      assert.equal(normalEditorAccess.isAdmin, false);
+      assert.equal(normalEditorAccess.isEditor, false);
+
+      const regularAccess = await storage.getPostAccessContext(regularUser.id, true);
+      assert.equal(regularAccess.isAdmin, false);
+      assert.equal(regularAccess.isEditor, false);
+      assert.equal(
+        await storage.getPostWithTranslations(seededPosts[0].id, undefined, regularAccess),
+        undefined,
+      );
+
+      const editorNews = await storage.getPosts({
+        postType: "news",
+        search: suffix,
+        access: editorAccess,
+      });
+      assert.deepEqual(
+        editorNews.posts.map(({ id }) => id).sort(),
+        seededPosts.slice(0, 3).map(({ id }) => id).sort(),
+      );
+      assert.equal(
+        (await storage.getPosts({ postType: "event", search: suffix, access: editorAccess })).total,
+        0,
+      );
+      assert.ok(
+        await storage.getPostWithTranslations(seededPosts[2].id, undefined, editorAccess),
+      );
+      assert.equal(
+        await storage.getPostWithTranslations(seededPosts[3].id, undefined, editorAccess),
+        undefined,
+      );
+      assert.equal(
+        await storage.getPostWithTranslations(seededPosts[4].id, undefined, editorAccess),
+        undefined,
+      );
+      assert.ok(
+        await storage.getPostWithTranslations(seededPosts[0].id, undefined, editorAccess),
+      );
+
+      const adminAccess = await storage.getPostAccessContext(adminUser.id, true);
+      assert.equal(adminAccess.isAdmin, true);
+      assert.equal(
+        (await storage.getPosts({ postType: "news", search: suffix, access: adminAccess })).total,
+        6,
+      );
+      assert.equal(
+        (await storage.getPosts({ postType: "event", search: suffix, access: adminAccess })).total,
+        1,
+      );
+      assert.ok(
+        await storage.getPostWithTranslations(seededPosts[3].id, undefined, adminAccess),
+      );
+    } finally {
+      await db.delete(userMemberships).where(inArray(
+        userMemberships.id,
+        [membership.id, regularMembership.id],
+      ));
+      await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
+      await db.delete(users).where(inArray(users.id, [
+        editorUser.id,
+        adminUser.id,
+        regularUser.id,
+      ]));
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, editorRole.id));
+      await db.delete(roles).where(eq(roles.id, editorRole.id));
     }
   },
 );

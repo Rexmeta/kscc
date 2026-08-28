@@ -121,7 +121,7 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin" || adminMode,
+      adminMode || req.user?.role === "admin",
     );
     
     // Parse tags from comma-separated string
@@ -172,7 +172,7 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin" || adminMode,
+      adminMode || req.user?.role === "admin",
     );
     const post = await storage.getPostBySlugWithTranslations(slug, locale, access);
     if (!post) {
@@ -206,7 +206,7 @@ router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response
 
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin" || adminMode,
+      adminMode || req.user?.role === "admin",
     );
     const post = await storage.getPostWithTranslations(id, locale, access);
     if (!post) {
@@ -528,9 +528,17 @@ router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Res
   try {
     const { id } = postIdSchema.parse(req.params);
     const key = req.query.key as string | undefined;
+    const adminMode = req.query.admin === "true";
+    if (adminMode) {
+      const adminPost = await storage.getPost(id);
+      if (!adminPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      if (!await requirePostPermission(req, res, adminPost.postType, "read")) return;
+    }
     const access = await storage.getPostAccessContext(
       req.user?.id,
-      req.user?.role === "admin",
+      adminMode || req.user?.role === "admin",
     );
     const post = await storage.getPostWithTranslations(id, undefined, access);
     if (!post) {

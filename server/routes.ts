@@ -1140,9 +1140,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let allowed = objectAclAllowed;
       if (linkedPost) {
+        // An authenticated caller may need editor access to the resource
+        // object; the storage context still derives administrator status and
+        // post types from the current account and ACL.
         const postAccess = await storage.getPostAccessContext(
           req.user?.id,
-          req.user?.role === "admin",
+          Boolean(req.user?.id),
         );
         const postAllowed = canReadPost(linkedPost, postAccess);
         const postIsPublic = canReadPost(linkedPost, publicPostAccess);

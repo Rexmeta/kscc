@@ -17,9 +17,12 @@ import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne 
 import bcrypt from "bcrypt";
 import {
   canReadPost,
+  canManagePostType,
   publicPostAccess,
   type PostAccessContext,
 } from "./postAccess";
+import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
+import { hasPermission } from "./permissions";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
@@ -160,7 +163,12 @@ export interface IStorage {
   deletePartner(id: string): Promise<void>;
 
   // Unified Posts System
-  getPostAccessContext(userId?: string, isAdmin?: boolean): Promise<PostAccessContext>;
+  /**
+   * Build a post access context from current account and ACL state.
+   * managementRequested only enables the editor path; it never makes a caller
+   * an administrator.
+   */
+  getPostAccessContext(userId?: string, managementRequested?: boolean): Promise<PostAccessContext>;
   // Posts
   getPost(id: string): Promise<Post | undefined>;
   getPostBySlug(slug: string): Promise<Post | undefined>;
@@ -1157,43 +1165,70 @@ export class DatabaseStorage implements IStorage {
 
   // Unified Posts System
   // Posts
-  async getPostAccessContext(userId?: string, isAdmin = false): Promise<PostAccessContext> {
-    if (isAdmin) {
+  async getPostAccessContext(userId?: string, managementRequested = false): Promise<PostAccessContext> {
+    if (!userId) return publicPostAccess;
+
+    const [user] = await db
+      .select({ id: users.id, role: users.role, isActive: users.isActive })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user?.isActive) return publicPostAccess;
+
+    // The account row, not a query parameter or token claim, is the authority
+    // for administrator access.
+    if (user.role === "admin") {
       return {
         userId,
         isAdmin: true,
+        isEditor: false,
+        managedPostTypes: new Set(Object.keys(postPermissionKeys)),
         canReadMembers: true,
         canReadPremium: true,
       };
     }
 
-    if (!userId) return publicPostAccess;
-
     const now = new Date();
-    const activeMemberships = await db
-      .select({ tierCode: tiers.code })
-      .from(userMemberships)
-      .innerJoin(users, eq(userMemberships.userId, users.id))
-      .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
-      .innerJoin(roles, eq(userMemberships.roleId, roles.id))
-      .where(and(
-        eq(userMemberships.userId, userId),
-        eq(users.isActive, true),
-        eq(userMemberships.isActive, true),
-        eq(tiers.isActive, true),
-        eq(roles.isActive, true),
-        lte(userMemberships.startedAt, now),
-        or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, now)),
-      ));
+    const [activeMemberships, managedPostTypes] = await Promise.all([
+      db
+        .select({ tierCode: tiers.code, roleCode: roles.code })
+        .from(userMemberships)
+        .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+        .innerJoin(roles, eq(userMemberships.roleId, roles.id))
+        .where(and(
+          eq(userMemberships.userId, userId),
+          eq(userMemberships.isActive, true),
+          eq(tiers.isActive, true),
+          eq(roles.isActive, true),
+          lte(userMemberships.startedAt, now),
+          or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, now)),
+        )),
+      managementRequested
+        ? Promise.all(
+            Object.entries(postPermissionKeys).map(async ([postType]) => {
+              const permission = getPostPermissionKey(
+                postType as keyof typeof postPermissionKeys,
+                "read",
+              );
+              return permission && await hasPermission(userId, permission) ? postType : undefined;
+            }),
+          ).then((postTypes) => new Set(postTypes.filter((postType): postType is string => Boolean(postType))))
+        : Promise.resolve(new Set<string>()),
+    ]);
 
     const premiumTiers = new Set([
       "PRO", "CORP", "PARTNER", "ADMIN",
       "PREMIUM", "SILVER", "GOLD", "PLATINUM",
     ]);
+    const editorAccount = user.role === "operator" ||
+      activeMemberships.some(({ roleCode }) => roleCode === "editor" || roleCode === "operator");
 
     return {
       userId,
       isAdmin: false,
+      isEditor: managementRequested && editorAccount && managedPostTypes.size > 0,
+      managedPostTypes,
       canReadMembers: activeMemberships.length > 0,
       canReadPremium: activeMemberships.some(({ tierCode }) =>
         premiumTiers.has(tierCode.toUpperCase()),
@@ -1324,6 +1359,29 @@ export class DatabaseStorage implements IStorage {
 
     if (access.isAdmin && filters?.status) {
       conditions.push(eq(posts.status, filters.status as any));
+    } else if (canManagePostType(access, filters?.postType || "")) {
+      // Editor lists are scoped to the requested post type and expose only
+      // editable states. Archived content remains an administrator concern.
+      if (filters?.status) {
+        if (filters.status === "draft" || filters.status === "published") {
+          conditions.push(eq(posts.status, filters.status as any));
+        } else {
+          conditions.push(sql`FALSE`);
+        }
+      } else {
+        conditions.push(inArray(posts.status, ["draft", "published"] as any));
+      }
+      const now = new Date();
+      if (filters?.status !== "draft") {
+        conditions.push(or(
+          eq(posts.status, "draft"),
+          and(
+            eq(posts.status, "published"),
+            or(isNull(posts.publishedAt), lte(posts.publishedAt, now)),
+            or(isNull(posts.expiresAt), gt(posts.expiresAt, now)),
+          ),
+        )!);
+      }
     } else if (!access.isAdmin) {
       conditions.push(eq(posts.status, "published"));
     }
@@ -1340,14 +1398,26 @@ export class DatabaseStorage implements IStorage {
       } else {
         conditions.push(inArray(posts.visibility, readableVisibilities as any));
       }
-      conditions.push(or(
-        isNull(posts.publishedAt),
-        lte(posts.publishedAt, new Date()),
-      )!);
-      conditions.push(or(
-        isNull(posts.expiresAt),
-        gt(posts.expiresAt, new Date()),
-      )!);
+      if (!canManagePostType(access, filters?.postType || "")) {
+        conditions.push(or(
+          isNull(posts.publishedAt),
+          lte(posts.publishedAt, new Date()),
+        )!);
+        conditions.push(or(
+          isNull(posts.expiresAt),
+          gt(posts.expiresAt, new Date()),
+        )!);
+      } else if (filters?.visibility === "internal") {
+        conditions.push(sql`FALSE`);
+      }
+    }
+
+    if (access.isEditor && filters?.postType && !canManagePostType(access, filters.postType)) {
+      conditions.push(sql`FALSE`);
+    } else if (access.isEditor && !filters?.postType) {
+      // Management reads must always name the post type being managed; do not
+      // turn an editor context into a cross-type content search.
+      conditions.push(sql`FALSE`);
     }
 
     if (filters?.authorId) {
@@ -1379,7 +1449,7 @@ export class DatabaseStorage implements IStorage {
     // Search filtering (slug + translations)
     if (filters?.search) {
       const searchTerm = `%${filters.search}%`;
-      conditions.push(sql`EXISTS (
+      conditions.push(sql`(EXISTS (
         SELECT 1 FROM ${postTranslations}
         WHERE ${postTranslations.postId} = ${posts.id}
           AND (
@@ -1387,7 +1457,7 @@ export class DatabaseStorage implements IStorage {
             OR ${postTranslations.content} ILIKE ${searchTerm}
             OR ${postTranslations.excerpt} ILIKE ${searchTerm}
           )
-      ) OR ${posts.slug} ILIKE ${searchTerm}`);
+      ) OR ${posts.slug} ILIKE ${searchTerm})`);
     }
 
     // Upcoming events filtering (SQL-level for correct pagination)
