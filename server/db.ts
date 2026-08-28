@@ -23,3 +23,31 @@ export const pool = new Pool({
   connectionTimeoutMillis: positiveInteger(process.env.DB_CONNECTION_TIMEOUT_MS, 10_000),
 });
 export const db = drizzle({ client: pool, schema });
+
+const readinessTimeoutMs = 2_000;
+
+/**
+ * Check only the database connectivity needed for serving requests.
+ * The timeout prevents a health probe from waiting on a stalled connection.
+ */
+export async function isDatabaseReady(): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      pool.query("select 1"),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("database readiness check timed out")),
+          readinessTimeoutMs,
+        );
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}

@@ -3,6 +3,8 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { isDatabaseReady } from "./db";
+import { registerHealthRoutes } from "./health";
 
 const app = express();
 
@@ -24,6 +26,9 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,
 }));
+
+// Keep health probes outside the API rate limit and request body parsers.
+registerHealthRoutes(app, isDatabaseReady);
 
 // Rate limiting for API routes
 const apiLimiter = rateLimit({

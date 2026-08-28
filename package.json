@@ -14,8 +14,10 @@
     "check": "tsc",
     "audit:production": "node scripts/check-production-audit.mjs",
     "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "admin:bootstrap": "tsx server/bootstrapAdmin.ts",
-    "test": "tsx --test server/regressions.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts"
+    "test": "tsx --test server/health.test.ts server/regressions.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^8.0.1",

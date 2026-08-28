@@ -18,8 +18,8 @@
 ## 시스템 요구사항
 
 ### 필수 요구사항
-- **Node.js**: v20 이상
-- **npm**: v9 이상
+- **Node.js**: v22 이상 (`package.json`의 `engines` 기준)
+- **npm**: v10 이상
 - **PostgreSQL**: v14 이상 (또는 Replit 내장 데이터베이스)
 
 ### 권장 사양
@@ -124,12 +124,12 @@ Replit에서는 내장 PostgreSQL 데이터베이스를 사용합니다:
    - PostgreSQL 데이터베이스 생성
    - 자동으로 `DATABASE_URL` 환경 변수가 설정됩니다
 
-2. **스키마 푸시**
+2. **개발 데이터베이스에 스키마 적용**
    ```bash
    npm run db:push
    ```
 
-   이 명령어는 `shared/schema.ts`의 스키마를 데이터베이스에 적용합니다.
+   `db:push`는 개발 데이터베이스에서 빠르게 확인할 때만 사용합니다.
 
 ### 로컬 환경
 
@@ -150,10 +150,10 @@ Replit에서는 내장 PostgreSQL 데이터베이스를 사용합니다:
 3. **환경 변수 설정**
    `.env` 파일 생성:
    ```
-   DATABASE_URL=postgresql://username:password@localhost:5432/korcham_db
+   DATABASE_URL=<development-database-url>
    ```
 
-4. **스키마 적용**
+4. **개발 스키마 적용**
    ```bash
    npm run db:push
    ```
@@ -163,12 +163,18 @@ Replit에서는 내장 PostgreSQL 데이터베이스를 사용합니다:
 스키마를 수정할 때:
 
 1. `shared/schema.ts` 파일 수정
-2. 변경사항 푸시:
+2. 마이그레이션 SQL 생성:
    ```bash
-   npm run db:push
+   npm run db:generate
+   ```
+3. 생성된 `migrations/` SQL을 검토하고 개발 데이터베이스에 적용:
+   ```bash
+   npm run db:migrate
    ```
 
-⚠️ **주의**: `db:push`는 개발 환경용입니다. 프로덕션에서는 마이그레이션을 사용하세요.
+⚠️ **주의**: `db:push`는 개발 환경용입니다. 프로덕션에서는 백업하고 검토한
+마이그레이션만 적용합니다. 운영 데이터베이스에 `--force` 또는 무검토
+`db:push`를 실행하지 마세요.
 
 ---
 
@@ -203,10 +209,14 @@ npm run dev
 # TypeScript 타입 체크
 npm run check
 
-# 데이터베이스 스키마 푸시
+# 개발 데이터베이스 스키마 푸시 (프로덕션에서는 사용하지 않음)
 npm run db:push
 
-# 데이터베이스 스키마 강제 푸시 (데이터 손실 가능)
+# 마이그레이션 SQL 생성 및 적용
+npm run db:generate
+npm run db:migrate
+
+# 강제 푸시 (개발 데이터베이스에서도 데이터 손실 가능)
 npm run db:push -- --force
 ```
 
@@ -265,9 +275,9 @@ Replit에서는 **Deployments** 기능을 통해 앱을 배포합니다.
 
 배포 전 필수 확인 사항:
 - [ ] 프로덕션 빌드가 로컬에서 정상 작동하는지 테스트
-- [ ] 모든 환경 변수가 준비되었는지 확인
+- [ ] 프로덕션 환경 변수와 Object Storage·메일 설정이 준비되었는지 확인
 - [ ] 프로덕션 데이터베이스 설정 완료
-- [ ] 데이터베이스 스키마가 최신 상태인지 확인
+- [ ] 검토된 마이그레이션과 백업·복구 계획 확인
 
 #### 2. 배포 유형 선택
 
@@ -316,25 +326,45 @@ Replit은 여러 배포 옵션을 제공합니다:
 
 4. **환경 변수 설정**
    
-   필수 환경 변수:
-   - `DATABASE_URL`: 프로덕션 PostgreSQL 데이터베이스 URL
-   - `SESSION_SECRET`: 강력한 랜덤 문자열 (최소 32자)
-   - `NODE_ENV`: `production`
+   배포 환경에는 아래 [환경 변수 설정](#환경-변수-설정)의 프로덕션
+   목록을 설정합니다. `DATABASE_URL`, `SESSION_SECRET`, `NODE_ENV`,
+   Object Storage 설정, 문의 답변 메일을 사용하는 경우의 Resend 설정을
+   누락하지 마세요.
    
    설정 방법:
    - Deployments 탭에서 "Environment Variables" 섹션
    - 또는 Replit Secrets에서 설정한 변수가 자동으로 주입됨
 
-5. **Health Check 설정** (선택사항)
+5. **Health Check 설정** (필수)
    
    Autoscale 배포의 경우:
-   - **Path**: `/` 또는 `/api/health` (구현되어 있다면)
+   - **Liveness Path**: `/healthz`
+   - **Readiness Path**: `/readyz`
    - **Port**: `5000`
-   - **Timeout**: 30초
+   - **Timeout**: 5초 (readiness 내부 데이터베이스 확인 제한은 2초)
+   - `/healthz`는 프로세스가 응답하는지만 확인하며 데이터베이스를 조회하지
+     않습니다. `/readyz`가 200일 때만 트래픽을 전달하세요.
 
 6. **배포 시작**
    - "Deploy" 버튼 클릭
    - 빌드 및 배포 진행 상황 모니터링
+
+#### Reverse proxy와 요청 IP
+
+서버는 `app.set("trust proxy", 1)`로 **바로 앞의 reverse proxy 한 홉만**
+신뢰합니다. 따라서 Express의 `req.ip`와 `express-rate-limit`의 IP별 제한은
+배포 플랫폼의 프록시가 전달한 클라이언트 IP를 기준으로 동작합니다. Replit
+Deployment처럼 애플리케이션 앞에 프록시가 정확히 한 개 있는 환경에서만
+그대로 사용하세요.
+
+- TLS 종료와 `X-Forwarded-For` 추가는 신뢰하는 배포 프록시가 담당해야 합니다.
+- 앱을 프록시 없이 직접 인터넷에 노출하거나 프록시를 여러 홉 거치게 바꾸면
+  `trust proxy` 값을 코드와 함께 검토합니다. 임의의 클라이언트가
+  `X-Forwarded-For`를 주입할 수 있는 구성에서는 rate limit의 IP 식별을
+  신뢰할 수 없습니다.
+- 기본 rate limit 저장소는 프로세스 메모리입니다. 여러 인스턴스에서는 제한이
+  인스턴스별로 적용되므로, 전역 IP 제한이 필요한 경우 별도 작업으로
+  공유 저장소 도입을 검토해야 합니다.
 
 #### 4. 프로덕션 데이터베이스 설정
 
@@ -353,14 +383,36 @@ Replit은 여러 배포 옵션을 제공합니다:
    - AWS RDS
    - Digital Ocean Managed Databases
 
-**데이터베이스 스키마 적용:**
+**프로덕션 데이터베이스 스키마 변경 절차:**
 
-```bash
-# 프로덕션 데이터베이스에 스키마 푸시
-DATABASE_URL=<production-db-url> npm run db:push
-```
+`db:push`는 프로덕션 운영 절차가 아닙니다. 스키마 변경은 아래 순서를
+지키고, 담당자의 검토와 승인 없이 실행하지 마세요.
 
-⚠️ **주의**: 프로덕션 데이터베이스에는 `--force` 플래그를 사용하지 마세요.
+1. 개발 또는 스테이징 데이터베이스에서 변경을 만들고 마이그레이션 SQL을
+   생성합니다.
+   ```bash
+   npm run db:generate
+   ```
+2. 생성된 `migrations/` SQL을 코드 리뷰하고, 스테이징에서 먼저
+   `npm run db:migrate`로 적용합니다. 호환성, 인덱스/잠금 시간, 애플리케이션
+   배포 순서를 확인합니다.
+3. 운영 변경 직전에 운영 데이터베이스를 백업합니다. 백업 파일은 저장소에
+   커밋하지 말고 접근이 제한된 별도 보관소에서 복구 가능 여부를 확인합니다.
+   ```bash
+   pg_dump --format=custom --file=korcham-$(date +%Y%m%d-%H%M%S).dump "$DATABASE_URL"
+   ```
+4. 승인된 동일 마이그레이션만 운영 데이터베이스에 적용합니다.
+   ```bash
+   npm run db:migrate
+   ```
+5. 애플리케이션을 배포하고 `/healthz`와 `/readyz`를 확인합니다. readiness가
+   503이면 트래픽을 열지 말고 로그에서 원인을 확인합니다.
+
+`npm run db:push`와 `--force`는 운영 데이터베이스에서 실행하지 않습니다.
+이 프로젝트에는 자동으로 안전한 down migration을 생성하는 절차가 없으므로,
+롤백은 먼저 검토한 역방향 마이그레이션을 사용하고, 그것이 없으면 승인된
+점검 시간에 검증된 백업을 복구합니다. 백업 복구는 이후 데이터가 사라질 수
+있으므로 현재 쓰기를 중지하고 담당자 승인을 받은 뒤 수행해야 합니다.
 
 #### 5. 도메인 설정
 
@@ -447,8 +499,8 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
    # Git 저장소에서 Heroku로 푸시
    git push heroku main
    
-   # 데이터베이스 스키마 적용
-   heroku run npm run db:push
+   # 사전에 검토하고 승인한 마이그레이션 적용
+   heroku run npm run db:migrate
    ```
 
 5. **로그 확인**
@@ -526,20 +578,25 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
 - [ ] 로컬에서 `npm start`로 프로덕션 빌드 실행 및 테스트
 - [ ] 모든 페이지가 정상 작동하는지 확인
 - [ ] API 엔드포인트 정상 응답 확인
+- [ ] 실행 중 `/healthz`가 200 (`{"status":"ok"}`)인지 확인
+- [ ] 실행 중 `/readyz`가 200 (`{"status":"ready"}`)인지 확인
 
 ##### 2. 환경 변수
 - [ ] `NODE_ENV=production` 설정
 - [ ] `DATABASE_URL` 프로덕션 데이터베이스 URL 설정
 - [ ] `SESSION_SECRET` 강력한 랜덤 문자열 설정 (최소 32자)
-- [ ] 모든 필수 환경 변수가 배포 플랫폼에 설정되었는지 확인
+- [ ] `PRIVATE_OBJECT_DIR`와 `PUBLIC_OBJECT_SEARCH_PATHS` 설정 및 버킷 권한 확인
+- [ ] 메일을 발송하는 운영 환경에 `RESEND_API_KEY`와 검증된 `EMAIL_FROM` 설정
+- [ ] `PORT`와 DB pool 설정을 배포 플랫폼의 실행 방식에 맞게 확인
 - [ ] 개발용 환경 변수와 프로덕션 환경 변수가 분리되었는지 확인
 
 ##### 3. 데이터베이스
 - [ ] 프로덕션 데이터베이스 생성 완료
 - [ ] 개발 DB와 프로덕션 DB 분리 확인
-- [ ] 프로덕션 DB에 스키마 적용 (`npm run db:push`)
-- [ ] 데이터베이스 백업 전략 수립
-- [ ] 데이터베이스 연결 테스트 완료
+- [ ] 마이그레이션 SQL 생성·리뷰·스테이징 적용 완료
+- [ ] 운영 변경 직전 백업 생성 및 복구 가능 여부 확인
+- [ ] 승인된 마이그레이션만 운영 DB에 적용 (`npm run db:migrate`)
+- [ ] `/readyz`로 데이터베이스 연결 테스트 완료
 
 ##### 4. 보안
 - [ ] 모든 시크릿 키가 환경 변수로 관리되는지 확인
@@ -558,6 +615,28 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
 - [ ] 에러 로깅 설정
 - [ ] 성능 모니터링 도구 설정 (선택사항)
 - [ ] 배포 후 로그 확인 방법 숙지
+
+##### 7. 재현 가능한 출시 명령
+
+잠금 파일을 기준으로 같은 의존성을 설치한 뒤 아래 순서로 실행합니다.
+마이그레이션 적용은 이 목록과 별도로 승인된 변경 창에서 수행합니다.
+
+```bash
+set -euo pipefail
+npm ci
+npm run audit:production
+npm run check
+npm test
+npm run build
+```
+
+배포 후에는 배포 플랫폼이 제공한 실제 URL로 다음을 실행합니다. URL을
+저장소나 환경 변수에 기록하지 마세요.
+
+```bash
+curl --fail --silent --show-error https://<deployed-host>/healthz
+curl --fail --silent --show-error https://<deployed-host>/readyz
+```
 
 #### 배포 후 검증
 
@@ -604,13 +683,20 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
    - Replit: Deployments 탭에서 이전 버전으로 롤백
    - Heroku: `heroku rollback`
    - Railway/Render: 대시보드에서 이전 배포 선택
+   - 롤백 직후 `/healthz`와 `/readyz`가 각각 200인지 확인
 
 2. **문제 진단**
    - 로그 확인
    - 에러 메시지 분석
    - 데이터베이스 상태 확인
 
-3. **수정 및 재배포**
+3. **데이터베이스 변경이 원인인 경우**
+   - 애플리케이션 롤백만으로 스키마가 되돌아가지 않음을 전제로 합니다.
+   - 검토된 역방향 마이그레이션을 사용하거나, 쓰기를 중지하고 승인받은
+     백업을 복구합니다.
+   - 복구 후 `/readyz`와 핵심 읽기 기능을 확인합니다.
+
+4. **수정 및 재배포**
    - 로컬에서 문제 재현 및 수정
    - 테스트 완료 후 재배포
 
@@ -627,18 +713,48 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
 
 ## 환경 변수 설정
 
-### 필수 환경 변수
+애플리케이션 프로세스와 운영 작업이 읽는 변수는 개발 환경과 프로덕션
+환경에 각각 설정합니다. 값 자체를 문서, 저장소, 로그에 기록하지 마세요.
 
-```bash
-# 데이터베이스
-DATABASE_URL=postgresql://user:password@host:port/database
+### 애플리케이션 시작에 필요한 변수
 
-# 세션 (프로덕션)
-SESSION_SECRET=<강력한-랜덤-문자열>
+| 변수 | 개발 환경 | 프로덕션 환경 |
+| --- | --- | --- |
+| `DATABASE_URL` | 개발용 PostgreSQL 연결 문자열 | 개발 DB와 분리된 운영 PostgreSQL 연결 문자열 |
+| `SESSION_SECRET` | 개발 전용 임의 값 | 충분히 긴 새 비밀값. 개발과 재사용하지 않음 |
+| `NODE_ENV` | `development` | `production` |
 
-# 환경 구분
-NODE_ENV=development  # 또는 production
-```
+`DATABASE_URL`과 `SESSION_SECRET`이 없으면 애플리케이션이 시작되지 않습니다.
+`PORT`는 선택 사항이며 기본값은 `5000`입니다. 배포 플랫폼이 지정한 포트를
+사용할 때만 설정합니다.
+
+### 기능별 운영 변수
+
+| 변수 | 필요 시점 | 설명 |
+| --- | --- | --- |
+| `PRIVATE_OBJECT_DIR` | 업로드·비공개 리소스 사용 시 필수 | Object Storage의 비공개 객체 경로 |
+| `PUBLIC_OBJECT_SEARCH_PATHS` | 공개 리소스 사용 시 필수 | 쉼표로 구분한 공개 객체 검색 경로 |
+| `RESEND_API_KEY` | 문의 답변 메일 발송 시 필수 | Resend API 인증 비밀값 |
+| `EMAIL_FROM` | 프로덕션 메일 발송 시 필수 | Resend에서 검증한 발신 주소 |
+
+Object Storage 경로가 없으면 해당 객체 작업이 실패합니다. `EMAIL_FROM`을
+지정하지 않으면 코드의 개발용 기본 발신 주소가 사용되므로, 프로덕션에서는
+반드시 검증된 주소를 설정합니다. `RESEND_API_KEY`가 없으면 메일은 발송되지
+않고 응답의 `emailSent`가 `false`가 됩니다.
+
+### 런타임·데이터베이스 pool 설정
+
+| 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `DB_POOL_MAX` | `10` | 프로세스별 최대 DB 연결 수 |
+| `DB_IDLE_TIMEOUT_MS` | `30000` | 유휴 연결 유지 시간(밀리초) |
+| `DB_CONNECTION_TIMEOUT_MS` | `10000` | DB 연결 대기 제한(밀리초) |
+
+세 값은 양의 정수만 사용합니다. 지정하지 않으면 위 기본값이 적용되며,
+잘못된 값도 기본값으로 대체되므로 배포 전에 값을 확인합니다. `PORT`의
+기본값은 `5000`입니다. 일회성 관리자 초기화 작업을 수행할 때만
+`ADMIN_BOOTSTRAP_EMAIL`과 `ADMIN_BOOTSTRAP_PASSWORD`를 별도로 설정하고,
+완료 후 제거합니다. 이 두 값은 일반 웹 프로세스의 필수 설정이 아닙니다.
 
 ### Replit에서 환경 변수 설정
 
@@ -655,10 +771,22 @@ NODE_ENV=development  # 또는 production
 
 `.env` 파일 생성 (Git에 커밋하지 말 것):
 ```bash
-DATABASE_URL=postgresql://localhost:5432/korcham_db
-SESSION_SECRET=dev-secret-change-in-production
+DATABASE_URL=<development-database-url>
+SESSION_SECRET=<development-only-secret>
 NODE_ENV=development
+PRIVATE_OBJECT_DIR=<development-private-object-dir>
+PUBLIC_OBJECT_SEARCH_PATHS=<development-public-object-paths>
+# 메일이 필요한 개발 환경에서만 설정
+# RESEND_API_KEY=<development-resend-key>
+# EMAIL_FROM=<verified-development-sender>
+# DB_POOL_MAX=10
+# DB_IDLE_TIMEOUT_MS=30000
+# DB_CONNECTION_TIMEOUT_MS=10000
 ```
+
+프로덕션에서는 Deployment 환경 변수에 같은 이름으로 운영 값을 설정하고,
+개발 환경의 데이터베이스·세션 비밀값·Object Storage 경로·메일 키를 재사용하지
+않습니다.
 
 ---
 
@@ -813,8 +941,11 @@ npm install <package>@latest
 ### 백업
 - **데이터베이스**: 정기적으로 백업
   ```bash
-  pg_dump $DATABASE_URL > backup.sql
+  pg_dump --format=custom --file=korcham-$(date +%Y%m%d-%H%M%S).dump "$DATABASE_URL"
   ```
+  백업 파일은 저장소 밖의 접근 제한된 보관소에 두고, 실제 복구 가능 여부를
+  정기적으로 확인합니다. 운영 변경 직전 절차는 위의 프로덕션 데이터베이스
+  절차를 따릅니다.
 - **코드**: Git 저장소에 커밋
 - **환경 변수**: 안전한 곳에 문서화
 
