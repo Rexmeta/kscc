@@ -6,6 +6,9 @@ import jwt from "jsonwebtoken";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
+  insertInquiryReplySchema,
+  insertInquirySchema,
+  inquiries,
   members,
   permissions,
   postMeta,
@@ -18,7 +21,12 @@ import {
   users,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
-import { AuthorizationStateError, EventRegistrationError } from "./storage";
+import {
+  AuthorizationStateError,
+  DuplicateInquiryError,
+  EventRegistrationError,
+} from "./storage";
+import { EmailService } from "./email";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -32,6 +40,253 @@ test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("page", "read"), undefined);
   assert.equal(getPostPermissionKey("news", "attendeeManage"), undefined);
 });
+
+test("inquiry contracts trim text and reject unsafe or oversized values", () => {
+  const parsed = insertInquirySchema.parse({
+    category: "membership",
+    name: "  Inquiry User  ",
+    email: "  inquiry@example.test  ",
+    phone: "   ",
+    companyName: "  Example Company  ",
+    subject: "  Subject  ",
+    message: "  A valid inquiry message.  ",
+  });
+
+  assert.equal(parsed.name, "Inquiry User");
+  assert.equal(parsed.email, "inquiry@example.test");
+  assert.equal(parsed.phone, undefined);
+  assert.equal(parsed.companyName, "Example Company");
+  assert.equal(parsed.subject, "Subject");
+  assert.equal(parsed.message, "A valid inquiry message.");
+
+  assert.throws(() => insertInquirySchema.parse({
+    category: "membership",
+    name: " ",
+    email: "inquiry@example.test",
+    subject: "Subject",
+    message: "Message",
+  }));
+  assert.throws(() => insertInquirySchema.parse({
+    category: "membership",
+    name: "Inquiry User",
+    email: "inquiry@example.test",
+    subject: "x".repeat(201),
+    message: "Message",
+  }));
+  assert.throws(() => insertInquirySchema.parse({
+    category: "membership",
+    name: "Inquiry User",
+    email: "inquiry@example.test",
+    subject: "Subject",
+    message: "x".repeat(10_001),
+  }));
+  assert.throws(() => insertInquirySchema.parse({
+    category: "unsupported",
+    name: "Inquiry User",
+    email: "inquiry@example.test",
+    subject: "Subject",
+    message: "Message",
+    password: "must not be accepted",
+  }));
+
+  assert.throws(() => insertInquiryReplySchema.parse({
+    inquiryId: "not-an-id",
+    respondedBy: randomUUID(),
+    message: "Reply",
+  }));
+  assert.throws(() => insertInquiryReplySchema.parse({
+    inquiryId: randomUUID(),
+    respondedBy: randomUUID(),
+    message: " ",
+  }));
+  assert.throws(() => insertInquiryReplySchema.parse({
+    inquiryId: randomUUID(),
+    respondedBy: randomUUID(),
+    message: "x".repeat(10_001),
+  }));
+});
+
+test("email failures log only delivery metadata", async () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const warningLogs: unknown[][] = [];
+  const errorLogs: unknown[][] = [];
+  const recipient = "private-recipient@example.test";
+  const body = "private inquiry and reply body";
+
+  try {
+    delete process.env.RESEND_API_KEY;
+    console.warn = (...args: unknown[]) => warningLogs.push(args);
+    const missingProviderResult = await new EmailService().sendEmail({
+      to: recipient,
+      subject: "private subject",
+      html: body,
+      text: body,
+    });
+    assert.equal(missingProviderResult, false);
+    assert.equal(JSON.stringify(warningLogs).includes(recipient), false);
+    assert.equal(JSON.stringify(warningLogs).includes(body), false);
+
+    process.env.RESEND_API_KEY = "test-provider-key";
+    globalThis.fetch = async () => new Response("provider response with private data", {
+      status: 502,
+    });
+    console.error = (...args: unknown[]) => errorLogs.push(args);
+    const providerFailureResult = await new EmailService().sendEmail({
+      to: recipient,
+      subject: "private subject",
+      html: body,
+      text: body,
+    });
+    assert.equal(providerFailureResult, false);
+    const serializedErrors = JSON.stringify(errorLogs);
+    assert.equal(serializedErrors.includes(recipient), false);
+    assert.equal(serializedErrors.includes(body), false);
+    assert.equal(serializedErrors.includes("provider response with private data"), false);
+    assert.equal(serializedErrors.includes("test-provider-key"), false);
+  } finally {
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
+});
+
+test(
+  "inquiry routes reject invalid ids and bound repeated public submissions",
+  { skip: !databaseAvailable },
+  async () => {
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `inquiry-route-test-${randomUUID()}`;
+    }
+    const [{ registerRoutes }, { storage }] = await Promise.all([
+      import("./routes"),
+      import("./storage"),
+    ]);
+    const originalGetUser = storage.getUser;
+    const originalCreateInquiry = storage.createInquiry;
+    const adminUserId = randomUUID();
+    storage.getUser = async (id) => id === adminUserId
+      ? ({
+          id: adminUserId,
+          email: "inquiry-admin@example.test",
+          password: "must-not-be-returned",
+          name: "Inquiry Admin",
+          role: "admin",
+          userType: "staff",
+          membershipTier: "free",
+          isActive: true,
+        } as any)
+      : undefined;
+    storage.createInquiry = async () => ({
+      id: randomUUID(),
+      category: "membership",
+      name: "Inquiry User",
+      email: "inquiry@example.test",
+      phone: null,
+      companyName: null,
+      subject: "Subject",
+      message: "Message",
+      status: "new",
+      createdAt: new Date(),
+    });
+
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const invalidIdResponse = await fetch(`${baseUrl}/api/inquiries/not-an-uuid`, {
+        headers: { Authorization: `Bearer ${jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!)}` },
+      });
+      assert.equal(invalidIdResponse.status, 400);
+
+      const requestBody = {
+        category: "membership",
+        name: "Inquiry User",
+        email: "inquiry@example.test",
+        subject: "Subject",
+        message: "Message",
+      };
+      const responses = [];
+      for (let index = 0; index < 6; index += 1) {
+        responses.push(await fetch(`${baseUrl}/api/inquiries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        }));
+      }
+      assert.deepEqual(responses.slice(0, 5).map((response) => response.status), [201, 201, 201, 201, 201]);
+      assert.equal(responses[5].status, 429);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      storage.getUser = originalGetUser;
+      storage.createInquiry = originalCreateInquiry;
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
+
+test(
+  "inquiry responder DTOs exclude password and unrelated account fields",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const suffix = randomUUID();
+    const responder = await storage.createUser({
+      email: `inquiry-responder-${suffix}@example.test`,
+      password: "test-password",
+      name: "Inquiry Responder",
+      role: "operator",
+      userType: "staff",
+    });
+    const inquiryInput = {
+      category: "membership" as const,
+      name: "Inquiry Contact",
+      email: `inquiry-contact-${suffix}@example.test`,
+      phone: null,
+      companyName: null,
+      subject: "DTO test",
+      message: "DTO response test",
+    };
+    const inquiry = await storage.createInquiry(inquiryInput);
+
+    try {
+      await storage.createInquiryReply({
+        inquiryId: inquiry.id,
+        respondedBy: responder.id,
+        message: "Safe responder test",
+      });
+      const result = await storage.getInquiryWithReplies(inquiry.id);
+      assert.ok(result);
+      assert.deepEqual(result.replies[0].responder, {
+        id: responder.id,
+        name: responder.name,
+      });
+      assert.equal("password" in result.replies[0].responder!, false);
+      assert.equal("email" in result.replies[0].responder!, false);
+
+      await assert.rejects(
+        () => storage.createInquiry(inquiryInput),
+        (error: unknown) => error instanceof DuplicateInquiryError,
+      );
+    } finally {
+      await db.delete(inquiries).where(eq(inquiries.id, inquiry.id));
+      await db.delete(users).where(eq(users.id, responder.id));
+    }
+  },
+);
 
 async function getDatabase() {
   const [{ db, pool }, { storage }] = await Promise.all([

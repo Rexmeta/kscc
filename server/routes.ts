@@ -1,7 +1,20 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { canReadPost, publicPostAccess } from "./postAccess";
-import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, type User } from "@shared/schema";
+import {
+  insertUserSchema,
+  insertMemberSchema,
+  insertEventRegistrationSchema,
+  insertInquirySchema,
+  insertInquiryReplySchema,
+  insertPartnerSchema,
+  insertOrganizationMemberSchema,
+  inquiryCategorySchema,
+  inquiryStatusSchema,
+  users,
+  type User,
+} from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq } from "drizzle-orm";
@@ -12,7 +25,7 @@ import { AuthorizationStateError, type AccountRole } from "./storage";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
-import { EventRegistrationError, storage } from "./storage";
+import { DuplicateInquiryError, EventRegistrationError, storage } from "./storage";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -29,10 +42,42 @@ const memberQuerySchema = z.object({
 });
 
 const inquiryQuerySchema = z.object({
-  status: z.string().trim().max(30).optional(),
-  category: z.string().trim().max(50).optional(),
+  status: inquiryStatusSchema.optional(),
+  category: inquiryCategorySchema.optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
+
+const inquiryIdSchema = z.string().uuid();
+const inquiryUpdateSchema = z.object({
+  status: inquiryStatusSchema.optional(),
+  category: inquiryCategorySchema.optional(),
+}).strict().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: "At least one inquiry field is required" },
+);
+const inquiryReplyRequestSchema = z.object({
+  message: z.string().trim().min(1, "Reply message is required").max(10_000),
+  sendEmail: z.boolean().default(false),
+}).strict();
+
+// Public submissions and outbound replies have separate budgets. The global
+// API limiter still protects all other endpoints, while these limits prevent
+// one expensive operation from consuming the whole budget.
+const inquiryCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { message: "Too many inquiries. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const inquiryReplyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip || "unknown"),
+  message: { message: "Too many inquiry replies. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 const organizationMemberCategories = [
@@ -576,13 +621,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Inquiries routes
-  app.post("/api/inquiries", async (req, res) => {
+  app.post("/api/inquiries", inquiryCreateLimiter, async (req, res) => {
     try {
       const inquiryData = insertInquirySchema.parse(req.body);
       const inquiry = await storage.createInquiry(inquiryData);
       res.status(201).json(inquiry);
     } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+      if (error instanceof DuplicateInquiryError) {
+        return res.status(429).json({ message: "A matching inquiry was submitted recently" });
+      }
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid inquiry data" });
+      }
+      res.status(500).json({ message: "Unable to submit inquiry" });
     }
   });
 
@@ -614,67 +665,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/inquiries/:id", authenticateToken, requireAdminOrPermission("inquiry.read"), async (req, res) => {
     try {
-      const inquiry = await storage.getInquiryWithReplies(req.params.id);
-      if (!inquiry) {
-        return res.status(404).json({ message: "Inquiry not found" });
-      }
-      res.json(inquiry);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  const inquiryUpdateSchema = z.object({
-    status: z.enum(['new', 'pending', 'in_progress', 'resolved', 'closed']).optional(),
-    category: z.string().max(100).optional(),
-    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-    assignedTo: z.string().uuid().optional().nullable(),
-    notes: z.string().max(5000).optional(),
-  });
-
-  app.put("/api/inquiries/:id", authenticateToken, requireAdminOrPermission("inquiry.respond"), async (req, res) => {
-    try {
-      const updateData = inquiryUpdateSchema.parse(req.body);
-      if (req.user?.role !== 'admin' && Object.keys(updateData).some((key) => key !== 'status')) {
-        return res.status(403).json({
-          message: 'Operators may only change inquiry status',
-        });
-      }
-      const inquiry = await storage.updateInquiry(req.params.id, updateData);
+      const inquiryId = inquiryIdSchema.parse(req.params.id);
+      const inquiry = await storage.getInquiryWithReplies(inquiryId);
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
       }
       res.json(inquiry);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0].message });
+        return res.status(400).json({ message: "Invalid inquiry ID" });
       }
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/inquiries/:id", authenticateToken, requireAdminOrPermission("inquiry.respond"), async (req, res) => {
+    try {
+      const inquiryId = inquiryIdSchema.parse(req.params.id);
+      const updateData = inquiryUpdateSchema.parse(req.body);
+      if (req.user?.role !== 'admin' && Object.keys(updateData).some((key) => key !== 'status')) {
+        return res.status(403).json({
+          message: 'Operators may only change inquiry status',
+        });
+      }
+      const inquiry = await storage.updateInquiry(inquiryId, updateData);
+      if (!inquiry) {
+        return res.status(404).json({ message: "Inquiry not found" });
+      }
+      res.json(inquiry);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid inquiry update" });
+      }
+      res.status(500).json({ message: "Unable to update inquiry" });
     }
   });
 
   app.delete("/api/inquiries/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const inquiry = await storage.getInquiry(req.params.id);
+      const inquiryId = inquiryIdSchema.parse(req.params.id);
+      const inquiry = await storage.getInquiry(inquiryId);
       if (!inquiry) {
         return res.status(404).json({ message: "Inquiry not found" });
       }
       
-      await storage.deleteInquiry(req.params.id);
+      await storage.deleteInquiry(inquiryId);
       res.json({ message: "Inquiry deleted successfully" });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid inquiry ID" });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });
 
-  app.post("/api/inquiries/:id/reply", authenticateToken, requireAdminOrPermission("inquiry.respond"), async (req, res) => {
+  app.post("/api/inquiries/:id/reply", authenticateToken, requireAdminOrPermission("inquiry.respond"), inquiryReplyLimiter, async (req, res) => {
     try {
-      const inquiryId = req.params.id;
-      const { message, sendEmail } = req.body;
-
-      if (!message || typeof message !== 'string') {
-        return res.status(400).json({ message: "Reply message is required" });
-      }
+      const inquiryId = inquiryIdSchema.parse(req.params.id);
+      const { message, sendEmail } = inquiryReplyRequestSchema.parse(req.body);
 
       const inquiry = await storage.getInquiry(inquiryId);
       if (!inquiry) {
@@ -711,8 +759,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedInquiry = await storage.getInquiryWithReplies(inquiryId);
       res.status(201).json({ inquiry: updatedInquiry, emailSent });
     } catch (error) {
-      console.error('[API] Error creating inquiry reply:', error);
-      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create reply" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid inquiry reply" });
+      }
+      // Do not serialize request data or provider errors into application logs.
+      console.error('[API] Inquiry reply operation failed', {
+        operation: "create_inquiry_reply",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      res.status(500).json({ message: "Unable to create inquiry reply" });
     }
   });
 

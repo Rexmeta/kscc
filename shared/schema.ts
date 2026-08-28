@@ -352,17 +352,37 @@ export const insertEventRegistrationSchema = createInsertSchema(eventRegistratio
   createdAt: true,
 });
 
+export const inquiryCategorySchema = z.enum(["membership", "event", "partnership", "other"]);
+export const inquiryStatusSchema = z.enum(["new", "pending", "in_progress", "resolved", "closed"]);
+
+const optionalTrimmedInquiryText = (max: number) => z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.string().trim().max(max).optional(),
+);
+
 export const insertInquirySchema = createInsertSchema(inquiries).omit({
   id: true,
   createdAt: true,
-});
+}).extend({
+  category: inquiryCategorySchema,
+  name: z.string().trim().min(1, "Name is required").max(100),
+  email: z.string().trim().email("Invalid email address").max(254),
+  phone: optionalTrimmedInquiryText(50),
+  companyName: optionalTrimmedInquiryText(200),
+  subject: z.string().trim().min(1, "Subject is required").max(200),
+  message: z.string().trim().min(1, "Message is required").max(10_000),
+}).strict();
 
 export const insertInquiryReplySchema = createInsertSchema(inquiryReplies).omit({
   id: true,
   createdAt: true,
   emailSent: true,
   emailSentAt: true,
-});
+}).extend({
+  inquiryId: z.string().uuid(),
+  message: z.string().trim().min(1, "Reply message is required").max(10_000),
+  respondedBy: z.string().uuid(),
+}).strict();
 
 export const insertPartnerSchema = createInsertSchema(partners).omit({
   id: true,
@@ -438,6 +458,7 @@ export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 
 export type InquiryReply = typeof inquiryReplies.$inferSelect;
 export type InsertInquiryReply = z.infer<typeof insertInquiryReplySchema>;
+export type SafeUser = Pick<User, "id" | "name">;
 
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
@@ -473,7 +494,7 @@ export type UserRegistrationWithEvent = EventRegistration & {
 };
 
 export type InquiryWithReplies = Inquiry & {
-  replies: (InquiryReply & { responder: User | null })[];
+  replies: (InquiryReply & { responder: SafeUser | null })[];
 };
 
 // Post with translations and meta

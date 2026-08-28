@@ -4,3 +4,4 @@
 - [Organization member visibility](organization-member-visibility.md) — public reads are active-only; inactive records require current admin authorization.
 - [Production dependency audit](production-dependency-audit.md) — keep release audits strict and document only narrowly scoped, owner-backed compatibility exceptions.
 - [Event registration invariants](event-registration-invariants.md) — availability and capacity decisions must stay inside the same event-locked transaction as registration changes.
+- [Rate-limit IP keys](rate-limit-ip-keys.md) — custom express-rate-limit keys must normalize IP fallbacks with its IPv6 helper.

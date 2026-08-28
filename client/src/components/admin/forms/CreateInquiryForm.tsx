@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 
 const inquirySchema = z.object({
-  subject: z.string().min(1, '제목을 입력해주세요'),
-  name: z.string().min(1, '이름을 입력해주세요'),
-  email: z.string().email('유효한 이메일을 입력해주세요'),
-  phone: z.string().optional(),
-  message: z.string().min(1, '내용을 입력해주세요'),
+  subject: z.string().trim().min(1, '제목을 입력해주세요').max(200, '제목은 200자 이내로 입력해주세요'),
+  name: z.string().trim().min(1, '이름을 입력해주세요').max(100, '이름은 100자 이내로 입력해주세요'),
+  email: z.string().trim().email('유효한 이메일을 입력해주세요').max(254, '이메일은 254자 이내로 입력해주세요'),
+  phone: z.string().trim().max(50, '전화번호는 50자 이내로 입력해주세요').optional(),
+  companyName: z.string().trim().max(200, '회사명은 200자 이내로 입력해주세요').optional(),
+  message: z.string().trim().min(1, '내용을 입력해주세요').max(10000, '내용은 10,000자 이내로 입력해주세요'),
 });
 
 type InquiryFormValues = z.infer<typeof inquirySchema>;
@@ -30,6 +31,7 @@ export function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
       name: '',
       email: '',
       phone: '',
+      companyName: '',
     }
   });
 
@@ -65,9 +67,9 @@ export function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
           <SelectValue placeholder="카테고리 선택" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="product">상품 문의</SelectItem>
-          <SelectItem value="billing">결제 문의</SelectItem>
-          <SelectItem value="support">기술 지원</SelectItem>
+          <SelectItem value="membership">회원 가입 문의</SelectItem>
+          <SelectItem value="event">행사 문의</SelectItem>
+          <SelectItem value="partnership">파트너십 문의</SelectItem>
           <SelectItem value="other">기타</SelectItem>
         </SelectContent>
       </Select>

@@ -6,6 +6,7 @@ import {
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
   type InquiryWithReplies,
+  type SafeUser,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
   type PostMeta, type InsertPostMeta, type PostWithTranslations,
@@ -40,6 +41,13 @@ export type EventRegistrationErrorCode =
   | "REGISTRATION_ATTENDED";
 
 export type AccountRole = "admin" | "operator" | "user";
+
+export class DuplicateInquiryError extends Error {
+  constructor() {
+    super("A matching inquiry was submitted recently");
+    this.name = "DuplicateInquiryError";
+  }
+}
 
 function getPostMetaValueColumns(value: any): Pick<
   PostMeta,
@@ -1004,11 +1012,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInquiry(inquiry: InsertInquiry): Promise<Inquiry> {
-    const [newInquiry] = await db
-      .insert(inquiries)
-      .values(inquiry)
-      .returning();
-    return newInquiry;
+    const duplicateWindowStart = new Date(Date.now() - 15 * 60 * 1000);
+
+    return db.transaction(async (tx) => {
+      // Serialize matching submissions by email so concurrent retries cannot
+      // both pass the duplicate check.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`inquiry:${inquiry.email}`}))`);
+
+      const [recentMatch] = await tx
+        .select({ id: inquiries.id })
+        .from(inquiries)
+        .where(and(
+          eq(inquiries.category, inquiry.category),
+          eq(inquiries.name, inquiry.name),
+          eq(inquiries.email, inquiry.email),
+          inquiry.phone ? eq(inquiries.phone, inquiry.phone) : isNull(inquiries.phone),
+          inquiry.companyName ? eq(inquiries.companyName, inquiry.companyName) : isNull(inquiries.companyName),
+          eq(inquiries.subject, inquiry.subject),
+          eq(inquiries.message, inquiry.message),
+          gte(inquiries.createdAt, duplicateWindowStart),
+        ))
+        .limit(1);
+
+      if (recentMatch) {
+        throw new DuplicateInquiryError();
+      }
+
+      const [newInquiry] = await tx
+        .insert(inquiries)
+        .values(inquiry)
+        .returning();
+      return newInquiry;
+    });
   }
 
   async updateInquiry(id: string, updates: Partial<Inquiry>): Promise<Inquiry | undefined> {
@@ -1031,7 +1066,10 @@ export class DatabaseStorage implements IStorage {
     const replies = await db
       .select({
         reply: inquiryReplies,
-        responder: users,
+        responder: {
+          id: users.id,
+          name: users.name,
+        } satisfies Record<keyof SafeUser, unknown>,
       })
       .from(inquiryReplies)
       .leftJoin(users, eq(inquiryReplies.respondedBy, users.id))

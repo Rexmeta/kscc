@@ -53,7 +53,10 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
 
     setIsSubmitting(true);
     try {
-      const response = await apiRequest('POST', `/api/inquiries/${inquiryId}/reply`, { message: replyMessage, sendEmail });
+      const response = await apiRequest('POST', `/api/inquiries/${inquiryId}/reply`, {
+        message: replyMessage.trim(),
+        sendEmail,
+      });
 
       if (!response.ok) throw new Error('Failed to submit reply');
 
@@ -204,6 +207,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
           onChange={(e) => setReplyMessage(e.target.value)}
           placeholder="답변 내용을 입력하세요..."
           rows={6}
+          maxLength={10000}
           className="resize-none"
           data-testid="textarea-inquiry-reply"
         />

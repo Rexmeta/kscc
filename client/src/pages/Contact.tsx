@@ -20,12 +20,12 @@ import type { PostWithTranslations } from '@shared/schema';
 
 const inquirySchema = z.object({
   category: z.string().min(1, '문의 분류를 선택해주세요'),
-  name: z.string().min(1, '이름을 입력해주세요'),
-  email: z.string().email('올바른 이메일을 입력해주세요'),
-  phone: z.string().optional(),
-  companyName: z.string().optional(),
-  subject: z.string().min(1, '제목을 입력해주세요'),
-  message: z.string().min(10, '내용을 10자 이상 입력해주세요'),
+  name: z.string().trim().min(1, '이름을 입력해주세요').max(100, '이름은 100자 이내로 입력해주세요'),
+  email: z.string().trim().email('올바른 이메일을 입력해주세요').max(254, '이메일은 254자 이내로 입력해주세요'),
+  phone: z.string().trim().max(50, '전화번호는 50자 이내로 입력해주세요').optional(),
+  companyName: z.string().trim().max(200, '회사명은 200자 이내로 입력해주세요').optional(),
+  subject: z.string().trim().min(1, '제목을 입력해주세요').max(200, '제목은 200자 이내로 입력해주세요'),
+  message: z.string().trim().min(10, '내용을 10자 이상 입력해주세요').max(10000, '내용은 10,000자 이내로 입력해주세요'),
   privacy: z.boolean().refine(val => val, '개인정보 수집 및 이용에 동의해주세요'),
 });
 
@@ -183,6 +183,7 @@ export default function ContactPage() {
                     <label className="form-label">{t('contact.form.name')} *</label>
                     <Input
                       placeholder="홍길동"
+                      maxLength={100}
                       {...register('name')}
                       data-testid="input-name"
                     />
@@ -194,6 +195,7 @@ export default function ContactPage() {
                     <label className="form-label">{t('contact.form.company')}</label>
                     <Input
                       placeholder="회사명"
+                      maxLength={200}
                       {...register('companyName')}
                       data-testid="input-company"
                     />
@@ -206,6 +208,7 @@ export default function ContactPage() {
                     <Input
                       type="email"
                       placeholder="example@email.com"
+                      maxLength={254}
                       {...register('email')}
                       data-testid="input-email"
                     />
@@ -218,6 +221,7 @@ export default function ContactPage() {
                     <Input
                       type="tel"
                       placeholder="010-0000-0000"
+                      maxLength={50}
                       {...register('phone')}
                       data-testid="input-phone"
                     />
@@ -228,6 +232,7 @@ export default function ContactPage() {
                   <label className="form-label">{t('contact.form.subject')} *</label>
                   <Input
                     placeholder="문의 제목을 입력하세요"
+                    maxLength={200}
                     {...register('subject')}
                     data-testid="input-subject"
                   />
@@ -241,6 +246,7 @@ export default function ContactPage() {
                   <Textarea
                     rows={6}
                     placeholder="문의 내용을 입력하세요"
+                    maxLength={10000}
                     {...register('message')}
                     data-testid="textarea-message"
                   />

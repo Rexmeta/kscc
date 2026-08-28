@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 export interface EmailOptions {
   to: string;
   subject: string;
@@ -24,12 +26,12 @@ export class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
+    const correlationId = randomUUID();
+
     if (!this.apiKey) {
-      console.warn('[EMAIL] RESEND_API_KEY not configured. Email not sent.');
-      console.log('[EMAIL] Would have sent:', {
-        to: options.to,
-        subject: options.subject,
-        preview: options.text?.substring(0, 100) || options.html.substring(0, 100),
+      console.warn('[EMAIL] Email not sent', {
+        correlationId,
+        reason: "provider_not_configured",
       });
       return false;
     }
@@ -51,16 +53,27 @@ export class EmailService {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        console.error('[EMAIL] Failed to send email:', error);
+        // Do not read or log the provider response: it may contain recipient
+        // data, message content, or request credentials.
+        console.error('[EMAIL] Provider rejected email', {
+          correlationId,
+          status: response.status,
+        });
         return false;
       }
 
-      const data = await response.json();
-      console.log('[EMAIL] Email sent successfully:', data);
+      // The response body is intentionally ignored. Only the delivery result
+      // and a correlation id belong in application logs.
+      console.log('[EMAIL] Email sent successfully', {
+        correlationId,
+        status: response.status,
+      });
       return true;
     } catch (error) {
-      console.error('[EMAIL] Error sending email:', error);
+      console.error('[EMAIL] Email delivery failed', {
+        correlationId,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       return false;
     }
   }
