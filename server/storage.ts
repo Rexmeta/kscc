@@ -192,6 +192,7 @@ export interface IStorage {
     offset?: number;
     access?: PostAccessContext;
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
+  getResourceCategoryCounts(access?: PostAccessContext): Promise<Record<string, number>>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
   updatePostComplete(
@@ -1595,6 +1596,49 @@ export class DatabaseStorage implements IStorage {
       posts: hydratedPosts,
       total: totalResult?.count || 0,
     };
+  }
+
+  async getResourceCategoryCounts(
+    access: PostAccessContext = publicPostAccess,
+  ): Promise<Record<string, number>> {
+    const firstPage = await this.getPosts({
+      postType: "resource",
+      status: "published",
+      compact: true,
+      limit: MAX_POST_PAGE_SIZE,
+      offset: 0,
+      access,
+    });
+
+    const pageCount = Math.ceil(firstPage.total / MAX_POST_PAGE_SIZE);
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
+        this.getPosts({
+          postType: "resource",
+          status: "published",
+          compact: true,
+          limit: MAX_POST_PAGE_SIZE,
+          offset: (index + 1) * MAX_POST_PAGE_SIZE,
+          access,
+        }),
+      ),
+    );
+
+    const counts: Record<string, number> = {};
+    for (const resource of [
+      ...firstPage.posts,
+      ...remainingPages.flatMap((page) => page.posts),
+    ]) {
+      const categoryMeta = resource.meta.find(
+        (meta) => meta.key === "resource.category",
+      );
+      const category = categoryMeta?.valueText ||
+        (Array.isArray(resource.tags) ? resource.tags[0] : undefined) ||
+        "uncategorized";
+      counts[category] = (counts[category] || 0) + 1;
+    }
+
+    return counts;
   }
 
   async createPost(post: InsertPost): Promise<Post> {

@@ -155,6 +155,21 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
   }
 });
 
+// GET /api/posts/resource/categories - Category counts for visible resources
+router.get("/resource/categories", optionalAuthenticateToken, async (req: Request, res: Response) => {
+  try {
+    const access = await storage.getPostAccessContext(
+      req.user?.id,
+      req.user?.role === "admin",
+    );
+    const categories = await storage.getResourceCategoryCounts(access);
+    res.json({ categories });
+  } catch (error) {
+    console.error("[Posts API] Error fetching resource categories:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // GET /api/posts/slug/:slug - Get single post by slug with translations
 router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
