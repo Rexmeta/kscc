@@ -24,6 +24,8 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
 
+export type AccountRole = "admin" | "operator" | "user";
+
 function getPostMetaValueColumns(value: any): Pick<
   PostMeta,
   "value" | "valueText" | "valueNumber" | "valueBoolean" | "valueTimestamp"
@@ -67,6 +69,13 @@ export interface IStorage {
   createUserForRegistration(userData: InsertUser & { userType?: string }): Promise<User>;
   createUserWithMemberForRegistration(userData: InsertUser & { userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+  updateUserAuthorization(
+    id: string,
+    updates: Partial<User>,
+    accountRole?: AccountRole,
+  ): Promise<User | undefined>;
+  updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined>;
+  bootstrapAdmin(email: string, password?: string): Promise<User>;
   validateUser(email: string, password: string): Promise<User | undefined>;
 
   // Members
@@ -229,19 +238,15 @@ export class DatabaseStorage implements IStorage {
     userData: InsertUser & { userType?: string },
   ): Promise<User> {
     return await db.transaction(async (tx) => {
-      // Serialize the first-registration check with all other registrations.
-      // A count followed by an insert is otherwise racy when two public
-      // registration requests arrive at the same time.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('users-bootstrap-registration'))`);
-      const [result] = await tx.select({ count: count() }).from(users);
-      const role = Number(result?.count || 0) === 0 ? "admin" : "member";
       const hashedPassword = await bcrypt.hash(userData.password, 10);
 
       const [user] = await tx
         .insert(users)
         .values({
           ...userData,
-          role,
+          // Public registration never grants an administrative account. Admin
+          // provisioning is an explicit, deployment-controlled operation.
+          role: "user",
           password: hashedPassword,
         })
         .returning();
@@ -254,18 +259,14 @@ export class DatabaseStorage implements IStorage {
     memberData: Omit<InsertMember, 'userId'>,
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
-      // Keep the user count check and both inserts in the same serialized
-      // transaction so only one concurrent registration can bootstrap admin.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('users-bootstrap-registration'))`);
-      const [result] = await tx.select({ count: count() }).from(users);
-      const role = Number(result?.count || 0) === 0 ? "admin" : "member";
       const hashedPassword = await bcrypt.hash(userData.password, 10);
 
       const [user] = await tx
         .insert(users)
         .values({
           ...userData,
-          role,
+          // Company registration is also a normal, non-privileged signup.
+          role: "user",
           password: hashedPassword,
           userType: 'company',
         })
@@ -283,7 +284,272 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  /**
+   * Update account fields and, when authorization state changes, synchronize
+   * the account role with exactly one effective ACL membership atomically.
+   */
+  async updateUserAuthorization(
+    id: string,
+    updates: Partial<User>,
+    accountRole?: AccountRole,
+  ): Promise<User | undefined> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user-authorization:${id}`}))`);
+      const [currentUser] = await tx.select().from(users).where(eq(users.id, id));
+      if (!currentUser) return undefined;
+
+      const finalRole = accountRole
+        || (currentUser.role === "member" ? "user" : currentUser.role as AccountRole);
+      const authorizationChanged = accountRole !== undefined || updates.isActive !== undefined;
+      if (authorizationChanged && !ACCOUNT_ROLE_TO_ACL_ROLE[finalRole]) {
+        throw new AuthorizationStateError(`Unsupported account role: ${finalRole}`);
+      }
+
+      let targetRoleId: string | undefined;
+      let targetTierId: string | undefined;
+      if (authorizationChanged) {
+        const aclRoleCode = ACCOUNT_ROLE_TO_ACL_ROLE[finalRole];
+        const [targetRole] = await tx
+          .select({ id: roles.id })
+          .from(roles)
+          .where(and(eq(roles.code, aclRoleCode), eq(roles.isActive, true)))
+          .limit(1);
+
+        // Preserve the most recent active tier when possible. An inactive or
+        // expired assignment is only used as a tier preference here; it never
+        // grants permissions by itself.
+        const [currentMembership] = await tx
+          .select({ tierId: userMemberships.tierId })
+          .from(userMemberships)
+          .innerJoin(roles, eq(userMemberships.roleId, roles.id))
+          .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+          .where(and(
+            eq(userMemberships.userId, id),
+            eq(roles.isActive, true),
+            eq(tiers.isActive, true),
+          ))
+          .orderBy(
+            desc(userMemberships.isActive),
+            desc(userMemberships.createdAt),
+          )
+          .limit(1);
+
+        let fallbackTierId = currentMembership?.tierId || undefined;
+        if (!fallbackTierId) {
+          const fallbackTierCode = finalRole === "user" ? "MEMBER" : "ADMIN";
+          const [fallbackTier] = await tx
+            .select({ id: tiers.id })
+            .from(tiers)
+            .where(and(eq(tiers.code, fallbackTierCode), eq(tiers.isActive, true)))
+            .limit(1);
+          fallbackTierId = fallbackTier?.id;
+        }
+
+        if (!targetRole || !fallbackTierId) {
+          throw new AuthorizationStateError(
+            `ACL role or tier is not configured for ${finalRole}`,
+          );
+        }
+        targetRoleId = targetRole.id;
+        targetTierId = fallbackTierId;
+      }
+
+      const [updatedUser] = await tx
+        .update(users)
+        .set({
+          ...updates,
+          ...(authorizationChanged ? { role: finalRole } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, id))
+        .returning();
+
+      if (!authorizationChanged) return updatedUser;
+
+      await tx
+        .update(userMemberships)
+        .set({
+          isActive: false,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(userMemberships.userId, id),
+          eq(userMemberships.isActive, true),
+        ));
+
+      // A deactivated account must not retain an effective membership. It is
+      // re-established on reactivation using its synchronized role.
+      if (updatedUser.isActive) {
+        await tx.insert(userMemberships).values({
+          userId: id,
+          tierId: targetTierId!,
+          roleId: targetRoleId!,
+          isActive: true,
+          startedAt: new Date(),
+          notes: "Synchronized from account authorization",
+        });
+      }
+
+      return updatedUser;
+    });
+  }
+
+  /**
+   * Change a membership and derive the account role from its ACL role in the
+   * same transaction. Referenced records are validated before old access is
+   * deactivated.
+   */
+  async updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user-authorization:${id}`}))`);
+      const [user] = await tx.select().from(users).where(eq(users.id, id));
+      if (!user) return undefined;
+
+      const [targetRole] = await tx
+        .select({ id: roles.id, code: roles.code })
+        .from(roles)
+        .where(and(eq(roles.id, roleId), eq(roles.isActive, true)))
+        .limit(1);
+      const [targetTier] = await tx
+        .select({ id: tiers.id })
+        .from(tiers)
+        .where(and(eq(tiers.id, tierId), eq(tiers.isActive, true)))
+        .limit(1);
+
+      if (!targetRole || !targetTier || !(targetRole.code in ACL_ROLE_TO_ACCOUNT_ROLE)) {
+        throw new AuthorizationStateError("Referenced ACL role or tier is not active");
+      }
+
+      const accountRole = ACL_ROLE_TO_ACCOUNT_ROLE[targetRole.code as AclRoleCode];
+      await tx
+        .update(userMemberships)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(
+          eq(userMemberships.userId, id),
+          eq(userMemberships.isActive, true),
+        ));
+
+      await tx.insert(userMemberships).values({
+        userId: id,
+        tierId: targetTier.id,
+        roleId: targetRole.id,
+        isActive: user.isActive,
+        startedAt: new Date(),
+        notes: "Synchronized from membership authorization",
+      });
+
+      const [updatedUser] = await tx
+        .update(users)
+        .set({ role: accountRole, updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+
+      return updatedUser;
+    });
+  }
+
+  /**
+   * Explicit administrator provisioning for deployment/operations use only.
+   * This is deliberately not exposed as an HTTP endpoint.
+   */
+  async bootstrapAdmin(email: string, password?: string): Promise<User> {
+    return await db.transaction(async (tx) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        throw new AuthorizationStateError("A valid administrator email is required");
+      }
+      const [adminRole] = await tx
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.code, "admin"), eq(roles.isActive, true)))
+        .limit(1);
+      const [adminTier] = await tx
+        .select({ id: tiers.id })
+        .from(tiers)
+        .where(and(eq(tiers.code, "ADMIN"), eq(tiers.isActive, true)))
+        .limit(1);
+
+      if (!adminRole || !adminTier) {
+        throw new AuthorizationStateError(
+          "ACL seed data is missing; seed roles and tiers before bootstrapping an administrator",
+        );
+      }
+
+      const [existingUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1);
+
+      if (existingUser) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user-authorization:${existingUser.id}`}))`);
+      }
+
+      let user: User;
+      if (existingUser) {
+        [user] = await tx
+          .update(users)
+          .set({ role: "admin", isActive: true, updatedAt: new Date() })
+          .where(eq(users.id, existingUser.id))
+          .returning();
+      } else {
+        if (!password) {
+          throw new AuthorizationStateError(
+            "A password is required when bootstrapping a new administrator",
+          );
+        }
+        [user] = await tx
+          .insert(users)
+          .values({
+            email: normalizedEmail,
+            password: await bcrypt.hash(password, 10),
+            name: "Administrator",
+            role: "admin",
+            userType: "staff",
+            isActive: true,
+          })
+          .returning();
+      }
+
+      await tx
+        .update(userMemberships)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(
+          eq(userMemberships.userId, user.id),
+          eq(userMemberships.isActive, true),
+        ));
+      await tx.insert(userMemberships).values({
+        userId: user.id,
+        tierId: adminTier.id,
+        roleId: adminRole.id,
+        isActive: true,
+        startedAt: new Date(),
+        notes: "Explicit administrator bootstrap",
+      });
+
+      return user;
+    });
+  }
+
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    if (updates.role !== undefined || updates.isActive !== undefined) {
+      const { role, ...otherUpdates } = updates;
+      const normalizedRole = role === "member" ? "user" : role;
+      if (
+        normalizedRole !== undefined
+        && normalizedRole !== "admin"
+        && normalizedRole !== "operator"
+        && normalizedRole !== "user"
+      ) {
+        throw new AuthorizationStateError(`Unsupported account role: ${role}`);
+      }
+      return this.updateUserAuthorization(
+        id,
+        otherUpdates,
+        normalizedRole as AccountRole | undefined,
+      );
+    }
+
     const [user] = await db
       .update(users)
       .set({ ...updates, updatedAt: new Date() })
@@ -1281,3 +1547,26 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+export type AclRoleCode = "admin" | "operator" | "editor" | "member" | "guest";
+
+const ACCOUNT_ROLE_TO_ACL_ROLE: Record<AccountRole, AclRoleCode> = {
+  admin: "admin",
+  operator: "operator",
+  user: "member",
+};
+
+export class AuthorizationStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthorizationStateError";
+  }
+}
+
+const ACL_ROLE_TO_ACCOUNT_ROLE: Record<AclRoleCode, AccountRole> = {
+  admin: "admin",
+  operator: "operator",
+  editor: "user",
+  member: "user",
+  guest: "user",
+};

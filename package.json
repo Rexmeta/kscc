@@ -10,6 +10,7 @@
     "check": "tsc",
     "audit:production": "node scripts/check-production-audit.mjs",
     "db:push": "drizzle-kit push",
+    "admin:bootstrap": "tsx server/bootstrapAdmin.ts",
     "test": "tsx --test server/regressions.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts"
   },
   "dependencies": {

@@ -47,6 +47,8 @@ Preferred communication style: Simple, everyday language.
 
 ### System Design Choices
 
+*   **Administrator Provisioning**: Public registration always creates a non-privileged user. After ACL seed data is installed, provision the first administrator by setting `ADMIN_BOOTSTRAP_EMAIL` and (for a new account) `ADMIN_BOOTSTRAP_PASSWORD` in the deployment environment and running `npm run admin:bootstrap`. Re-running the command repairs the account's admin role and active ADMIN membership without changing an existing password.
+
 *   **User Type System**: Supports 'staff' (운영진) and 'company' (회원사) user types, with atomic creation of company users and associated member profiles. Server-side logic prevents privilege escalation.
 *   **Language System**: Global language state managed via React Context with `localStorage` persistence and router key-based remounting for instant, no-reload language switching.
 *   **Access Control List (ACL)**: A hierarchical 5-tier, 5-role, 27-permission system is enforced on both frontend and backend for security and UI rendering.

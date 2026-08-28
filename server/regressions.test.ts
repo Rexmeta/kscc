@@ -18,6 +18,7 @@ import {
   users,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
+import { AuthorizationStateError } from "./storage";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -143,6 +144,115 @@ test(
   },
 );
 
+
+test(
+  "registration and authorization mutations keep account and ACL state aligned",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const [{ getUserPermissions }] = await Promise.all([
+      import("./permissions"),
+    ]);
+    const suffix = randomUUID();
+    const [memberRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.code, "member"))
+      .limit(1);
+    const [operatorRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.code, "operator"))
+      .limit(1);
+    const [adminRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.code, "admin"))
+      .limit(1);
+    const [memberTier] = await db
+      .select()
+      .from(tiers)
+      .where(eq(tiers.code, "MEMBER"))
+      .limit(1);
+
+    assert.ok(memberRole, "ACL seed must include the member role");
+    assert.ok(operatorRole, "ACL seed must include the operator role");
+    assert.ok(adminRole, "ACL seed must include the admin role");
+    assert.ok(memberTier, "ACL seed must include the MEMBER tier");
+
+    const user = await storage.createUserForRegistration({
+      email: `authorization-sync-${suffix}@example.test`,
+      password: "test-password",
+      name: "Authorization Sync Test",
+      userType: "staff",
+    });
+
+    try {
+      const initialPermissions = await getUserPermissions(user.id);
+      assert.equal(user.role, "user");
+      assert.equal(initialPermissions.has("system.dashboard"), false);
+
+      const updatedByMembership = await storage.updateUserMembership(
+        user.id,
+        memberTier.id,
+        operatorRole.id,
+      );
+      assert.equal(updatedByMembership?.role, "operator");
+      assert.equal((await getUserPermissions(user.id)).has("system.dashboard"), true);
+
+      await assert.rejects(
+        () => storage.updateUserMembership(user.id, randomUUID(), randomUUID()),
+        AuthorizationStateError,
+      );
+      const unchangedMemberships = await db
+        .select({ roleId: userMemberships.roleId })
+        .from(userMemberships)
+        .where(and(
+          eq(userMemberships.userId, user.id),
+          eq(userMemberships.isActive, true),
+        ));
+      assert.deepEqual(unchangedMemberships, [{ roleId: operatorRole.id }]);
+
+      const demoted = await storage.updateUserAuthorization(user.id, {}, "user");
+      assert.equal(demoted?.role, "user");
+      assert.equal((await getUserPermissions(user.id)).has("system.dashboard"), false);
+      assert.equal((await getUserPermissions(user.id)).has("member.read"), true);
+
+      await storage.updateUserAuthorization(user.id, { isActive: false });
+      assert.equal((await getUserPermissions(user.id)).size, 0);
+      const inactiveMemberships = await db
+        .select()
+        .from(userMemberships)
+        .where(and(
+          eq(userMemberships.userId, user.id),
+          eq(userMemberships.isActive, true),
+        ));
+      assert.equal(inactiveMemberships.length, 0);
+
+      await storage.updateUserAuthorization(user.id, { isActive: true });
+      const reactivated = await storage.getUser(user.id);
+      assert.equal(reactivated?.role, "user");
+      assert.equal((await getUserPermissions(user.id)).has("member.read"), true);
+
+      const bootstrapped = await storage.bootstrapAdmin(user.email);
+      assert.equal(bootstrapped.role, "admin");
+      assert.equal((await getUserPermissions(user.id)).has("system.dashboard"), true);
+      await storage.bootstrapAdmin(user.email);
+      const activeAdminMemberships = await db
+        .select()
+        .from(userMemberships)
+        .where(and(
+          eq(userMemberships.userId, user.id),
+          eq(userMemberships.isActive, true),
+        ));
+      assert.equal(activeAdminMemberships.length, 1);
+      const finalUser = await storage.getUser(user.id);
+      assert.equal(finalUser?.role, "admin");
+    } finally {
+      await db.delete(users).where(eq(users.id, user.id));
+    }
+  },
+);
 
 test(
   "compact post lists select the requested locale and fall back to the primary locale",

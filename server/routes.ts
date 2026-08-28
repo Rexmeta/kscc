@@ -2,13 +2,14 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { canReadPost, publicPostAccess } from "./postAccess";
-import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, userMemberships, roles, tiers, type User } from "@shared/schema";
+import { insertUserSchema, insertMemberSchema, insertEventRegistrationSchema, insertInquirySchema, insertInquiryReplySchema, insertPartnerSchema, insertOrganizationMemberSchema, users, type User } from "@shared/schema";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { sql, eq, and, or, isNull, gt } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
-import { getUserMembershipInfo, getUserPermissions, clearUserPermissionCache, requirePermission, requireAnyPermission } from "./permissions";
+import { getUserMembershipInfo, getUserPermissions, requirePermission, requireAnyPermission } from "./permissions";
+import { AuthorizationStateError, type AccountRole } from "./storage";
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
@@ -397,7 +398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { role, userType, membershipTier, isActive, name, email } = req.body;
       const updateData: any = {};
-      const accountRole = role === undefined
+      const accountRole: AccountRole | undefined = role === undefined
         ? undefined
         : z.enum(['admin', 'operator', 'user']).parse(role);
       
@@ -419,86 +420,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No fields to update" });
       }
       
-      const updatedUser = await db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(users)
-          .set({ ...updateData, updatedAt: new Date() })
-          .where(eq(users.id, req.params.id))
-          .returning();
-
-        if (!updated || !accountRole) return updated;
-
-        const aclRoleCode = accountRole === 'user' ? 'member' : accountRole;
-        const effectiveMemberships = await tx
-          .select({
-            id: userMemberships.id,
-            tierId: userMemberships.tierId,
-            roleCode: roles.code,
-          })
-          .from(userMemberships)
-          .innerJoin(roles, eq(userMemberships.roleId, roles.id))
-          .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
-          .where(and(
-            eq(userMemberships.userId, req.params.id),
-            eq(userMemberships.isActive, true),
-            eq(roles.isActive, true),
-            eq(tiers.isActive, true),
-            or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, new Date())),
-          ));
-
-        const matchingMembership = effectiveMemberships.find(
-          (membership) => membership.roleCode === aclRoleCode,
-        );
-
-        await tx
-          .update(userMemberships)
-          .set({ isActive: false, updatedAt: new Date() })
-          .where(and(
-            eq(userMemberships.userId, req.params.id),
-            eq(userMemberships.isActive, true),
-          ));
-
-        if (matchingMembership) {
-          await tx
-            .update(userMemberships)
-            .set({ isActive: true, updatedAt: new Date() })
-            .where(eq(userMemberships.id, matchingMembership.id));
-          return updated;
-        }
-
-        const [targetRole] = await tx
-          .select({ id: roles.id })
-          .from(roles)
-          .where(and(eq(roles.code, aclRoleCode), eq(roles.isActive, true)))
-          .limit(1);
-        const fallbackTierCode = accountRole === 'user' ? 'MEMBER' : 'ADMIN';
-        const existingTierId = effectiveMemberships.find(
-          (membership) => membership.tierId,
-        )?.tierId;
-        const [fallbackTier] = existingTierId
-          ? []
-          : await tx
-              .select({ id: tiers.id })
-              .from(tiers)
-              .where(and(eq(tiers.code, fallbackTierCode), eq(tiers.isActive, true)))
-              .limit(1);
-        const targetTierId = existingTierId || fallbackTier?.id;
-
-        if (!targetRole || !targetTierId) {
-          throw new Error(`ACL role or tier is not configured for ${accountRole}`);
-        }
-
-        await tx.insert(userMemberships).values({
-          userId: req.params.id,
-          tierId: targetTierId,
-          roleId: targetRole.id,
-          isActive: true,
-          startedAt: new Date(),
-          notes: 'Synchronized from account role',
-        });
-
-        return updated;
-      });
+      const updatedUser = await storage.updateUserAuthorization(
+        req.params.id,
+        updateData,
+        accountRole,
+      );
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -507,6 +433,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user role", errors: error.errors });
+      }
+      if (error instanceof AuthorizationStateError) {
+        return res.status(400).json({ message: error.message });
       }
       res.status(500).json({ message: "Internal server error" });
     }
@@ -527,31 +456,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userIdSchema = z.string().uuid();
       userIdSchema.parse(userId);
       
-      // Check if user exists
-      const user = await storage.getUser(userId);
-      if (!user) {
+      const updatedUser = await storage.updateUserMembership(userId, tierId, roleId);
+      if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
-
-      // Deactivate old memberships using Drizzle query builder
-      await db.update(userMemberships)
-        .set({ isActive: false })
-        .where(and(
-          eq(userMemberships.userId, userId),
-          eq(userMemberships.isActive, true)
-        ));
-
-      // Create new membership using Drizzle query builder
-      await db.insert(userMemberships).values({
-        userId,
-        tierId,
-        roleId,
-        isActive: true,
-        startedAt: new Date(),
-      });
-
-      // Clear cache
-      clearUserPermissionCache(userId);
 
       // Get updated membership info
       const membership = await getUserMembershipInfo(userId);
@@ -563,6 +471,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid request data", errors: error.errors });
+      }
+      if (error instanceof AuthorizationStateError) {
+        return res.status(400).json({ message: error.message });
       }
       res.status(500).json({ message: "Internal server error" });
     }
