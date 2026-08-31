@@ -40,6 +40,12 @@ export async function setupVite(app: Express, server: Server) {
     appType: "custom",
   });
 
+  // Warm the entrypoint and newly added lazy admin screen before exposing
+  // the middleware. Otherwise the first proxied preview request can race
+  // dependency optimization and receive stale/missing optimized chunks.
+  await vite.transformRequest("/src/main.tsx");
+  await vite.transformRequest("/src/components/admin/tabs/SurveyTab.tsx");
+
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
