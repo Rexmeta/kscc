@@ -301,6 +301,144 @@ test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("news", "attendeeManage"), undefined);
 });
 
+test("admin dashboard route is administrator-only and returns the bounded safe snapshot contract", async () => {
+  const [{ registerRoutes }, { storage }] = await Promise.all([
+    import("./routes"),
+    import("./storage"),
+  ]);
+  const adminId = randomUUID();
+  const memberId = randomUUID();
+  const admin = {
+    id: adminId,
+    email: "dashboard-admin@example.test",
+    password: "not-returned",
+    name: "Dashboard Admin",
+    role: "admin",
+    userType: "staff",
+    membershipTier: "free",
+    isActive: true,
+    sessionVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any;
+  const member = {
+    ...admin,
+    id: memberId,
+    email: "dashboard-member@example.test",
+    name: "Dashboard Member",
+    role: "user",
+  } as any;
+  const snapshot = {
+    stats: {
+      totalMembers: 9,
+      totalEvents: 8,
+      totalNews: 7,
+      totalInquiries: 6,
+      totalUsers: 12,
+      activeUsers: 10,
+      inactiveUsers: 2,
+      activeMembers: 5,
+      pendingMembers: 3,
+      inactiveMembers: 1,
+      unpublishedNews: 2,
+      unpublishedEvents: 1,
+      totalContent: 20,
+      unpublishedContent: 4,
+      upcomingEvents: 6,
+      unresolvedInquiries: 4,
+    },
+    recentInquiries: Array.from({ length: 5 }, (_, index) => ({
+      id: randomUUID(),
+      subject: `Safe inquiry ${index}`,
+      category: "membership",
+      status: index === 0 ? "new" : "in_progress",
+      createdAt: new Date(Date.UTC(2026, 7, 31, 12, 0, 5 - index)).toISOString(),
+    })),
+    upcomingEvents: Array.from({ length: 5 }, (_, index) => ({
+      id: randomUUID(),
+      title: `Upcoming event ${index}`,
+      status: index === 0 ? "draft" : "published",
+      eventDate: new Date(Date.UTC(2026, 8, 1 + index)).toISOString(),
+      location: index === 0 ? null : "Seoul",
+    })),
+  };
+  const originalMethods = {
+    getUser: storage.getUser,
+    getPostAccessContext: storage.getPostAccessContext,
+    getAdminDashboardSnapshot: storage.getAdminDashboardSnapshot,
+  };
+  const access = {
+    userId: adminId,
+    isAdmin: true,
+    isEditor: false,
+    managedPostTypes: new Set(["news", "event", "resource"]),
+    canReadMembers: true,
+    canReadPremium: true,
+  };
+  let snapshotCalls = 0;
+
+  storage.getUser = async (id) => id === adminId ? admin : id === memberId ? member : undefined;
+  storage.getPostAccessContext = async () => access;
+  storage.getAdminDashboardSnapshot = async (receivedAccess) => {
+    assert.equal(receivedAccess, access);
+    snapshotCalls += 1;
+    return snapshot;
+  };
+
+  const app = express();
+  app.use(express.json());
+  const server = await registerRoutes(app);
+  const adminToken = issueAuthToken(admin, process.env.SESSION_SECRET!);
+  const memberToken = issueAuthToken(member, process.env.SESSION_SECRET!);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, resolve);
+    });
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const request = async (token?: string) => {
+      const response = await fetch(`${baseUrl}/api/admin/dashboard`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const text = await response.text();
+      return {
+        status: response.status,
+        body: text.startsWith("{") ? JSON.parse(text) : text,
+      };
+    };
+
+    assert.equal((await request()).status, 401);
+    assert.equal((await request(memberToken)).status, 403);
+    assert.equal(snapshotCalls, 0);
+
+    const response = await request(adminToken);
+    assert.equal(response.status, 200);
+    assert.equal(snapshotCalls, 1);
+    assert.deepEqual(response.body.stats, snapshot.stats);
+    assert.equal(response.body.recentInquiries.length, 5);
+    assert.equal(response.body.upcomingEvents.length, 5);
+    assert.deepEqual(
+      Object.keys(response.body.recentInquiries[0]).sort(),
+      ["category", "createdAt", "id", "status", "subject"],
+    );
+    assert.deepEqual(
+      Object.keys(response.body.upcomingEvents[0]).sort(),
+      ["eventDate", "id", "location", "status", "title"],
+    );
+    assert.equal("message" in response.body.recentInquiries[0], false);
+    assert.equal("email" in response.body.recentInquiries[0], false);
+    assert.equal("phone" in response.body.recentInquiries[0], false);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    storage.getUser = originalMethods.getUser;
+    storage.getPostAccessContext = originalMethods.getPostAccessContext;
+    storage.getAdminDashboardSnapshot = originalMethods.getAdminDashboardSnapshot;
+  }
+});
+
 test("managed object intents bind the caller and path, and private reads are not reusable", async () => {
   const originalSessionSecret = process.env.SESSION_SECRET;
   const originalPrivateObjectDir = process.env.PRIVATE_OBJECT_DIR;

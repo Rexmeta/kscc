@@ -27,14 +27,16 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
   const canCreate = isAdmin || hasPermission('member.create');
   const canUpdate = isAdmin || hasPermission('member.update');
   const canDelete = isAdmin || hasPermission('member.delete');
+  const invalidate = () => {
+    queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+  };
 
   return (
     <TabsContent value="members" className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">회원사 관리</h2>
-        {canCreate && <CreateMemberDialog onSuccess={() => {
-          queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
-        }} />}
+        {canCreate && <CreateMemberDialog onSuccess={invalidate} />}
       </div>
 
       <QueryState
@@ -92,7 +94,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
                         const response = await apiRequest('DELETE', `/api/members/${member.id}`, null);
                         if (response.ok) {
                           toast({ title: "회원이 삭제되었습니다" });
-                          queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+                          invalidate();
                         }
                       } catch (error) {
                         toast({ title: "삭제 실패", variant: "destructive" });
@@ -194,7 +196,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
               member={selectedMember}
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+                invalidate();
               }}
             />
           </DialogContent>

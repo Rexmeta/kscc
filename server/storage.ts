@@ -36,6 +36,7 @@ import {
   PostMetaValidationError,
   validatePostMetaValue,
 } from "@shared/postMetaKeys";
+import type { AdminDashboardSnapshot } from "@shared/adminDashboard";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
@@ -150,6 +151,11 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
 
   getUserCount(): Promise<number>;
+
+  getAdminDashboardSnapshot(
+    access: PostAccessContext,
+    now?: Date,
+  ): Promise<AdminDashboardSnapshot>;
 
   getUsers(filters?: {
     limit?: number;
@@ -869,6 +875,148 @@ export class DatabaseStorage implements IStorage {
   async getUserCount(): Promise<number> {
     const [result] = await db.select({ count: count() }).from(users);
     return result?.count || 0;
+  }
+
+  async getAdminDashboardSnapshot(
+    access: PostAccessContext,
+    now = new Date(),
+  ): Promise<AdminDashboardSnapshot> {
+    const [
+      userStatusCounts,
+      memberStatusCounts,
+      inquiryStatusCounts,
+      newsResult,
+      newsDraftResult,
+      eventResult,
+      eventDraftResult,
+      resourceResult,
+      resourceDraftResult,
+      pageResult,
+      pageDraftResult,
+      recentInquiries,
+      eventPosts,
+    ] = await Promise.all([
+      db
+        .select({ status: users.isActive, count: count() })
+        .from(users)
+        .groupBy(users.isActive),
+      db
+        .select({ status: members.membershipStatus, count: count() })
+        .from(members)
+        .groupBy(members.membershipStatus),
+      db
+        .select({ status: inquiries.status, count: count() })
+        .from(inquiries)
+        .groupBy(inquiries.status),
+      // Post totals deliberately use the existing access-aware helper so
+      // dashboard counts cannot drift from administrator post visibility.
+      this.getPosts({ postType: "news", limit: 1, access }),
+      this.getPosts({ postType: "news", status: "draft", limit: 1, access }),
+      this.getPosts({ postType: "event", limit: 1, access }),
+      this.getPosts({ postType: "event", status: "draft", limit: 1, access }),
+      this.getPosts({ postType: "resource", limit: 1, access }),
+      this.getPosts({ postType: "resource", status: "draft", limit: 1, access }),
+      this.getPosts({ postType: "page", limit: 1, access }),
+      this.getPosts({ postType: "page", status: "draft", limit: 1, access }),
+      db
+        .select({
+          id: inquiries.id,
+          subject: inquiries.subject,
+          category: inquiries.category,
+          status: inquiries.status,
+          createdAt: inquiries.createdAt,
+        })
+        .from(inquiries)
+        .orderBy(desc(inquiries.createdAt), desc(inquiries.id))
+        .limit(5),
+      this.getPosts({
+        postType: "event",
+        upcoming: true,
+        compact: true,
+        limit: MAX_POST_PAGE_SIZE,
+        access,
+      }),
+    ]);
+
+    const getGroupedCount = <T extends string | boolean>(
+      rows: Array<{ status: T; count: number }>,
+      status: T,
+    ) => Number(rows.find((row) => row.status === status)?.count ?? 0);
+    const totalUsers = userStatusCounts.reduce((total, row) => total + Number(row.count), 0);
+    const activeUsers = getGroupedCount(userStatusCounts, true);
+    const inactiveUsers = getGroupedCount(userStatusCounts, false);
+    const totalMembers = memberStatusCounts.reduce((total, row) => total + Number(row.count), 0);
+    const activeMembers = getGroupedCount(memberStatusCounts, "active");
+    const pendingMembers = getGroupedCount(memberStatusCounts, "pending");
+    const inactiveMembers = getGroupedCount(memberStatusCounts, "inactive");
+    const totalInquiries = inquiryStatusCounts.reduce((total, row) => total + Number(row.count), 0);
+    const unresolvedInquiries = inquiryStatusCounts
+      .filter(({ status }) => status !== "resolved")
+      .reduce((total, row) => total + Number(row.count), 0);
+    const totalNews = Number(newsResult.total);
+    const totalEvents = Number(eventResult.total);
+    const totalContent = totalNews + totalEvents +
+      Number(resourceResult.total) + Number(pageResult.total);
+    const unpublishedNews = Number(newsDraftResult.total);
+    const unpublishedEvents = Number(eventDraftResult.total);
+    const unpublishedContent = unpublishedNews + unpublishedEvents +
+      Number(resourceDraftResult.total) + Number(pageDraftResult.total);
+
+    const getEventMeta = (post: PostWithTranslations, key: string): unknown => {
+      const meta = post.meta.find((item) => item.key === key);
+      return meta ? getStoredPostMetaValue(meta) : undefined;
+    };
+    const getTitle = (post: PostWithTranslations): string => {
+      const translation = post.translations.find(
+        (item) => item.locale === post.primaryLocale,
+      ) || post.translations[0];
+      return translation?.title || post.slug;
+    };
+    const upcomingEventRows = eventPosts.posts
+      .map((post) => {
+        const eventDate = getEventMeta(post, "event.eventDate") ??
+          getEventMeta(post, "event.date");
+        if (!(eventDate instanceof Date) && typeof eventDate !== "string") return null;
+        const parsedDate = new Date(eventDate);
+        if (Number.isNaN(parsedDate.getTime()) || parsedDate < now) return null;
+        const location = getEventMeta(post, "event.location");
+        return {
+          id: post.id,
+          title: getTitle(post),
+          status: post.status,
+          eventDate: parsedDate.toISOString(),
+          location: typeof location === "string" ? location : null,
+        };
+      })
+      .filter((event): event is NonNullable<typeof event> => event !== null)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.id.localeCompare(b.id))
+      .slice(0, 5);
+
+    return {
+      stats: {
+        totalMembers,
+        totalEvents,
+        totalNews,
+        totalInquiries,
+        totalUsers,
+        activeUsers,
+        inactiveUsers,
+        activeMembers,
+        pendingMembers,
+        inactiveMembers,
+        unpublishedNews,
+        unpublishedEvents,
+        totalContent,
+        unpublishedContent,
+        upcomingEvents: Number(eventPosts.total),
+        unresolvedInquiries,
+      },
+      recentInquiries: recentInquiries.map((inquiry) => ({
+        ...inquiry,
+        createdAt: inquiry.createdAt.toISOString(),
+      })),
+      upcomingEvents: upcomingEventRows,
+    };
   }
 
   async getUsers(filters?: {
@@ -1927,6 +2075,23 @@ export class DatabaseStorage implements IStorage {
     let countQuery = db.select({ count: count() }).from(posts);
 
     const conditions = [];
+    const upcomingEventDate = filters?.upcoming && filters?.postType === "event"
+      ? sql<Date | null>`(
+          SELECT COALESCE(
+            ${postMeta.valueTimestamp},
+            CASE
+              WHEN ${postMeta.valueText} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+              THEN ${postMeta.valueText}::timestamp
+              ELSE NULL
+            END
+          )
+          FROM ${postMeta}
+          WHERE ${postMeta.postId} = ${posts.id}
+            AND ${postMeta.key} IN ('event.eventDate', 'event.date')
+          ORDER BY CASE WHEN ${postMeta.key} = 'event.eventDate' THEN 0 ELSE 1 END
+          LIMIT 1
+        )`
+      : undefined;
 
     if (filters?.postType) {
       conditions.push(eq(posts.postType, filters.postType as any));
@@ -2039,14 +2204,8 @@ export class DatabaseStorage implements IStorage {
 
     // Upcoming events filtering (SQL-level for correct pagination)
     // Check event.date key with valueText containing date string
-    if (filters?.upcoming && filters?.postType === 'event') {
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${postMeta}
-        WHERE ${postMeta.postId} = ${posts.id}
-          AND ${postMeta.key} IN ('event.eventDate', 'event.date')
-          AND ${postMeta.valueText} IS NOT NULL
-          AND ${postMeta.valueText}::date >= CURRENT_DATE
-      )`);
+    if (upcomingEventDate) {
+      conditions.push(sql`${upcomingEventDate} >= CURRENT_TIMESTAMP`);
     }
 
     if (conditions.length > 0) {
@@ -2059,9 +2218,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Always order by publishedAt DESC in SQL, then sort in memory for upcoming events
     const postsQuery = query
-      .orderBy(desc(posts.publishedAt))
+      .orderBy(
+        ...(upcomingEventDate
+          ? [asc(upcomingEventDate), asc(posts.id)]
+          : [desc(posts.publishedAt), desc(posts.id)]),
+      )
       .limit(boundedPageSize(filters?.limit, MAX_POST_PAGE_SIZE))
       .offset(boundedOffset(filters?.offset));
     const [[totalResult], postsResult] = await Promise.all([countQuery, postsQuery]);
@@ -2183,7 +2345,8 @@ export class DatabaseStorage implements IStorage {
         const bDate = bDateMeta?.valueText || bDateMeta?.valueTimestamp;
         if (!aDate) return 1;  // nulls last
         if (!bDate) return -1; // nulls last
-        return new Date(aDate).getTime() - new Date(bDate).getTime(); // ASC
+        return new Date(aDate).getTime() - new Date(bDate).getTime() ||
+          a.id.localeCompare(b.id); // ASC, deterministic tie-breaker
       });
     }
 

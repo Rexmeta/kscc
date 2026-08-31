@@ -57,7 +57,10 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
     }
   };
 
-  const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+  };
 
   return (
     <TabsContent value="events" className="space-y-6">

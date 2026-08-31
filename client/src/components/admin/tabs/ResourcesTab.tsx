@@ -35,7 +35,10 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
   const canPublish = isAdmin || hasPermission('resource.publish');
   const canDelete = isAdmin;
 
-  const invalidate = () => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+  };
 
   return (
     <TabsContent value="resources" className="space-y-6">

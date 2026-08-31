@@ -7,14 +7,18 @@ import { mapNewsFormToPost, mapEventFormToPost, mapResourceFormToPost, type News
 import type { MemberFormValues, NewsFormValues, EventFormValues, ResourceFormValues } from '@/components/admin/adminSchemas';
 import { NEWS_META_KEYS, EVENT_META_KEYS, RESOURCE_META_KEYS } from '@shared/postMetaKeys';
 
-const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) =>
+const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
     predicate: (query) => query.queryKey[0] === '/api/posts',
   });
-const invalidateMembers = (queryClient: ReturnType<typeof useQueryClient>) =>
+  queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+};
+const invalidateMembers = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
     predicate: (query) => query.queryKey[0] === '/api/members',
   });
+  queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+};
 
 export function useCreateNewsPost(options: {
   userId: string;

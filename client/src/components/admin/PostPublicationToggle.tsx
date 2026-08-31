@@ -38,6 +38,7 @@ export function PostPublicationToggle({
       queryClient.invalidateQueries({
         predicate: (query) => query.queryKey[0] === '/api/posts',
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
     },
   });
 

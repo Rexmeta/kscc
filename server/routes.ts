@@ -1416,21 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/dashboard", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const adminPostAccess = await storage.getPostAccessContext(req.user!.id, true);
-      const [membersResult, eventsResult, newsResult, inquiriesResult] = await Promise.all([
-        storage.getMembers({ admin: true, limit: 1 }),
-        storage.getPosts({ postType: 'event', limit: 1, access: adminPostAccess }),
-        storage.getPosts({ postType: 'news', limit: 1, access: adminPostAccess }),
-        storage.getInquiries({ limit: 1 }),
-      ]);
-
-      res.json({
-        stats: {
-          totalMembers: membersResult.total,
-          totalEvents: eventsResult.total || 0,
-          totalNews: newsResult.total || 0,
-          totalInquiries: inquiriesResult.total,
-        },
-      });
+      res.json(await storage.getAdminDashboardSnapshot(adminPostAccess));
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

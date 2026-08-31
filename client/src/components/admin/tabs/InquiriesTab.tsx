@@ -63,6 +63,7 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
                         if (response.ok) {
                           toast({ title: "문의가 삭제되었습니다" });
                           queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+                          queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
                         }
                       } catch (error) {
                         toast({ title: "삭제 실패", variant: "destructive" });

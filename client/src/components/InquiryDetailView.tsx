@@ -34,6 +34,7 @@ export function InquiryDetailView({ inquiryId, onClose }: { inquiryId: string; o
     onSuccess: () => {
       toast({ title: '문의 상태가 변경되었습니다.' });
       queryClient.invalidateQueries({ queryKey: ['/api/inquiries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
       refetch();
     },
     onError: () => {

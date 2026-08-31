@@ -46,6 +46,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
 
   const refreshUsers = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
   };
 
   const handleActiveToggle = async (managedUser: User) => {

@@ -11,6 +11,7 @@ import type {
   SurveySettings,
   SurveySettingsHistory,
 } from '@shared/schema';
+import type { AdminDashboardSnapshot } from '@shared/adminDashboard';
 
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -129,21 +130,13 @@ export function useAdminOrganizationMembers(
   });
 }
 
-type DashboardStats = {
-  stats: {
-    totalMembers: number;
-    totalEvents: number;
-    totalNews: number;
-    totalInquiries: number;
-  };
-};
-
 export function useAdminDashboard(activeTab: string) {
   const { isAdmin } = useAuth();
-  return useQuery<DashboardStats>({
+  return useQuery<AdminDashboardSnapshot>({
     queryKey: ['/api/admin/dashboard'],
-    queryFn: () => fetchJson<DashboardStats>('/api/admin/dashboard'),
+    queryFn: () => fetchJson<AdminDashboardSnapshot>('/api/admin/dashboard'),
     enabled: isAdmin && activeTab === 'dashboard',
+    refetchOnMount: 'always',
   });
 }
 

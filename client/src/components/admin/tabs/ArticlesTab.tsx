@@ -38,6 +38,10 @@ export function ArticlesTab({
   const canUpdate = isAdmin || hasPermission('news.update');
   const canPublish = isAdmin || hasPermission('news.publish');
   const canDelete = isAdmin;
+  const invalidate = () => {
+    queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+    queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
+  };
 
   return (
     <TabsContent value="articles" className="space-y-6">
@@ -52,7 +56,7 @@ export function ArticlesTab({
             <CreateNewsDialog
               open={createNewsDialogOpen}
               onOpenChange={setCreateNewsDialogOpen}
-              onSuccess={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' })}
+              onSuccess={invalidate}
             />
           </>
         )}
@@ -120,7 +124,7 @@ export function ArticlesTab({
                     try {
                       await deletePost(article.id);
                       toast({ title: "뉴스가 삭제되었습니다" });
-                      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+                      invalidate();
                     } catch (error) {
                       toast({ title: "삭제 실패", variant: "destructive" });
                     }
@@ -149,7 +153,7 @@ export function ArticlesTab({
               news={selectedArticle}
               onSuccess={() => {
                 setEditDialogOpen(false);
-                queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+                invalidate();
               }}
             />
           </DialogContent>
