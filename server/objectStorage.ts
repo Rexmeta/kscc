@@ -11,6 +11,7 @@ import {
   setObjectAclPolicy,
 } from "./objectAcl";
 import type { Post } from "@shared/schema";
+import { emitOperationalEvent } from "./telemetry";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -171,7 +172,7 @@ export class ObjectStorageService {
     file: File,
     res: Response,
     cacheTtlSec: number = 3600,
-    options: { publicCache?: boolean } = {},
+    options: { publicCache?: boolean; correlationId?: string } = {},
   ) {
     try {
       const [metadata] = await file.getMetadata();
@@ -208,7 +209,12 @@ export class ObjectStorageService {
       const stream = file.createReadStream();
 
       stream.on("error", (err) => {
-        console.error("Stream error:", err);
+        emitOperationalEvent("storage.failure", "error", {
+          correlationId: options.correlationId,
+          operation: "download_stream",
+          errorType: err instanceof Error ? err.name : "UnknownError",
+          result: "failed",
+        });
         if (!res.headersSent) {
           res.status(500).json({ error: "Error streaming file" });
         }
@@ -216,7 +222,12 @@ export class ObjectStorageService {
 
       stream.pipe(res);
     } catch (error) {
-      console.error("Error downloading file:", error);
+      emitOperationalEvent("storage.failure", "error", {
+        correlationId: options.correlationId,
+        operation: "download",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        result: "failed",
+      });
       if (!res.headersSent) {
         res.status(500).json({ error: "Error downloading file" });
       }

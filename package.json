@@ -13,6 +13,9 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "audit:production": "node scripts/check-production-audit.mjs",
+    "db:check": "node scripts/check-schema.mjs",
+    "smoke:api": "node scripts/smoke-api.mjs",
+    "release:verify": "node scripts/verify-release.mjs",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -20,7 +23,7 @@
     "acl:ensure-executive": "tsx server/ensureExecutiveAcl.ts",
     "acl:ensure-survey": "tsx server/ensureSurveyAcl.ts",
     "admin:bootstrap": "tsx server/bootstrapAdmin.ts",
-    "test": "tsx --test server/health.test.ts server/seo.test.ts server/regressions.test.ts server/postStatusRoutes.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts client/src/lib/analytics.test.ts client/src/lib/publicPartners.test.ts client/src/lib/frontendReliability.test.ts"
+    "test": "tsx --test server/health.test.ts server/telemetry.test.ts server/seo.test.ts server/regressions.test.ts server/postStatusRoutes.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts client/src/lib/analytics.test.ts client/src/lib/publicPartners.test.ts client/src/lib/frontendReliability.test.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^8.0.1",

@@ -11,3 +11,4 @@
 - [Management list filters](management-list-filters.md) — all-permitted-category management views must not inherit a default single-category filter.
 - [Scheduled publication coordination](scheduled-publication-coordination.md) — durable post metadata markers preserve ACL retry state without requiring a new schema column.
 - [Frontend query state](frontend-query-state.md) — failed client requests must remain distinguishable from valid empty collections and offer localized retry.
+- [Redacted operational telemetry](telemetry-contract.md) — correlate structured events through an allow-list; never serialize request, auth, message, or provider data.

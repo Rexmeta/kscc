@@ -7,6 +7,12 @@ import { isDatabaseReady } from "./db";
 import { registerHealthRoutes } from "./health";
 import { registerSeoRoutes } from "./seo";
 import { startScheduledPublicationWorker } from "./scheduledPublications";
+import {
+  emitOperationalEvent,
+  getCorrelationId,
+  getTelemetryRoute,
+  requestTelemetry,
+} from "./telemetry";
 
 const app = express();
 
@@ -28,6 +34,10 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,
 }));
+
+// Correlate requests before rate limiting, parsing, and health checks so even
+// rejected or malformed requests have a safe identifier in the logs.
+app.use(requestTelemetry);
 
 // Keep health probes outside the API rate limit and request body parsers.
 registerHealthRoutes(app, isDatabaseReady);
@@ -59,26 +69,11 @@ app.use("/api", apiLimiter);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      log(logLine);
-    }
-  });
-
-  next();
-});
-
 (async () => {
   const server = await registerRoutes(app);
   registerSeoRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     
     // In production, don't expose internal error details
@@ -87,8 +82,15 @@ app.use((req, res, next) => {
       ? "Internal Server Error" 
       : (err.message || "Internal Server Error");
     
-    // Log the full error server-side
-    console.error('[ERROR]', err);
+    // Never serialize the error object: it may contain request data or
+    // provider payloads. The response remains intentionally generic in prod.
+    emitOperationalEvent("http.error", "error", {
+      correlationId: getCorrelationId(req),
+      requestId: getCorrelationId(req),
+      route: getTelemetryRoute(req),
+      status,
+      errorType: err instanceof Error ? err.name : "UnknownError",
+    });
 
     res.status(status).json({ message });
   });

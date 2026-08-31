@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { emitOperationalEvent } from "./telemetry";
 
 export interface EmailOptions {
   to: string;
@@ -25,12 +26,17 @@ export class EmailService {
     this.fromEmail = process.env.EMAIL_FROM || 'noreply@example.com';
   }
 
-  async sendEmail(options: EmailOptions): Promise<boolean> {
-    const correlationId = randomUUID();
+  async sendEmail(
+    options: EmailOptions,
+    context: { correlationId?: string } = {},
+  ): Promise<boolean> {
+    const correlationId = context.correlationId || randomUUID();
 
     if (!this.apiKey) {
-      console.warn('[EMAIL] Email not sent', {
+      emitOperationalEvent("email.delivery", "warn", {
         correlationId,
+        provider: "resend",
+        operation: "send",
         reason: "provider_not_configured",
       });
       return false;
@@ -55,24 +61,33 @@ export class EmailService {
       if (!response.ok) {
         // Do not read or log the provider response: it may contain recipient
         // data, message content, or request credentials.
-        console.error('[EMAIL] Provider rejected email', {
+        emitOperationalEvent("email.delivery", "error", {
           correlationId,
+          provider: "resend",
+          operation: "send",
           status: response.status,
+          result: "rejected",
         });
         return false;
       }
 
       // The response body is intentionally ignored. Only the delivery result
       // and a correlation id belong in application logs.
-      console.log('[EMAIL] Email sent successfully', {
+      emitOperationalEvent("email.delivery", "info", {
         correlationId,
+        provider: "resend",
+        operation: "send",
         status: response.status,
+        result: "sent",
       });
       return true;
     } catch (error) {
-      console.error('[EMAIL] Email delivery failed', {
+      emitOperationalEvent("email.delivery", "error", {
         correlationId,
+        provider: "resend",
+        operation: "send",
         errorType: error instanceof Error ? error.name : "UnknownError",
+        result: "failed",
       });
       return false;
     }

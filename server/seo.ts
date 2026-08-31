@@ -20,6 +20,7 @@ import type { PostMeta, PostWithTranslations } from "@shared/schema";
 import { EVENT_META_KEYS } from "@shared/postMetaKeys";
 import { publicPostAccess } from "./postAccess";
 import { storage } from "./storage";
+import { emitOperationalEvent, getCorrelationId } from "./telemetry";
 
 const SITEMAP_POST_TYPES = ["news", "event"] as const;
 const SITEMAP_PAGE_SIZE = 100;
@@ -352,7 +353,11 @@ export async function getInitialSeo(req: Request): Promise<InitialSeo> {
   } catch (error) {
     // A metadata lookup must never prevent the app shell from loading, and a
     // failed lookup must fail closed so an unknown page is not indexable.
-    console.error("[SEO] Failed to build detail metadata:", error);
+    emitOperationalEvent("seo.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "detail_metadata",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     return { ...fallback, noIndex: true };
   }
 }
@@ -465,7 +470,11 @@ export function registerSeoRoutes(app: Express): void {
         .set("Cache-Control", "public, max-age=900")
         .send(buildSitemapXml(entries));
     } catch (error) {
-      console.error("[SEO] Failed to build sitemap:", error);
+      emitOperationalEvent("seo.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "sitemap",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(503).type("text/plain").send("Sitemap temporarily unavailable");
     }
   });

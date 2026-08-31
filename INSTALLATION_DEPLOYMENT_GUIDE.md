@@ -450,6 +450,35 @@ Deployment처럼 애플리케이션 앞에 프록시가 정확히 한 개 있는
 - 이전 배포 버전으로 롤백 가능
 - Deployments 탭에서 배포 기록 확인
 
+### 운영 관측성 및 로그 계약
+
+애플리케이션 로그는 외부 모니터링 제품에 종속되지 않는 JSON Lines 형식의
+운영 이벤트입니다. 모든 API 요청에는 `X-Request-ID` 응답 헤더와
+`correlationId`/`requestId` 필드가 함께 기록됩니다. 요청이 보낸 ID가
+영숫자·`.`, `_`, `:`, `-`로만 구성되고 128자 이하이면 재사용하고, 그 외에는
+새 ID를 생성합니다.
+
+요청 이벤트(`http.request`)에는 `method`, `route`, `status`, `durationMs`,
+`outcome` 및 correlation ID만 기록됩니다. `outcome`은 `success`,
+`client_error`, `server_error` 중 하나입니다. 메모리 메트릭은 전체 요청/오류/
+누적 시간, outcome별 수, 최대 100개 정규화 route로 제한되어 프로세스 메모리
+이상으로 노출되지 않습니다.
+
+인증(`auth.failure`), 관리자 변경(`admin.change`), 메일(`email.delivery`),
+오브젝트 스토리지(`storage.failure`) 및 도메인 작업 이벤트는 `severity`
+(`info`, `warn`, `error`), 작업 종류, 결과, 오류 타입처럼 조사에 필요한
+최소 필드만 기록합니다. 요청 본문, Authorization 헤더, 비밀번호,
+이메일·전화번호, 문의 내용, 파일 경로/내용, 외부 provider 응답은 로그에
+기록하지 않습니다. 운영 로그의 보존 기간과 접근 권한은 조직의 사고 대응
+정책에 맞추고, 필요 기간이 지나면 삭제합니다. 장기 감사 저장소로 복사할
+때도 같은 필드 제한과 보존 기간을 적용합니다.
+
+`/healthz`는 프로세스 생존만 확인하며 데이터베이스나 오브젝트 스토리지를
+조회하지 않습니다. `/readyz`는 요청 처리에 필요한 데이터베이스 연결만
+최대 2초 동안 확인하고, 외부에는 `{"status":"ready"}` 또는
+`{"status":"not_ready"}`만 반환합니다. 연결 문자열·오류 상세·환경 변수는
+상태 응답에 포함하지 않습니다.
+
 ### 다른 플랫폼에 배포
 
 #### Vercel 배포
@@ -624,18 +653,23 @@ Vercel은 프론트엔드와 서버리스 함수에 최적화되어 있습니다
 ```bash
 set -euo pipefail
 npm ci
-npm run audit:production
-npm run check
-npm test
-npm run build
+npm run release:verify
 ```
 
-배포 후에는 배포 플랫폼이 제공한 실제 URL로 다음을 실행합니다. URL을
-저장소나 환경 변수에 기록하지 마세요.
+`release:verify`는 타입 체크, 테스트, 운영 의존성 감사, Drizzle
+스키마/마이그레이션 일관성 검사, 프로덕션 빌드, 임시 프로덕션 서버를
+대상으로 한 liveness/readiness 및 대표 API smoke 검사를 순서대로 수행합니다.
+어느 단계에서든 실패하면 0이 아닌 코드로 즉시 종료하며 단계명과 수정
+방향을 출력합니다. 마이그레이션 적용은 이 검증과 별도로 승인된 변경 창에서
+`npm run db:migrate`를 실행합니다.
+
+배포 후에는 배포 플랫폼이 제공한 실제 URL로 health와 대표 API를 확인합니다.
+URL을 저장소나 환경 변수에 기록하지 마세요.
 
 ```bash
 curl --fail --silent --show-error https://<deployed-host>/healthz
 curl --fail --silent --show-error https://<deployed-host>/readyz
+SMOKE_BASE_URL=https://<deployed-host> npm run smoke:api
 ```
 
 #### 배포 후 검증
@@ -649,8 +683,8 @@ curl --fail --silent --show-error https://<deployed-host>/readyz
   - [ ] 로그인/회원가입 (`/login`, `/register`)
   - [ ] 관리자 페이지 (`/admin`) (인증 후)
 - [ ] API 엔드포인트 테스트
-  - [ ] `GET /api/events`
-  - [ ] `GET /api/news`
+  - [ ] `GET /api/posts?postType=event&limit=1`
+  - [ ] `GET /api/posts?postType=news&limit=1`
   - [ ] `GET /api/members`
   - [ ] `POST /api/auth/login`
 - [ ] 데이터베이스 연동 확인

@@ -2,6 +2,7 @@ import { Router, type Request, Response } from "express";
 import { EventRegistrationError, storage } from "../storage";
 import { insertPostSchema, insertPostTranslationSchema } from "@shared/schema";
 import { ObjectStorageService, getResourceObjectAclVisibility } from "../objectStorage";
+import { emitOperationalEvent, getCorrelationId } from "../telemetry";
 import type { Post } from "@shared/schema";
 import { z } from "zod";
 import { authenticateToken, optionalAuthenticateToken } from "../routes";
@@ -99,27 +100,41 @@ const eventRegistrationRequestSchema = z.object({
   companyName: z.string().trim().max(200).optional(),
 }).strict();
 
-async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<boolean> {
+async function syncResourceObjectAcl(
+  post: Post,
+  ownerId: string,
+  correlationId?: string,
+): Promise<boolean> {
   if (post.postType !== "resource") return false;
 
-  const fileMeta = await storage.getPostMeta(post.id, "resource.fileUrl");
-  const fileUrl = fileMeta?.valueText ||
-    (typeof fileMeta?.value === "string" ? fileMeta.value : "");
-  if (!fileUrl) return false;
+  try {
+    const fileMeta = await storage.getPostMeta(post.id, "resource.fileUrl");
+    const fileUrl = fileMeta?.valueText ||
+      (typeof fileMeta?.value === "string" ? fileMeta.value : "");
+    if (!fileUrl) return false;
 
-  const objectStorageService = new ObjectStorageService();
-  const now = new Date();
-  const visibility = getResourceObjectAclVisibility(post, now);
-  await objectStorageService.updateObjectEntityAclVisibility(
-    fileUrl,
-    visibility,
-    ownerId,
-  );
-  await storage.markResourceAclSynchronized(
-    post.id,
-    getResourceAclSyncMarker(post, visibility),
-  );
-  return true;
+    const objectStorageService = new ObjectStorageService();
+    const now = new Date();
+    const visibility = getResourceObjectAclVisibility(post, now);
+    await objectStorageService.updateObjectEntityAclVisibility(
+      fileUrl,
+      visibility,
+      ownerId,
+    );
+    await storage.markResourceAclSynchronized(
+      post.id,
+      getResourceAclSyncMarker(post, visibility),
+    );
+    return true;
+  } catch (error) {
+    emitOperationalEvent("storage.failure", "error", {
+      correlationId,
+      operation: "sync_acl",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      result: "failed",
+    });
+    throw error;
+  }
 }
 
 // GET /api/posts - List posts with filters
@@ -165,7 +180,11 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid query parameters", errors: error.errors });
     }
-    console.error("[Posts API] Error fetching posts:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "list",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -180,7 +199,11 @@ router.get("/resource/categories", optionalAuthenticateToken, async (req: Reques
     const categories = await storage.getResourceCategoryCounts(access);
     res.json({ categories });
   } catch (error) {
-    console.error("[Posts API] Error fetching resource categories:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "resource_categories",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -214,7 +237,11 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid locale", errors: error.errors });
     }
-    console.error("[Posts API] Error fetching post by slug:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "read_by_slug",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -248,7 +275,11 @@ router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
-    console.error("[Posts API] Error fetching post:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "read",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -298,7 +329,11 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
             : 409;
       return res.status(status).json({ message: error.message, code: error.code });
     }
-    console.error("[Posts API] Error registering for event:", error);
+    emitOperationalEvent("event.registration", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "register",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -330,7 +365,11 @@ router.get("/:id/registrations", authenticateToken, async (req: Request, res: Re
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
-    console.error("[Posts API] Error fetching registrations:", error);
+    emitOperationalEvent("event.registration", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "list",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -418,7 +457,7 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
       for (const metaData of completeCreate.meta) {
         await storage.setPostMeta(post.id, metaData.key, getPostMetaValue(metaData));
       }
-      await syncResourceObjectAcl(post, req.user!.id);
+      await syncResourceObjectAcl(post, req.user!.id, getCorrelationId(req));
     }
 
     res.status(201).json(post);
@@ -428,7 +467,12 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     }
     if (createdPostId) {
       await storage.deletePost(createdPostId).catch((cleanupError) => {
-        console.error("[Posts API] Failed to clean up partial post creation:", cleanupError);
+        emitOperationalEvent("storage.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "post_cleanup",
+          errorType: cleanupError instanceof Error ? cleanupError.name : "UnknownError",
+          result: "failed",
+        });
       });
     }
     if (error instanceof z.ZodError) {
@@ -437,7 +481,11 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     if (error instanceof PostMetaValidationError) {
       return res.status(400).json({ message: error.message });
     }
-    console.error("[Posts API] Error creating post:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "create",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -470,7 +518,7 @@ router.patch("/:id/status", authenticateToken, async (req: Request, res: Respons
       return res.status(404).json({ message: "Post not found" });
     }
 
-    await syncResourceObjectAcl(updatedPost, req.user!.id);
+    await syncResourceObjectAcl(updatedPost, req.user!.id, getCorrelationId(req));
     res.json(updatedPost);
   } catch (error) {
     if (error instanceof InvalidPostScheduleError) {
@@ -479,7 +527,11 @@ router.patch("/:id/status", authenticateToken, async (req: Request, res: Respons
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post status", errors: error.errors });
     }
-    console.error("[Posts API] Error updating post status:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "status_update",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -527,7 +579,7 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
         return res.status(404).json({ message: "Post not found" });
       }
 
-      await syncResourceObjectAcl(updatedPost, req.user!.id);
+      await syncResourceObjectAcl(updatedPost, req.user!.id, getCorrelationId(req));
       const access = await storage.getPostAccessContext(req.user?.id, true);
       const completePost = await storage.getPostWithTranslations(id, undefined, access);
       return res.json(completePost ?? updatedPost);
@@ -547,7 +599,7 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     
     const updatedPost = await storage.updatePost(id, updateData);
     if (updatedPost) {
-      await syncResourceObjectAcl(updatedPost, req.user!.id);
+      await syncResourceObjectAcl(updatedPost, req.user!.id, getCorrelationId(req));
     }
     
     res.json(updatedPost);
@@ -561,7 +613,11 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     if (error instanceof PostMetaValidationError) {
       return res.status(400).json({ message: error.message });
     }
-    console.error("[Posts API] Error updating post:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "update",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -587,7 +643,11 @@ router.delete("/:id", authenticateToken, async (req: Request, res: Response) => 
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
     }
-    console.error("[Posts API] Error deleting post:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "delete",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -616,7 +676,11 @@ router.post("/:id/translations", authenticateToken, async (req: Request, res: Re
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid translation data", errors: error.errors });
     }
-    console.error("[Posts API] Error upserting translation:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "translation_upsert",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -665,7 +729,11 @@ router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Res
     if (error instanceof PostMetaValidationError) {
       return res.status(400).json({ message: error.message });
     }
-    console.error("[Posts API] Error fetching post meta:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "meta_read",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -687,7 +755,7 @@ router.post("/:id/meta", authenticateToken, async (req: Request, res: Response) 
     await storage.setPostMeta(id, metaData.key, value);
     const updatedPost = await storage.getPost(id);
     if (updatedPost) {
-      await syncResourceObjectAcl(updatedPost, req.user!.id);
+      await syncResourceObjectAcl(updatedPost, req.user!.id, getCorrelationId(req));
     }
     
     res.json({ success: true });
@@ -698,7 +766,11 @@ router.post("/:id/meta", authenticateToken, async (req: Request, res: Response) 
     if (error instanceof PostMetaValidationError) {
       return res.status(400).json({ message: error.message });
     }
-    console.error("[Posts API] Error setting post meta:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "meta_update",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -725,7 +797,11 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
     if (error instanceof PostMetaValidationError) {
       return res.status(400).json({ message: error.message });
     }
-    console.error("[Posts API] Error incrementing post meta:", error);
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "meta_increment",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     res.status(500).json({ message: "Internal server error" });
   }
 });

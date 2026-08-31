@@ -62,6 +62,7 @@ import {
   passwordSchema,
   toSafeUser,
 } from "./auth";
+import { emitOperationalEvent, getCorrelationId } from "./telemetry";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
@@ -188,7 +189,12 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
   try {
     tokenPayload = jwt.verify(token, JWT_SECRET!);
   } catch (error: any) {
-    console.log('[AUTH] Token verification failed:', error.message);
+    emitOperationalEvent("auth.failure", "warn", {
+      correlationId: getCorrelationId(req),
+      operation: "token_verify",
+      reason: "invalid_token",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     return res.sendStatus(403);
   }
 
@@ -212,7 +218,12 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
     next();
   } catch (error) {
-    console.log('[AUTH] DB fetch error:', error);
+    emitOperationalEvent("auth.failure", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "account_lookup",
+      reason: "authorization_unavailable",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
     return res.sendStatus(403);
   }
 }
@@ -361,6 +372,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.validateUser(credentials.email, credentials.password);
       if (!user) {
+        emitOperationalEvent("auth.failure", "warn", {
+          correlationId: getCorrelationId(req),
+          operation: "login",
+          reason: "invalid_credentials",
+        });
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -368,8 +384,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ user: toSafeUser(user), token });
     } catch (error) {
       if (error instanceof z.ZodError) {
+        emitOperationalEvent("auth.failure", "warn", {
+          correlationId: getCorrelationId(req),
+          operation: "login",
+          reason: "invalid_credentials",
+        });
         return res.status(400).json({ message: "Invalid credentials" });
       }
+      emitOperationalEvent("auth.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "login",
+        reason: "login_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -422,7 +449,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(settings.endsAt ? { endsAt: settings.endsAt } : {}),
       });
     } catch (error) {
-      console.error("Error fetching survey settings:", error);
+      emitOperationalEvent("survey.operation", "error", {
+        correlationId: getCorrelationId(_req),
+        operation: "read",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -439,7 +470,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endsAt: null,
       });
     } catch (error) {
-      console.error("Error fetching admin survey settings:", error);
+      emitOperationalEvent("survey.operation", "error", {
+        correlationId: getCorrelationId(_req),
+        operation: "admin_read",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -457,7 +492,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
       }
-      console.error("Error updating survey settings:", error);
+      emitOperationalEvent("survey.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "update",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -483,7 +522,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: error.errors[0].message });
         }
-        console.error("Error fetching survey settings history:", error);
+        emitOperationalEvent("survey.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "history_read",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
         res.status(500).json({ message: "Internal server error" });
       }
     },
@@ -1086,7 +1129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subject: `[한국 사천-충칭 총상회] ${inquiry.subject} - 답변`,
           html: emailContent.html,
           text: emailContent.text,
-        });
+        }, { correlationId: getCorrelationId(req) });
 
         await storage.updateInquiryReplyEmailStatus(reply.id, emailSent);
       }
@@ -1098,7 +1141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid inquiry reply" });
       }
       // Do not serialize request data or provider errors into application logs.
-      console.error('[API] Inquiry reply operation failed', {
+      emitOperationalEvent("inquiry.reply", "error", {
+        correlationId: getCorrelationId(req),
         operation: "create_inquiry_reply",
         errorType: error instanceof Error ? error.name : "UnknownError",
       });
@@ -1157,7 +1201,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid partner data" });
       }
-      console.error("Error creating partner:", error);
+      emitOperationalEvent("partner.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "create",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1177,7 +1225,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid partner data" });
       }
-      console.error("Error updating partner:", error);
+      emitOperationalEvent("partner.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "update",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1196,7 +1248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid partner ID" });
       }
-      console.error("Error deleting partner:", error);
+      emitOperationalEvent("partner.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "delete",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1401,7 +1457,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid upload parameters" });
       }
-      console.error("Error getting upload URL:", error);
+      emitOperationalEvent("storage.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "upload_url",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        result: "failed",
+      });
       res.status(500).json({ error: "Internal server error" });
     }
     },
@@ -1484,7 +1545,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof ObjectOwnershipError) {
         return res.status(403).json({ error: "Object ownership does not permit this operation" });
       }
-      console.error("Error setting image ACL:", error);
+      emitOperationalEvent("storage.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "set_acl",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        result: "failed",
+      });
       res.status(500).json({ error: "Internal server error" });
     }
     },
@@ -1534,12 +1600,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.sendStatus(403);
       }
 
-      await objectStorageService.downloadObject(objectFile, res, 3600, { publicCache });
+      await objectStorageService.downloadObject(objectFile, res, 3600, {
+        publicCache,
+        correlationId: getCorrelationId(req),
+      });
     } catch (error) {
       if (error instanceof InvalidObjectPathError) {
         return res.sendStatus(404);
       }
-      console.error("Error serving object:", error);
+      emitOperationalEvent("storage.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "serve",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        result: "failed",
+      });
       if (error instanceof ObjectNotFoundError) {
         return res.sendStatus(404);
       }
