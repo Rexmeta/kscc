@@ -32,7 +32,7 @@ function groupMembers(
 ): MembersByCategory {
   return members.reduce<MembersByCategory>((groups, member) => {
     if (executivesOnly && !isExecutiveManagementCategory(member.category)) return groups;
-    if (categoryFilter !== 'all' && member.category !== categoryFilter) return groups;
+    if (!executivesOnly && categoryFilter !== 'all' && member.category !== categoryFilter) return groups;
     const categoryMembers = groups[member.category] || [];
     groups[member.category] = [...categoryMembers, member];
     return groups;

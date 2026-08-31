@@ -8,3 +8,4 @@
 - [Vite workflow process isolation](vite-workflow-processes.md) — React hook and outdated optimized-dependency errors can come from orphaned servers sharing the preview port.
 - [SEO language URLs](seo-language-urls.md) — crawlable language variants use `?lang=ko|en|zh` alongside the SPA's local language preference.
 - [Server-rendered SEO routing](seo-ssr-routing.md) — wildcard shell routes must derive route metadata from `req.originalUrl`, not the mounted `req.path`.
+- [Management list filters](management-list-filters.md) — all-permitted-category management views must not inherit a default single-category filter.
