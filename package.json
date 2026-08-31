@@ -16,6 +16,7 @@
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "acl:ensure-executive": "tsx server/ensureExecutiveAcl.ts",
     "admin:bootstrap": "tsx server/bootstrapAdmin.ts",
     "test": "tsx --test server/health.test.ts server/regressions.test.ts server/postStatusRoutes.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts"
   },
