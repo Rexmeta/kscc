@@ -117,10 +117,32 @@ export const surveySettings = pgTable("survey_settings", {
   description: text("description").notNull().default(""),
   externalUrl: text("external_url"),
   isActive: boolean("is_active").notNull().default(false),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const surveySettingsHistory = pgTable("survey_settings_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  surveySettingsId: text("survey_settings_id").notNull().references(() => surveySettings.id, { onDelete: "restrict" }),
+  version: integer("version").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  externalUrl: text("external_url"),
+  isActive: boolean("is_active").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  changedBy: uuid("changed_by").references(() => users.id, { onDelete: "set null" }),
+  changedByName: text("changed_by_name").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  settingsVersionUnique: uniqueIndex("survey_settings_history_settings_version_unique")
+    .on(table.surveySettingsId, table.version),
+  changedAtIdx: index("survey_settings_history_changed_at_idx")
+    .on(table.surveySettingsId, table.changedAt.desc(), table.version.desc(), table.id.desc()),
+}));
 
 // Unified Posts System (WordPress-like)
 export const posts = pgTable("posts", {
@@ -538,6 +560,7 @@ export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
 
 export type SurveySettings = typeof surveySettings.$inferSelect;
+export type SurveySettingsHistory = typeof surveySettingsHistory.$inferSelect;
 export type { SurveySettingsInput } from "./survey";
 
 export type Tier = typeof tiers.$inferSelect;

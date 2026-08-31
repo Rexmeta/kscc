@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys } from '@/lib/queryClient';
 import { trackEvent } from '@/lib/analytics';
+import { fetchPublicPartners } from '@/lib/publicPartners';
 import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
@@ -27,6 +28,19 @@ export default function Home() {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
+    });
+  };
+
+  const formatDateTime = (date?: string | Date | null) => {
+    if (!date) return '';
+    const value = typeof date === 'string' ? new Date(date) : date;
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -54,11 +68,7 @@ export default function Home() {
   // Public partners are served active-only by the API.
   const { data: partnersData } = useQuery<Partner[]>({
     queryKey: queryKeys.partners.list(),
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/api/partners', { signal });
-      if (!response.ok) throw new Error('Failed to fetch partners');
-      return response.json();
-    },
+    queryFn: ({ signal }) => fetchPublicPartners(signal),
   });
 
   const { data: membersData } = useQuery({
@@ -70,7 +80,7 @@ export default function Home() {
     },
   });
 
-  const { data: survey } = useQuery<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive'> | null>({
+  const { data: survey } = useQuery<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'> | null>({
     queryKey: ['/api/survey'],
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/survey', {
@@ -84,6 +94,8 @@ export default function Home() {
       return response.json();
     },
     enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 30_000 : false,
+    refetchIntervalInBackground: true,
   });
 
   const events = eventsData?.posts || [];
@@ -159,6 +171,11 @@ export default function Home() {
                     <div>
                       <h2 className="text-xl font-semibold">{survey.title}</h2>
                       <p className="mt-2 text-sm leading-6 text-white/80">{survey.description}</p>
+                      {(survey.startsAt || survey.endsAt) && (
+                        <p className="mt-2 text-xs text-white/70">
+                          설문 기간: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <Button asChild size="lg" className="btn-accent shrink-0">

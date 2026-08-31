@@ -1,7 +1,7 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postMeta, organizationMembers,
-  tiers, roles, userMemberships, surveySettings,
+  tiers, roles, userMemberships, surveySettings, surveySettingsHistory,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
@@ -11,7 +11,7 @@ import {
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
   type PostMeta, type InsertPostMeta, type PostWithTranslations,
   type OrganizationMember, type InsertOrganizationMember,
-  type SurveySettings, type SurveySettingsInput,
+   type SurveySettings, type SurveySettingsInput, type SurveySettingsHistory,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
@@ -58,6 +58,7 @@ export type EventRegistrationErrorCode =
 
 export type AccountRole = "admin" | "operator" | "user";
 
+export type SurveySettingsHistoryEntry = SurveySettingsHistory;
 export class DuplicateInquiryError extends Error {
   constructor() {
     super("A matching inquiry was submitted recently");
@@ -270,6 +271,11 @@ export interface IStorage {
   getSurveySettings(): Promise<SurveySettings | undefined>;
 
   upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
+  getSurveySettingsHistory(filters?: {
+    limit?: number;
+    offset?: number;
+    snapshotVersion?: number;
+  }): Promise<{ history: SurveySettingsHistoryEntry[]; total: number; snapshotVersion: number }>;
 
   // Unified Posts System
   /**
@@ -1467,29 +1473,171 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings> {
-    const [storedSettings] = await db
-      .insert(surveySettings)
-      .values({
-        id: "default",
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('survey-settings:default'))`);
+      const [current] = await tx
+        .select()
+        .from(surveySettings)
+        .where(eq(surveySettings.id, "default"))
+        .limit(1);
+      const nextValues = {
         title: settings.title,
         description: settings.description,
         externalUrl: settings.externalUrl || null,
         isActive: settings.isActive,
-        updatedBy,
-      })
-      .onConflictDoUpdate({
-        target: surveySettings.id,
-        set: {
-          title: settings.title,
-          description: settings.description,
-          externalUrl: settings.externalUrl || null,
-          isActive: settings.isActive,
+        startsAt: settings.startsAt,
+        endsAt: settings.endsAt,
+      };
+      const [actor] = await tx
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, updatedBy))
+        .limit(1);
+      if (!actor) {
+        throw new Error("Survey settings editor not found");
+      }
+
+      if (!current) {
+        const [created] = await tx
+          .insert(surveySettings)
+          .values({
+            id: "default",
+            ...nextValues,
+            updatedBy,
+          })
+          .returning();
+        await tx.insert(surveySettingsHistory).values({
+          surveySettingsId: created.id,
+          version: 1,
+          ...nextValues,
+          changedBy: updatedBy,
+          changedByName: actor.name,
+          changedAt: created.updatedAt,
+        });
+        return created;
+      }
+
+      const [existingHistory] = await tx
+        .select({ id: surveySettingsHistory.id })
+        .from(surveySettingsHistory)
+        .where(eq(surveySettingsHistory.surveySettingsId, current.id))
+        .limit(1);
+      if (!existingHistory) {
+        const [baselineActor] = current.updatedBy
+          ? await tx
+            .select({ name: users.name })
+            .from(users)
+            .where(eq(users.id, current.updatedBy))
+            .limit(1)
+          : [];
+        await tx.insert(surveySettingsHistory).values({
+          surveySettingsId: current.id,
+          version: 1,
+          title: current.title,
+          description: current.description,
+          externalUrl: current.externalUrl,
+          isActive: current.isActive,
+          startsAt: current.startsAt,
+          endsAt: current.endsAt,
+          changedBy: current.updatedBy,
+          changedByName: baselineActor?.name || "알 수 없음",
+          changedAt: current.updatedAt,
+        });
+      }
+
+      const datesEqual = (left: Date | null, right: Date | null) =>
+        (left?.getTime() ?? null) === (right?.getTime() ?? null);
+      const hasChanged =
+        current.title !== nextValues.title ||
+        current.description !== nextValues.description ||
+        current.externalUrl !== nextValues.externalUrl ||
+        current.isActive !== nextValues.isActive ||
+        !datesEqual(current.startsAt, nextValues.startsAt) ||
+        !datesEqual(current.endsAt, nextValues.endsAt);
+      if (!hasChanged) return current;
+
+      const changedAt = new Date();
+      const [versionResult] = await tx
+        .select({ maxVersion: sql<number>`coalesce(max(${surveySettingsHistory.version}), 0)` })
+        .from(surveySettingsHistory)
+        .where(eq(surveySettingsHistory.surveySettingsId, current.id));
+      const [updated] = await tx
+        .update(surveySettings)
+        .set({
+          ...nextValues,
           updatedBy,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return storedSettings;
+          updatedAt: changedAt,
+        })
+        .where(eq(surveySettings.id, current.id))
+        .returning();
+      await tx.insert(surveySettingsHistory).values({
+        surveySettingsId: updated.id,
+        version: Number(versionResult?.maxVersion ?? 0) + 1,
+        ...nextValues,
+        changedBy: updatedBy,
+        changedByName: actor.name,
+        changedAt,
+      });
+      return updated;
+    });
+  }
+
+  async getSurveySettingsHistory(filters: {
+    limit?: number;
+    offset?: number;
+    snapshotVersion?: number;
+  } = {}): Promise<{ history: SurveySettingsHistoryEntry[]; total: number; snapshotVersion: number }> {
+    const limit = boundedPageSize(filters.limit, 50);
+    const offset = boundedOffset(filters.offset);
+    const [latest] = await db
+      .select({ version: surveySettingsHistory.version })
+      .from(surveySettingsHistory)
+      .where(eq(surveySettingsHistory.surveySettingsId, "default"))
+      .orderBy(desc(surveySettingsHistory.version))
+      .limit(1);
+    const snapshotVersion = Math.min(
+      filters.snapshotVersion ?? latest?.version ?? 0,
+      latest?.version ?? 0,
+    );
+    const snapshotCondition = and(
+      eq(surveySettingsHistory.surveySettingsId, "default"),
+      lte(surveySettingsHistory.version, snapshotVersion),
+    );
+    const [totalResult, history] = await Promise.all([
+      db
+        .select({ count: count() })
+        .from(surveySettingsHistory)
+        .where(snapshotCondition),
+      db
+        .select({
+          id: surveySettingsHistory.id,
+          surveySettingsId: surveySettingsHistory.surveySettingsId,
+          version: surveySettingsHistory.version,
+          title: surveySettingsHistory.title,
+          description: surveySettingsHistory.description,
+          externalUrl: surveySettingsHistory.externalUrl,
+          isActive: surveySettingsHistory.isActive,
+          startsAt: surveySettingsHistory.startsAt,
+          endsAt: surveySettingsHistory.endsAt,
+          changedBy: surveySettingsHistory.changedBy,
+          changedByName: surveySettingsHistory.changedByName,
+          changedAt: surveySettingsHistory.changedAt,
+        })
+        .from(surveySettingsHistory)
+        .where(snapshotCondition)
+        .orderBy(
+          desc(surveySettingsHistory.changedAt),
+          desc(surveySettingsHistory.version),
+          desc(surveySettingsHistory.id),
+        )
+        .limit(limit)
+        .offset(offset),
+    ]);
+    return {
+      history,
+      total: Number(totalResult[0]?.count ?? 0),
+      snapshotVersion,
+    };
   }
 
   // Unified Posts System

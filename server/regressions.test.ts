@@ -21,6 +21,7 @@ import {
   rolePermissions,
   roles,
   surveySettings,
+  surveySettingsHistory,
   surveySettingsSchema,
   tiers,
   userMemberships,
@@ -47,6 +48,7 @@ import {
 import { EmailService } from "./email";
 import { issueAuthToken } from "./auth";
 import { sortOrganizationMembers } from "@shared/organization";
+import { getSurveyStatus, isSurveyVisible } from "@shared/survey";
 import {
   canAccessObject,
   ObjectPermission,
@@ -443,6 +445,36 @@ test("survey settings validate external links and enforce member visibility", as
     externalUrl: "",
     isActive: true,
   }));
+  assert.throws(() => surveySettingsSchema.parse({
+    title: "Scheduled survey",
+    description: "Description",
+    externalUrl: "https://forms.example.test/survey",
+    isActive: true,
+    startsAt: "2026-09-01T00:00:00.000Z",
+    endsAt: null,
+  }));
+  assert.throws(() => surveySettingsSchema.parse({
+    title: "Scheduled survey",
+    description: "Description",
+    externalUrl: "https://forms.example.test/survey",
+    isActive: true,
+    startsAt: "2026-09-02T00:00:00.000Z",
+    endsAt: "2026-09-01T00:00:00.000Z",
+  }));
+
+  const boundaryStart = new Date("2026-09-01T00:00:00.000Z");
+  const boundaryEnd = new Date("2026-09-02T00:00:00.000Z");
+  const scheduledSettings = {
+    isActive: true,
+    startsAt: boundaryStart,
+    endsAt: boundaryEnd,
+  };
+  assert.equal(getSurveyStatus({ ...scheduledSettings, isActive: false }, boundaryStart), "inactive");
+  assert.equal(getSurveyStatus(scheduledSettings, new Date(boundaryStart.getTime() - 1)), "upcoming");
+  assert.equal(isSurveyVisible(scheduledSettings, boundaryStart), true);
+  assert.equal(isSurveyVisible(scheduledSettings, new Date(boundaryEnd.getTime() - 1)), true);
+  assert.equal(getSurveyStatus(scheduledSettings, boundaryEnd), "ended");
+  assert.equal(isSurveyVisible({ isActive: true, startsAt: null, endsAt: null }, boundaryEnd), true);
 
   if (!databaseAvailable) {
     t.skip("DATABASE_URL is not configured");
@@ -456,6 +488,14 @@ test("survey settings validate external links and enforce member visibility", as
   }
   const suffix = randomUUID();
   const originalSettings = await storage.getSurveySettings();
+  const originalHistory = await db
+    .select()
+    .from(surveySettingsHistory)
+    .where(eq(surveySettingsHistory.surveySettingsId, "default"));
+  await db
+    .delete(surveySettingsHistory)
+    .where(eq(surveySettingsHistory.surveySettingsId, "default"));
+  await db.delete(surveySettings).where(eq(surveySettings.id, "default"));
   const admin = await storage.createUser({
     email: `survey-admin-${suffix}@example.test`,
     password: "test-password",
@@ -512,9 +552,9 @@ test("survey settings validate external links and enforce member visibility", as
       }
       return { status: response.status, body };
     };
-    const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
-    const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
-    const memberToken = jwt.sign({ id: member.id }, process.env.SESSION_SECRET!);
+    const adminToken = issueAuthToken(admin, process.env.SESSION_SECRET!);
+    const operatorToken = issueAuthToken(operator, process.env.SESSION_SECRET!);
+    const memberToken = issueAuthToken(member, process.env.SESSION_SECRET!);
     const activeSettings = {
       title: "회원 의견 조사",
       description: "협회 서비스 개선을 위한 설문입니다.",
@@ -543,17 +583,146 @@ test("survey settings validate external links and enforce member visibility", as
     const memberSurvey = await request("/api/survey", { token: memberToken });
     assert.equal(memberSurvey.status, 200);
     assert.deepEqual(memberSurvey.body, activeSettings);
+    assert.equal("updatedBy" in (memberSurvey.body as Record<string, unknown>), false);
 
     const adminSurvey = await request("/api/admin/survey", { token: adminToken });
     assert.equal(adminSurvey.status, 200);
     assert.equal(adminSurvey.body.updatedBy, operator.id);
+
+    const futureStart = new Date(Date.now() + 60_000);
+    const futureEnd = new Date(Date.now() + 120_000);
+    const futureUpdate = await request("/api/admin/survey", {
+      token: operatorToken,
+      method: "PUT",
+      body: {
+        ...activeSettings,
+        startsAt: futureStart.toISOString(),
+        endsAt: futureEnd.toISOString(),
+      },
+    });
+    assert.equal(futureUpdate.status, 200);
+    assert.equal((await request("/api/survey", { token: memberToken })).body, null);
+
+    const activeStart = new Date(Date.now() - 60_000);
+    const activeEnd = new Date(Date.now() + 60_000);
+    const scheduledUpdate = await request("/api/admin/survey", {
+      token: adminToken,
+      method: "PUT",
+      body: {
+        ...activeSettings,
+        startsAt: activeStart.toISOString(),
+        endsAt: activeEnd.toISOString(),
+      },
+    });
+    assert.equal(scheduledUpdate.status, 200);
+    const scheduledSurvey = await request("/api/survey", { token: memberToken });
+    assert.equal(scheduledSurvey.status, 200);
+    assert.equal(scheduledSurvey.body.startsAt, activeStart.toISOString());
+    assert.equal(scheduledSurvey.body.endsAt, activeEnd.toISOString());
+    assert.equal("updatedBy" in (scheduledSurvey.body as Record<string, unknown>), false);
+
+    const endedUpdate = await request("/api/admin/survey", {
+      token: adminToken,
+      method: "PUT",
+      body: {
+        ...activeSettings,
+        startsAt: new Date(Date.now() - 120_000).toISOString(),
+        endsAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    });
+    assert.equal(endedUpdate.status, 200);
+    assert.equal((await request("/api/survey", { token: memberToken })).body, null);
+
+    const periodlessUpdate = await request("/api/admin/survey", {
+      token: operatorToken,
+      method: "PUT",
+      body: { ...activeSettings, startsAt: null, endsAt: null },
+    });
+    assert.equal(periodlessUpdate.status, 200);
+    assert.deepEqual(
+      (await request("/api/survey", { token: memberToken })).body,
+      activeSettings,
+    );
+
+    const historyBeforeNoop = await request("/api/admin/survey/history?limit=2&page=1", {
+      token: operatorToken,
+    });
+    assert.equal(historyBeforeNoop.status, 200);
+    assert.equal(historyBeforeNoop.body.history.length, 2);
+    assert.ok(historyBeforeNoop.body.total >= 5);
+    assert.ok(historyBeforeNoop.body.history[0].version > historyBeforeNoop.body.history[1].version);
+    assert.equal(historyBeforeNoop.body.history[0].changedBy, operator.id);
+    assert.equal(historyBeforeNoop.body.history[0].changedByName, operator.name);
+    assert.equal(
+      (await request("/api/admin/survey/history", { token: memberToken })).status,
+      403,
+    );
+    assert.equal(
+      (await request("/api/admin/survey/history?limit=51", { token: adminToken })).status,
+      400,
+    );
+
+    const noopUpdate = await request("/api/admin/survey", {
+      token: adminToken,
+      method: "PUT",
+      body: { ...activeSettings, startsAt: null, endsAt: null },
+    });
+    assert.equal(noopUpdate.status, 200);
+    const historyAfterNoop = await request("/api/admin/survey/history?limit=50&page=1", {
+      token: adminToken,
+    });
+    assert.equal(historyAfterNoop.body.total, historyBeforeNoop.body.total);
+    assert.equal(
+      historyAfterNoop.body.history.at(-1).title,
+      activeSettings.title,
+    );
+
+    const snapshotVersion = historyBeforeNoop.body.snapshotVersion;
+    const newVersion = await request("/api/admin/survey", {
+      token: adminToken,
+      method: "PUT",
+      body: {
+        ...activeSettings,
+        title: "새 버전 설문",
+        startsAt: null,
+        endsAt: null,
+      },
+    });
+    assert.equal(newVersion.status, 200);
+    const stableSecondPage = await request(
+      `/api/admin/survey/history?limit=2&page=2&snapshotVersion=${snapshotVersion}`,
+      { token: adminToken },
+    );
+    assert.equal(stableSecondPage.status, 200);
+    assert.equal(stableSecondPage.body.total, historyBeforeNoop.body.total);
+    assert.equal(
+      stableSecondPage.body.history.some((entry: { version: number }) => entry.version > snapshotVersion),
+      false,
+    );
+
+    await db.delete(users).where(eq(users.id, operator.id));
+    const preservedActorHistory = await request("/api/admin/survey/history?limit=50&page=1", {
+      token: adminToken,
+    });
+    const operatorEntry = preservedActorHistory.body.history.find(
+      (entry: { changedByName: string }) => entry.changedByName === operator.name,
+    );
+    assert.ok(operatorEntry);
+    assert.equal(operatorEntry.changedBy, null);
+    assert.equal(operatorEntry.changedByName, operator.name);
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => error ? reject(error) : resolve()),
     );
+    await db
+      .delete(surveySettingsHistory)
+      .where(eq(surveySettingsHistory.surveySettingsId, "default"));
     await db.delete(surveySettings).where(eq(surveySettings.id, "default"));
     if (originalSettings) {
       await db.insert(surveySettings).values(originalSettings);
+      if (originalHistory.length > 0) {
+        await db.insert(surveySettingsHistory).values(originalHistory);
+      }
     }
     await db.delete(users).where(inArray(users.id, [admin.id, operator.id, member.id]));
     if (originalSessionSecret === undefined) {
@@ -757,10 +926,17 @@ test(
       }
       return undefined;
     };
-    storage.getPartners = async (active) =>
-      deleted ? [] : active === true
-        ? (partner.isActive ? [partner, unsafeLegacyPartner] : [unsafeLegacyPartner])
-        : [partner];
+    storage.getPartners = async (filters) => {
+      const visiblePartners = deleted
+        ? []
+        : filters?.active === true
+          ? (partner.isActive ? [partner, unsafeLegacyPartner] : [unsafeLegacyPartner])
+          : [partner];
+      return {
+        partners: visiblePartners,
+        total: visiblePartners.length,
+      };
+    };
     storage.getPartner = async (id) => !deleted && id === partner.id ? partner : undefined;
     storage.createPartner = async () => createdPartner;
     storage.updatePartner = async (_id, updates) => {
@@ -821,9 +997,9 @@ test(
       assert.equal((await request("/api/partners")).status, 200);
       const publicPartners = await request("/api/partners");
       assert.equal(publicPartners.status, 200);
-      assert.equal((publicPartners.body as any[]).length, 1);
-      assert.equal((publicPartners.body as any[])[0].id, partner.id);
-      assert.equal((await request("/api/partners", { token: memberToken })).body.length, 1);
+      assert.equal((publicPartners.body as any).partners.length, 1);
+      assert.equal((publicPartners.body as any).partners[0].id, partner.id);
+      assert.equal((await request("/api/partners", { token: memberToken })).body.partners.length, 1);
       assert.equal((await request("/api/partners/not-an-uuid", {
         token: adminToken,
         method: "PUT",
@@ -862,8 +1038,11 @@ test(
         method: "PUT",
         body: { website: "data:text/html,unsafe" },
       })).status, 400);
-      assert.deepEqual((await request("/api/partners")).body, []);
-      assert.equal((await request("/api/partners", { token: adminToken })).body[0].isActive, false);
+      assert.deepEqual((await request("/api/partners")).body.partners, []);
+      assert.equal(
+        (await request("/api/partners?admin=true", { token: adminToken })).body.partners[0].isActive,
+        false,
+      );
 
       assert.equal((await request(`/api/partners/${partnerId}`, {
         token: adminToken,

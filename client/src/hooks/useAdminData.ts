@@ -9,6 +9,7 @@ import type {
   Partner,
   InquiryWithReplies,
   SurveySettings,
+  SurveySettingsHistory,
 } from '@shared/schema';
 
 const authHeaders = () => ({
@@ -100,6 +101,13 @@ export function useAdminSurvey(activeTab: string) {
   });
 }
 
+export type SurveyHistoryResponse = {
+  history: SurveySettingsHistory[];
+  total: number;
+  page: number;
+  totalPages: number;
+  snapshotVersion: number;
+};
 export function useAdminOrganizationMembers(
   categoryFilter: string,
   activeTab: string,
@@ -144,5 +152,24 @@ export function useAdminDashboard(activeTab: string) {
     queryKey: ['/api/admin/dashboard'],
     queryFn: () => fetchJson<DashboardStats>('/api/admin/dashboard'),
     enabled: isAdmin && activeTab === 'dashboard',
+  });
+}
+
+export function useAdminSurveyHistory(
+  activeTab: string,
+  page: number,
+  limit = 10,
+  snapshotVersion?: number,
+) {
+  const { isAdmin, hasPermission } = useAuth();
+  const canManage = isAdmin || hasPermission('survey.manage');
+  return useQuery<SurveyHistoryResponse>({
+    queryKey: ['/api/admin/survey/history', { page, limit, snapshotVersion }],
+    queryFn: () => fetchJson<SurveyHistoryResponse>(
+      `/api/admin/survey/history?page=${page}&limit=${limit}${
+        snapshotVersion ? `&snapshotVersion=${snapshotVersion}` : ''
+      }`,
+    ),
+    enabled: canManage && activeTab === 'survey',
   });
 }

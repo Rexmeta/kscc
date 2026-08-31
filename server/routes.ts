@@ -53,6 +53,7 @@ import postsRouter from "./routes/posts";
 import { emailService } from "./email";
 import { isExecutiveManagementCategory } from "@shared/organization";
 import { getPostPermissionKey } from "./postPermissions";
+import { isSurveyVisible } from "@shared/survey";
 import {
   getTokenSessionVersion,
   isUniqueViolation,
@@ -105,9 +106,11 @@ const inquiryReplyRequestSchema = z.object({
   sendEmail: z.boolean().default(false),
 }).strict();
 
-// Public submissions and outbound replies have separate budgets. The global
-// API limiter still protects all other endpoints, while these limits prevent
-// one expensive operation from consuming the whole budget.
+const surveyHistoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  snapshotVersion: z.coerce.number().int().min(1).optional(),
+}).strict();
 const inquiryCreateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -407,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/survey", authenticateToken, async (_req, res) => {
     try {
       const settings = await storage.getSurveySettings();
-      if (!settings?.isActive || !settings.externalUrl) {
+      if (!settings || !settings.externalUrl || !isSurveyVisible(settings, new Date())) {
         return res.json(null);
       }
       res.json({
@@ -415,6 +418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: settings.description,
         externalUrl: settings.externalUrl,
         isActive: true,
+        ...(settings.startsAt ? { startsAt: settings.startsAt } : {}),
+        ...(settings.endsAt ? { endsAt: settings.endsAt } : {}),
       });
     } catch (error) {
       console.error("Error fetching survey settings:", error);
@@ -430,6 +435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: "",
         externalUrl: "",
         isActive: false,
+        startsAt: null,
+        endsAt: null,
       });
     } catch (error) {
       console.error("Error fetching admin survey settings:", error);
@@ -441,7 +448,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const settings = surveySettingsSchema.parse(req.body);
       const savedSettings = await storage.upsertSurveySettings(settings, req.user!.id);
-      res.json(savedSettings);
+      const history = await storage.getSurveySettingsHistory({ limit: 1 });
+      res.json({
+        ...savedSettings,
+        historySnapshotVersion: history.snapshotVersion,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
@@ -450,6 +461,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
+  app.get(
+    "/api/admin/survey/history",
+    authenticateToken,
+    requireAdminOrPermission("survey.manage"),
+    async (req, res) => {
+      try {
+        const { page, limit, snapshotVersion } = surveyHistoryQuerySchema.parse(req.query);
+        const result = await storage.getSurveySettingsHistory({
+          limit,
+          offset: (page - 1) * limit,
+          snapshotVersion,
+        });
+        res.json({
+          ...result,
+          page,
+          totalPages: Math.ceil(result.total / limit),
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        console.error("Error fetching survey settings history:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    },
+  );
 
   // Profile update schema
   const profileUpdateSchema = z.object({
