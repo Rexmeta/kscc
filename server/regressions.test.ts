@@ -8,6 +8,7 @@ import {
   eventRegistrations,
   insertInquiryReplySchema,
   insertInquirySchema,
+  insertPartnerSchema,
   inquiries,
   members,
   permissions,
@@ -21,6 +22,7 @@ import {
   tiers,
   userMemberships,
   users,
+  updatePartnerSchema,
 } from "@shared/schema";
 import { getPostPermissionKey } from "./postPermissions";
 import { canReadPost, publicPostAccess, type PostAccessContext } from "./postAccess";
@@ -448,6 +450,264 @@ test("inquiry contracts trim text and reject unsafe or oversized values", () => 
     message: "x".repeat(10_001),
   }));
 });
+
+test("partner contracts trim text, bound values, and allow only HTTP(S) URLs", () => {
+  const parsed = insertPartnerSchema.parse({
+    name: "  Partner Name  ",
+    nameEn: "  Partner Name EN  ",
+    nameZh: "   ",
+    logo: "  https://cdn.example.test/logo.svg  ",
+    website: "https://partner.example.test",
+    description: "  A partner description  ",
+    category: "partner",
+    order: 4,
+    isActive: true,
+  });
+
+  assert.equal(parsed.name, "Partner Name");
+  assert.equal(parsed.nameEn, "Partner Name EN");
+  assert.equal(parsed.nameZh, null);
+  assert.equal(parsed.logo, "https://cdn.example.test/logo.svg");
+  assert.equal(parsed.description, "A partner description");
+
+  for (const unsafeUrl of ["javascript:alert(1)", "data:text/html,unsafe", "ftp://partner.example.test/logo"]) {
+    assert.throws(() => insertPartnerSchema.parse({
+      name: "Partner",
+      logo: unsafeUrl,
+      category: "partner",
+    }));
+  }
+  assert.throws(() => insertPartnerSchema.parse({
+    name: " ",
+    logo: "https://cdn.example.test/logo.svg",
+    category: "partner",
+  }));
+  assert.throws(() => insertPartnerSchema.parse({
+    name: "Partner",
+    logo: "https://cdn.example.test/logo.svg",
+    category: "partner",
+    description: "x".repeat(2_001),
+  }));
+  assert.throws(() => insertPartnerSchema.parse({
+    name: "Partner",
+    logo: "https://cdn.example.test/logo.svg",
+    category: "partner",
+    order: 10_001,
+  }));
+  assert.throws(() => updatePartnerSchema.parse({}));
+  assert.throws(() => updatePartnerSchema.parse({ website: "javascript:alert(1)" }));
+});
+
+test(
+  "partner routes enforce admin CRUD and keep inactive partners private",
+  { skip: !databaseAvailable },
+  async () => {
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `partner-route-test-${randomUUID()}`;
+    }
+    const [{ registerRoutes }, { storage }] = await Promise.all([
+      import("./routes"),
+      import("./storage"),
+    ]);
+    const adminId = randomUUID();
+    const memberId = randomUUID();
+    const partnerId = randomUUID();
+    const createdId = randomUUID();
+    const now = new Date();
+    let partner = {
+      id: partnerId,
+      name: "Existing Partner",
+      nameEn: null,
+      nameZh: null,
+      logo: "https://cdn.example.test/existing.svg",
+      website: "https://existing.example.test",
+      description: "Existing description",
+      descriptionEn: null,
+      descriptionZh: null,
+      category: "partner",
+      isActive: true,
+      order: 1,
+      createdAt: now,
+    };
+    const createdPartner = {
+      ...partner,
+      id: createdId,
+      name: "Created Partner",
+      logo: "https://cdn.example.test/created.svg",
+    };
+    const unsafeLegacyPartner = {
+      ...partner,
+      id: randomUUID(),
+      name: "Unsafe Legacy Partner",
+      logo: "javascript:alert(1)",
+      website: "data:text/html,unsafe",
+    };
+    let deleted = false;
+    const originalMethods = {
+      getUser: storage.getUser,
+      getPartners: storage.getPartners,
+      getPartner: storage.getPartner,
+      createPartner: storage.createPartner,
+      updatePartner: storage.updatePartner,
+      deletePartner: storage.deletePartner,
+    };
+    storage.getUser = async (id) => {
+      if (id === adminId) {
+        return {
+          id: adminId,
+          email: "partner-admin@example.test",
+          password: "not-returned",
+          name: "Partner Admin",
+          role: "admin",
+          userType: "staff",
+          membershipTier: "free",
+          isActive: true,
+        } as any;
+      }
+      if (id === memberId) {
+        return {
+          id: memberId,
+          email: "partner-member@example.test",
+          password: "not-returned",
+          name: "Partner Member",
+          role: "user",
+          userType: "staff",
+          membershipTier: "free",
+          isActive: true,
+        } as any;
+      }
+      return undefined;
+    };
+    storage.getPartners = async (active) =>
+      deleted ? [] : active === true
+        ? (partner.isActive ? [partner, unsafeLegacyPartner] : [unsafeLegacyPartner])
+        : [partner];
+    storage.getPartner = async (id) => !deleted && id === partner.id ? partner : undefined;
+    storage.createPartner = async () => createdPartner;
+    storage.updatePartner = async (_id, updates) => {
+      partner = { ...partner, ...updates };
+      return partner;
+    };
+    storage.deletePartner = async (id) => {
+      if (id === partner.id) {
+        deleted = true;
+      }
+    };
+
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    const adminToken = jwt.sign({ id: adminId }, process.env.SESSION_SECRET!);
+    const memberToken = jwt.sign({ id: memberId }, process.env.SESSION_SECRET!);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        const text = await response.text();
+        let body: unknown = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // Keep plain text responses available for assertions when needed.
+        }
+        return { status: response.status, body };
+      };
+      const validPayload = {
+        name: "Created Partner",
+        logo: "https://cdn.example.test/created.svg",
+        website: "https://created.example.test",
+        category: "partner",
+        description: "Created description",
+        isActive: true,
+        order: 2,
+      };
+
+      assert.equal((await request("/api/partners")).status, 200);
+      const publicPartners = await request("/api/partners");
+      assert.equal(publicPartners.status, 200);
+      assert.equal((publicPartners.body as any[]).length, 1);
+      assert.equal((publicPartners.body as any[])[0].id, partner.id);
+      assert.equal((await request("/api/partners", { token: memberToken })).body.length, 1);
+      assert.equal((await request("/api/partners/not-an-uuid", {
+        token: adminToken,
+        method: "PUT",
+        body: { name: "Invalid ID" },
+      })).status, 400);
+      assert.equal((await request("/api/partners/not-an-uuid", {
+        token: adminToken,
+        method: "DELETE",
+      })).status, 400);
+      assert.equal((await request("/api/partners", {
+        token: memberToken,
+        method: "POST",
+        body: validPayload,
+      })).status, 403);
+      assert.equal((await request("/api/partners", {
+        token: adminToken,
+        method: "POST",
+        body: { ...validPayload, logo: "javascript:alert(1)" },
+      })).status, 400);
+      assert.equal((await request("/api/partners", {
+        token: adminToken,
+        method: "POST",
+        body: validPayload,
+      })).status, 201);
+
+      const update = await request(`/api/partners/${partnerId}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { name: "Updated Partner", isActive: false },
+      });
+      assert.equal(update.status, 200);
+      assert.equal((update.body as any).name, "Updated Partner");
+      assert.equal((update.body as any).isActive, false);
+      assert.equal((await request(`/api/partners/${partnerId}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { website: "data:text/html,unsafe" },
+      })).status, 400);
+      assert.deepEqual((await request("/api/partners")).body, []);
+      assert.equal((await request("/api/partners", { token: adminToken })).body[0].isActive, false);
+
+      assert.equal((await request(`/api/partners/${partnerId}`, {
+        token: adminToken,
+        method: "DELETE",
+      })).status, 200);
+      assert.equal((await request(`/api/partners/${partnerId}`, {
+        token: adminToken,
+        method: "DELETE",
+      })).status, 404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      storage.getUser = originalMethods.getUser;
+      storage.getPartners = originalMethods.getPartners;
+      storage.getPartner = originalMethods.getPartner;
+      storage.createPartner = originalMethods.createPartner;
+      storage.updatePartner = originalMethods.updatePartner;
+      storage.deletePartner = originalMethods.deletePartner;
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
 
 test("email failures log only delivery metadata", async () => {
   const originalApiKey = process.env.RESEND_API_KEY;

@@ -9,6 +9,8 @@ import {
   insertInquirySchema,
   insertInquiryReplySchema,
   insertPartnerSchema,
+  partnerUrlSchema,
+  updatePartnerSchema,
   insertOrganizationMemberSchema,
   inquiryCategorySchema,
   inquiryStatusSchema,
@@ -121,6 +123,7 @@ const organizationMemberQuerySchema = z.object({
 }).strict();
 
 const organizationMemberIdSchema = z.string().uuid();
+const partnerIdSchema = z.string().uuid();
 const organizationMemberReorderSchema = z.object({
   category: z.enum(organizationMemberCategories),
   memberIds: z.array(z.string().uuid()).min(1).max(200),
@@ -1005,10 +1008,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Partners routes
-  app.get("/api/partners", async (req, res) => {
+  app.get("/api/partners", optionalAuthenticateToken, async (req, res) => {
     try {
-      const partners = await storage.getPartners(true);
-      res.json(partners);
+      // Public consumers only receive active partners. The admin tab uses the
+      // same endpoint with a current admin token to manage inactive records.
+      const isAdmin = req.user?.role === "admin";
+      const partners = await storage.getPartners(isAdmin ? undefined : true);
+      if (isAdmin) {
+        return res.json(partners);
+      }
+
+      // Do not let legacy rows with invalid links reach the public browser
+      // surface. New writes are validated by insert/updatePartnerSchema, but
+      // older data may predate that contract.
+      const safePartners = partners
+        .filter((partner) => partnerUrlSchema.safeParse(partner.logo).success)
+        .map((partner) => ({
+          ...partner,
+          website: partner.website && partnerUrlSchema.safeParse(partner.website).success
+            ? partner.website
+            : null,
+        }));
+      res.json(safePartners);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -1020,38 +1041,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const partner = await storage.createPartner(partnerData);
       res.status(201).json(partner);
     } catch (error) {
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid partner data" });
+      }
+      console.error("Error creating partner:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
   app.put("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const partner = await storage.getPartner(req.params.id);
+      const id = partnerIdSchema.parse(req.params.id);
+      const partner = await storage.getPartner(id);
       if (!partner) {
         return res.status(404).json({ message: "Partner not found" });
       }
       
-      const updateData = insertPartnerSchema.partial().parse(req.body);
-      const updatedPartner = await storage.updatePartner(req.params.id, updateData);
+      const updateData = updatePartnerSchema.parse(req.body);
+      const updatedPartner = await storage.updatePartner(id, updateData);
       res.json(updatedPartner);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0].message });
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid partner data" });
       }
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
+      console.error("Error updating partner:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
   app.delete("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const partner = await storage.getPartner(req.params.id);
+      const id = partnerIdSchema.parse(req.params.id);
+      const partner = await storage.getPartner(id);
       if (!partner) {
         return res.status(404).json({ message: "Partner not found" });
       }
       
-      await storage.deletePartner(req.params.id);
+      await storage.deletePartner(id);
       res.json({ message: "Partner deleted successfully" });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid partner ID" });
+      }
+      console.error("Error deleting partner:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

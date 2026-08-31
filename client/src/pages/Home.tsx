@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp, ClipboardList } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Member, PostWithTranslations } from '@shared/schema';
+import { Partner, PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
@@ -51,11 +51,21 @@ export default function Home() {
     },
   });
 
-  // Fetch the partner cards and the total count in one bounded response.
-  const { data: membersData } = useQuery({
-    queryKey: queryKeys.members.list({ isPublic: true, limit: 12 }),
+  // Public partners are served active-only by the API.
+  const { data: partnersData } = useQuery<Partner[]>({
+    queryKey: queryKeys.partners.list(),
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/members?limit=12', { signal });
+      const response = await fetch('/api/partners', { signal });
+      if (!response.ok) throw new Error('Failed to fetch partners');
+      return response.json();
+    },
+  });
+
+  const { data: membersData } = useQuery({
+    queryKey: queryKeys.members.list({ isPublic: true, limit: 1 }),
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/members?limit=1', { signal });
+      if (!response.ok) throw new Error('Failed to fetch member count');
       return response.json();
     },
   });
@@ -78,7 +88,7 @@ export default function Home() {
 
   const events = eventsData?.posts || [];
   const news = newsData?.posts || [];
-  const membersPartners = membersData?.members || [];
+  const partners = partnersData || [];
   const memberCount = membersData?.total || 0;
   const latestNews = news[0];
   const latestNewsTranslation = latestNews ? getTranslationSafe(latestNews, language) : null;
@@ -292,14 +302,14 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-6">
-            {membersPartners && membersPartners.length > 0 ? (
-              membersPartners.slice(0, 12).map((member: Member) => (
-                <Card key={member.id} className="card-hover p-6 flex items-center justify-center h-32">
+            {partners.length > 0 ? (
+              partners.slice(0, 12).map((partner: Partner) => (
+                <Card key={partner.id} className="card-hover p-6 flex items-center justify-center h-32">
                   <div className="text-center">
-                    {member.logo ? (
+                    {partner.logo ? (
                       <img 
-                        src={member.logo} 
-                        alt={member.companyName} 
+                        src={partner.logo}
+                        alt={partner.name}
                         className="h-12 w-auto mx-auto object-contain"
                         width={160}
                         height={48}
@@ -311,16 +321,16 @@ export default function Home() {
                         }}
                       />
                     ) : null}
-                    {!member.logo && (
+                    {!partner.logo && (
                       <div className="flex flex-col items-center">
                         <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{member.companyName}</span>
+                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{partner.name}</span>
                       </div>
                     )}
-                    {member.logo && (
+                    {partner.logo && (
                       <div className="hidden flex-col items-center">
                         <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{member.companyName}</span>
+                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{partner.name}</span>
                       </div>
                     )}
                   </div>

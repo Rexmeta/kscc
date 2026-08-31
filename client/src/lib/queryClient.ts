@@ -92,6 +92,9 @@ export const queryKeys = {
     list: (params: Record<string, unknown> = {}) =>
       ["/api/members", "list", params] as const,
   },
+  partners: {
+    list: () => ["/api/partners"] as const,
+  },
 } as const;
 
 export const queryClient = new QueryClient({

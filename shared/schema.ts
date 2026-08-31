@@ -415,10 +415,46 @@ export const insertInquiryReplySchema = createInsertSchema(inquiryReplies).omit(
   respondedBy: z.string().uuid(),
 }).strict();
 
-export const insertPartnerSchema = createInsertSchema(partners).omit({
-  id: true,
-  createdAt: true,
-});
+const partnerText = (max: number) => z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? null : value,
+  z.string().trim().max(max).nullable().optional(),
+);
+
+export const partnerUrlSchema = z.string()
+  .trim()
+  .url("유효한 URL을 입력해주세요.")
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "URL은 HTTP 또는 HTTPS 주소여야 합니다.");
+
+export const partnerCategorySchema = z.enum(["sponsor", "partner", "government"]);
+
+export const insertPartnerSchema = z.object({
+  name: z.string().trim().min(1, "파트너 이름은 필수입니다.").max(200),
+  nameEn: partnerText(200),
+  nameZh: partnerText(200),
+  logo: partnerUrlSchema,
+  website: z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? null : value,
+    partnerUrlSchema.nullable().optional(),
+  ),
+  description: partnerText(2_000),
+  descriptionEn: partnerText(2_000),
+  descriptionZh: partnerText(2_000),
+  category: partnerCategorySchema,
+  isActive: z.boolean().default(true),
+  order: z.number().int().min(0).max(10_000).default(0),
+}).strict();
+
+export const updatePartnerSchema = insertPartnerSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: "At least one partner field is required" },
+);
 
 export { surveySettingsSchema } from "./survey";
 

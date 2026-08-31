@@ -14,7 +14,7 @@ import {
   type SurveySettings, type SurveySettingsInput,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
   canReadPost,
@@ -1196,7 +1196,12 @@ export class DatabaseStorage implements IStorage {
       query = query.where(eq(partners.isActive, active));
     }
 
-    return query.orderBy(partners.order, partners.name);
+    return query.orderBy(
+      asc(partners.order),
+      asc(partners.name),
+      asc(partners.createdAt),
+      asc(partners.id),
+    );
   }
 
   async createPartner(partner: InsertPartner): Promise<Partner> {
