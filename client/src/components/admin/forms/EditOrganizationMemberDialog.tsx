@@ -20,11 +20,13 @@ import { getUploadParameters } from '../uploadHelpers';
 export function EditOrganizationMemberDialog({
   member,
   onSuccess,
-  onClose
+  onClose,
+  executivesOnly = false,
 }: {
   member: OrganizationMember;
   onSuccess: () => void;
   onClose: () => void;
+  executivesOnly?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(true);
   const { toast } = useToast();
@@ -172,22 +174,29 @@ export function EditOrganizationMemberDialog({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">카테고리 *</label>
-              <Select value={category} onValueChange={(value) => {
-                setCategory(value);
-                form.setValue('category', value);
-              }}>
-                <SelectTrigger data-testid="select-org-edit-category">
-                  <SelectValue placeholder="카테고리 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORGANIZATION_CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!executivesOnly ? (
+              <div>
+                <label className="text-sm font-medium">카테고리 *</label>
+                <Select value={category} onValueChange={(value) => {
+                  setCategory(value);
+                  form.setValue('category', value);
+                }}>
+                  <SelectTrigger data-testid="select-org-edit-category">
+                    <SelectValue placeholder="카테고리 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORGANIZATION_CATEGORIES.map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Input value="임원진" disabled data-testid="input-org-edit-category-executives" />
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">정렬 순서</label>
               <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-edit-sort-order" />
@@ -216,6 +225,14 @@ export function EditOrganizationMemberDialog({
           <div>
             <label className="text-sm font-medium">설명 (한국어)</label>
             <Textarea {...form.register('description')} data-testid="textarea-org-edit-description" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">설명 (영어)</label>
+            <Textarea {...form.register('descriptionEn')} data-testid="textarea-org-edit-description-en" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">설명 (중국어)</label>
+            <Textarea {...form.register('descriptionZh')} data-testid="textarea-org-edit-description-zh" />
           </div>
 
           <div className="flex items-center space-x-2">

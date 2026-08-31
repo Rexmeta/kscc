@@ -22,7 +22,7 @@ import { z } from "zod";
 import { sql, eq } from "drizzle-orm";
 import "./types";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
-import { getUserMembershipInfo, getUserPermissions, requirePermission, requireAnyPermission } from "./permissions";
+import { getUserMembershipInfo, getUserPermissions, hasPermission, requirePermission, requireAnyPermission } from "./permissions";
 import {
   AuthorizationStateError,
   DuplicateInquiryError,
@@ -98,6 +98,12 @@ const organizationMemberCategories = [
   'committees',
   'organizations',
 ] as const;
+const executiveCategory = 'executives';
+const executivePermissions = {
+  read: 'organization.executives.read',
+  create: 'organization.executives.create',
+  update: 'organization.executives.update',
+} as const;
 
 const organizationMemberQuerySchema = z.object({
   category: z.enum(organizationMemberCategories).optional(),
@@ -197,6 +203,25 @@ function requireAdminOrPermission(permission: string) {
       return next();
     }
     return requirePermission(permission)(req, res, next);
+  };
+}
+
+function requireAdminOrOperatorPermission(permission: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === 'admin') {
+      return next();
+    }
+    if (req.user?.role !== 'operator') {
+      return res.status(403).json({ message: 'Operator access required' });
+    }
+    const allowed = await hasPermission(req.user.id, permission);
+    if (!allowed) {
+      return res.status(403).json({
+        message: 'Insufficient permissions',
+        required: permission,
+      });
+    }
+    next();
   };
 }
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -936,15 +961,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { category, isActive } = parsedQuery.data;
       const isAdmin = req.user?.role === 'admin';
-      if (isActive === 'false' && !isAdmin) {
+      const isExecutiveOperator = req.user?.role === 'operator'
+        && await hasPermission(req.user.id, executivePermissions.read);
+      if (isActive === 'false' && !isAdmin && !isExecutiveOperator) {
         return res.status(403).json({ message: "Administrative access required" });
+      }
+      if (isExecutiveOperator && category && category !== executiveCategory) {
+        return res.status(403).json({ message: "Operators may only manage executives" });
       }
 
       // The admin UI uses isActive=false to request the complete management
-      // list. Public and non-admin requests always remain active-only.
+      // list. Public and non-management requests always remain active-only.
       const members = await storage.getOrganizationMembers({
-        category,
-        isActive: isAdmin && isActive === 'false' ? undefined : true,
+        category: isExecutiveOperator ? executiveCategory : category,
+        isActive: (isAdmin || isExecutiveOperator) && isActive === 'false' ? undefined : true,
       });
       res.json(members);
     } catch (error) {
@@ -961,7 +991,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const member = await storage.getOrganizationMember(req.params.id);
       // Do not reveal whether an inactive record exists to public callers.
-      if (!member || (req.user?.role !== 'admin' && !member.isActive)) {
+      const isExecutiveOperator = req.user?.role === 'operator'
+        && await hasPermission(req.user.id, executivePermissions.read);
+      if (!member) {
+        return res.status(404).json({ message: "Organization member not found" });
+      }
+      if (isExecutiveOperator && member.category !== executiveCategory) {
+        return res.status(403).json({ message: "Operators may only manage executives" });
+      }
+      if (req.user?.role !== 'admin' && !isExecutiveOperator && !member.isActive) {
         return res.status(404).json({ message: "Organization member not found" });
       }
       res.json(member);
@@ -970,36 +1008,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/organization-members", authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const memberData = insertOrganizationMemberSchema.parse(req.body);
-      const member = await storage.createOrganizationMember(memberData);
-      res.status(201).json(member);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0].message });
+  app.post(
+    "/api/organization-members",
+    authenticateToken,
+    requireAdminOrOperatorPermission(executivePermissions.create),
+    async (req, res) => {
+      try {
+        const memberData = insertOrganizationMemberSchema.parse(req.body);
+        if (req.user?.role !== 'admin' && memberData.category !== executiveCategory) {
+          return res.status(403).json({ message: "Operators may only manage executives" });
+        }
+        const member = await storage.createOrganizationMember(memberData);
+        res.status(201).json(member);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
       }
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
-  });
+  );
 
-  app.put("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const member = await storage.getOrganizationMember(req.params.id);
-      if (!member) {
-        return res.status(404).json({ message: "Organization member not found" });
+  app.put(
+    "/api/organization-members/:id",
+    authenticateToken,
+    requireAdminOrOperatorPermission(executivePermissions.update),
+    async (req, res) => {
+      try {
+        const member = await storage.getOrganizationMember(req.params.id);
+        if (!member) {
+          return res.status(404).json({ message: "Organization member not found" });
+        }
+
+        const updateData = insertOrganizationMemberSchema.partial().parse(req.body);
+        if (req.user?.role !== 'admin') {
+          if (member.category !== executiveCategory
+            || (updateData.category && updateData.category !== executiveCategory)) {
+            return res.status(403).json({ message: "Operators may only manage executives" });
+          }
+        }
+        const updatedMember = await storage.updateOrganizationMember(req.params.id, updateData);
+        res.json(updatedMember);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
       }
-      
-      const updateData = insertOrganizationMemberSchema.partial().parse(req.body);
-      const updatedMember = await storage.updateOrganizationMember(req.params.id, updateData);
-      res.json(updatedMember);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: error.errors[0].message });
-      }
-      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid data" });
     }
-  });
+  );
 
   app.delete("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {

@@ -16,10 +16,10 @@ import type { UploadResult } from '@uppy/core';
 import { organizationMemberSchema, ORGANIZATION_CATEGORIES } from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
 
-export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () => void }) {
+export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = false }: { onSuccess: () => void; executivesOnly?: boolean }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { toast } = useToast();
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(executivesOnly ? 'executives' : '');
   const [isActive, setIsActive] = useState(true);
   const [photo, setPhoto] = useState('');
 
@@ -32,7 +32,7 @@ export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () =>
       position: '',
       positionEn: '',
       positionZh: '',
-      category: '',
+      category: executivesOnly ? 'executives' : '',
       photo: '',
       description: '',
       descriptionEn: '',
@@ -52,7 +52,7 @@ export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () =>
         },
         body: JSON.stringify({
           ...data,
-          category,
+          category: executivesOnly ? 'executives' : category,
           photo,
           isActive,
         })
@@ -63,7 +63,7 @@ export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () =>
     onSuccess: () => {
       toast({ title: "구성원이 추가되었습니다" });
       form.reset();
-      setCategory('');
+      setCategory(executivesOnly ? 'executives' : '');
       setPhoto('');
       setIsActive(true);
       setInternalOpen(false);
@@ -145,22 +145,29 @@ export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () =>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">카테고리 *</label>
-              <Select value={category} onValueChange={(value) => {
-                setCategory(value);
-                form.setValue('category', value);
-              }}>
-                <SelectTrigger data-testid="select-org-category">
-                  <SelectValue placeholder="카테고리 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORGANIZATION_CATEGORIES.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!executivesOnly ? (
+              <div>
+                <label className="text-sm font-medium">카테고리 *</label>
+                <Select value={category} onValueChange={(value) => {
+                  setCategory(value);
+                  form.setValue('category', value);
+                }}>
+                  <SelectTrigger data-testid="select-org-category">
+                    <SelectValue placeholder="카테고리 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORGANIZATION_CATEGORIES.map(cat => (
+                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Input value="임원진" disabled data-testid="input-org-category-executives" />
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">정렬 순서</label>
               <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-sort-order" />
@@ -189,6 +196,14 @@ export function CreateOrganizationMemberDialog({ onSuccess }: { onSuccess: () =>
           <div>
             <label className="text-sm font-medium">설명 (한국어)</label>
             <Textarea {...form.register('description')} data-testid="textarea-org-description" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">설명 (영어)</label>
+            <Textarea {...form.register('descriptionEn')} data-testid="textarea-org-description-en" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">설명 (중국어)</label>
+            <Textarea {...form.register('descriptionZh')} data-testid="textarea-org-description-zh" />
           </div>
 
           <div className="flex items-center space-x-2">

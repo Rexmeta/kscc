@@ -1289,6 +1289,281 @@ test(
     }
   },
 );
+
+test(
+  "executive organization permissions scope operator management",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `executive-permission-test-${randomUUID()}`;
+    }
+    const suffix = randomUUID();
+    const [operator] = await Promise.all([
+      storage.createUser({
+        email: `executive-operator-${suffix}@example.test`,
+        password: "test-password",
+        name: "Executive Operator",
+        role: "operator",
+        userType: "staff",
+      }),
+      storage.createUser({
+        email: `executive-no-permission-${suffix}@example.test`,
+        password: "test-password",
+        name: "Unprivileged Operator",
+        role: "operator",
+        userType: "staff",
+      }),
+      storage.createUser({
+        email: `executive-member-${suffix}@example.test`,
+        password: "test-password",
+        name: "Regular Member",
+        role: "user",
+        userType: "staff",
+      }),
+    ]);
+    const noPermissionOperator = await storage.getUserByEmail(`executive-no-permission-${suffix}@example.test`);
+    const regularMember = await storage.getUserByEmail(`executive-member-${suffix}@example.test`);
+    const [tier] = await db.insert(tiers).values({
+      code: `executive-test-tier-${suffix}`,
+      name: "Executive Permission Test Tier",
+    }).returning();
+    const [role] = await db.insert(roles).values({
+      code: `executive-test-role-${suffix}`,
+      name: "Executive Permission Test Role",
+    }).returning();
+    const permissionIds: string[] = [];
+    for (const [key, action] of [
+      ["organization.executives.read", "read"],
+      ["organization.executives.create", "create"],
+      ["organization.executives.update", "update"],
+    ] as const) {
+      await db.insert(permissions).values({
+        key,
+        resource: "organization.executives",
+        action,
+        description: "Executive organization permission regression test",
+      }).onConflictDoNothing();
+      const [permission] = await db
+        .select({ id: permissions.id })
+        .from(permissions)
+        .where(eq(permissions.key, key))
+        .limit(1);
+      assert.ok(permission);
+      permissionIds.push(permission.id);
+    }
+    const [membership] = await db.insert(userMemberships).values({
+      userId: operator.id,
+      tierId: tier.id,
+      roleId: role.id,
+      expiresAt: new Date(Date.now() + 60_000),
+    }).returning();
+    await db.insert(rolePermissions).values(
+      permissionIds.map((permissionId) => ({
+        roleId: role.id,
+        permissionId,
+      })),
+    );
+
+    const activeExecutive = {
+      id: randomUUID(),
+      name: "Active Executive",
+      position: "President",
+      category: "executives",
+      isActive: true,
+    };
+    const inactiveExecutive = {
+      id: randomUUID(),
+      name: "Inactive Executive",
+      position: "President",
+      category: "executives",
+      isActive: false,
+    };
+    const otherCategoryMember = {
+      id: randomUUID(),
+      name: "Secretariat Member",
+      position: "Secretary",
+      category: "secretariat",
+      isActive: true,
+    };
+    const originalGetOrganizationMembers = storage.getOrganizationMembers;
+    const originalGetOrganizationMember = storage.getOrganizationMember;
+    const originalCreateOrganizationMember = storage.createOrganizationMember;
+    const originalUpdateOrganizationMember = storage.updateOrganizationMember;
+    storage.getOrganizationMembers = async (filters) => {
+      if (filters?.category === "executives") {
+        return filters?.isActive === true
+          ? [activeExecutive as any]
+          : [activeExecutive as any, inactiveExecutive as any];
+      }
+      return [otherCategoryMember as any];
+    };
+    storage.getOrganizationMember = async (id) => {
+      if (id === activeExecutive.id) return activeExecutive as any;
+      if (id === inactiveExecutive.id) return inactiveExecutive as any;
+      if (id === otherCategoryMember.id) return otherCategoryMember as any;
+      return undefined;
+    };
+    storage.createOrganizationMember = async (member) => ({
+      ...member,
+      id: randomUUID(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+    storage.updateOrganizationMember = async (id, updates) => ({
+      ...(id === activeExecutive.id ? activeExecutive : otherCategoryMember),
+      ...updates,
+      id,
+      updatedAt: new Date(),
+    } as any);
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
+      const noPermissionToken = jwt.sign({ id: noPermissionOperator!.id }, process.env.SESSION_SECRET!);
+      const memberToken = jwt.sign({ id: regularMember!.id }, process.env.SESSION_SECRET!);
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        return { status: response.status, body: await response.json() };
+      };
+      const memberData = {
+        name: "New Executive",
+        position: "Vice President",
+        category: "executives",
+        isActive: true,
+      };
+
+      const operatorList = await request("/api/organization-members?isActive=false", {
+        token: operatorToken,
+      });
+      assert.equal(operatorList.status, 200);
+      assert.deepEqual(
+        operatorList.body.map((member: any) => member.id),
+        [activeExecutive.id, inactiveExecutive.id],
+      );
+
+      assert.equal(
+        (await request("/api/organization-members?isActive=false&category=secretariat", {
+          token: operatorToken,
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/organization-members", {
+          token: noPermissionToken,
+        })).status,
+        200,
+      );
+      assert.equal(
+        (await request("/api/organization-members?isActive=false", {
+          token: noPermissionToken,
+        })).status,
+        403,
+      );
+
+      assert.equal(
+        (await request("/api/organization-members", {
+          token: memberToken,
+          method: "POST",
+          body: memberData,
+        })).status,
+        403,
+      );
+      const createdExecutive = await request("/api/organization-members", {
+          token: operatorToken,
+          method: "POST",
+          body: memberData,
+        });
+      assert.equal(
+        createdExecutive.status,
+        201,
+        JSON.stringify(createdExecutive.body),
+      );
+      assert.equal(
+        (await request("/api/organization-members", {
+          token: operatorToken,
+          method: "POST",
+          body: { ...memberData, category: "secretariat" },
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${activeExecutive.id}`, {
+          token: operatorToken,
+          method: "PUT",
+          body: { name: "Updated Executive", category: "executives" },
+        })).status,
+        200,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${activeExecutive.id}`, {
+          token: operatorToken,
+          method: "PUT",
+          body: { category: "secretariat" },
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${otherCategoryMember.id}`, {
+          token: operatorToken,
+          method: "PUT",
+          body: { name: "Should Be Rejected" },
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${activeExecutive.id}`, {
+          token: operatorToken,
+          method: "DELETE",
+        })).status,
+        403,
+      );
+    } finally {
+      storage.getOrganizationMembers = originalGetOrganizationMembers;
+      storage.getOrganizationMember = originalGetOrganizationMember;
+      storage.createOrganizationMember = originalCreateOrganizationMember;
+      storage.updateOrganizationMember = originalUpdateOrganizationMember;
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await db.delete(userMemberships).where(eq(userMemberships.id, membership.id));
+      await db.delete(users).where(inArray(users.id, [
+        operator.id,
+        noPermissionOperator!.id,
+        regularMember!.id,
+      ]));
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, role.id));
+      await db.delete(roles).where(eq(roles.id, role.id));
+      await db.delete(tiers).where(eq(tiers.id, tier.id));
+      if (originalSessionSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = originalSessionSecret;
+      }
+    }
+  },
+);
+
 test(
   "member lifecycle and ownership boundaries are enforced by member routes",
   { skip: !databaseAvailable },

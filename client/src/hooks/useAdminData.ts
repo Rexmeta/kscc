@@ -86,22 +86,27 @@ export function useAdminInquiries(activeTab: string) {
 
 export function useAdminOrganizationMembers(
   categoryFilter: string,
-  activeTab: string
+  activeTab: string,
+  executivesOnly = false,
 ) {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, hasPermission } = useAuth();
+  const canRead = isAdmin
+    || (user?.role === 'operator' && hasPermission('organization.executives.read'));
+  const category = executivesOnly ? 'executives' : categoryFilter;
+  const tabName = executivesOnly ? 'executives' : 'organization';
   return useQuery<OrganizationMember[]>({
-    queryKey: ['/api/organization-members', { category: categoryFilter, admin: true }],
+    queryKey: ['/api/organization-members', { category, admin: true }],
     queryFn: () => {
       const params = new URLSearchParams();
       params.append('isActive', 'false');
-      if (categoryFilter && categoryFilter !== 'all') {
-        params.append('category', categoryFilter);
+      if (category && category !== 'all') {
+        params.append('category', category);
       }
       return fetchJson<OrganizationMember[]>(
         `/api/organization-members?${params.toString()}`
       );
     },
-    enabled: isAdmin && activeTab === 'organization',
+    enabled: canRead && activeTab === tabName,
   });
 }
 

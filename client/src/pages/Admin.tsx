@@ -37,13 +37,15 @@ export default function AdminPage() {
     .filter(({ permission }) => isAdmin || hasPermission(permission))
     .map(({ tab }) => tab);
   const canReadInquiries = isAdmin || hasPermission('inquiry.read');
+  const canReadExecutives = isAdmin
+    || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
-    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'partners', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(canReadInquiries ? ['inquiries'] : []), ...(hasManual ? ['manual'] : [])];
+    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'executives', 'partners', ...(hasManual ? ['manual'] : [])]
+    : [...boardTabs, ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
-  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || (canReadInquiries ? 'inquiries' : 'dashboard');
-  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadInquiries;
+  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadExecutives ? 'executives' : 'dashboard');
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadInquiries || canReadExecutives;
 
   useEffect(() => {
     if (loading) return;
@@ -110,6 +112,7 @@ export default function AdminPage() {
                 {isAdmin && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
                  {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
                 {isAdmin && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
+                {allowedTabs.includes('executives') && <SelectItem value="executives" data-testid="option-tab-executives">임원진</SelectItem>}
                 {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                 {hasManual && (
                   <SelectItem value="manual" data-testid="option-tab-manual">매뉴얼</SelectItem>
@@ -129,6 +132,7 @@ export default function AdminPage() {
               {isAdmin && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
                {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
               {isAdmin && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
+               {allowedTabs.includes('executives') && <TabsTrigger value="executives" data-testid="tab-executives" className="text-sm whitespace-nowrap">임원진</TabsTrigger>}
               {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
               {hasManual && (
                 <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm whitespace-nowrap">매뉴얼</TabsTrigger>
@@ -164,6 +168,9 @@ export default function AdminPage() {
             {isAdmin && activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
+            {allowedTabs.includes('executives') && activeTab === 'executives' && (
+              <OrganizationTab activeTab={activeTab} executivesOnly />
+            )}
              {allowedTabs.includes('inquiries') && activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
             {activeTab === 'manual' && hasManual && <ManualTab />}
           </Suspense>

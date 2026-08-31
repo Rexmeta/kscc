@@ -99,6 +99,11 @@ const PERMS = [
   // Inquiries
   ['inquiry.read', 'inquiry', 'read', '문의 열람'],
   ['inquiry.respond', 'inquiry', 'update', '문의 응답'],
+
+  // Executive organization management
+  ['organization.executives.read', 'organization.executives', 'read', '임원진 정보 열람'],
+  ['organization.executives.create', 'organization.executives', 'create', '임원진 정보 추가'],
+  ['organization.executives.update', 'organization.executives', 'update', '임원진 정보 수정'],
   
   // System
   ['system.dashboard', 'system', 'read', '대시보드 접근'],
@@ -155,6 +160,9 @@ const ROLE_PERMS: Record<string, string[]> = {
     'partner.*',
     'inquiry.*',
     'system.dashboard',
+    'organization.executives.read',
+    'organization.executives.create',
+    'organization.executives.update',
   ],
   admin: ['*'], // All permissions
 };
