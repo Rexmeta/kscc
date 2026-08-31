@@ -40,6 +40,7 @@ import {
   AuthorizationStateError,
   DuplicateInquiryError,
   EventRegistrationError,
+  UserDeletionError,
 } from "./storage";
 import { EmailService } from "./email";
 import { issueAuthToken } from "./auth";
@@ -247,6 +248,29 @@ test(
       });
       assert.equal(deactivation.status, 200);
       assert.equal((await request("/api/auth/me", { token: activeToken })).status, 403);
+
+      assert.equal(
+        (await request(`/api/users/${admin.id}`, {
+          token: adminToken,
+          method: "PUT",
+          body: { isActive: false },
+        })).status,
+        400,
+      );
+      assert.equal(
+        (await request(`/api/users/${admin.id}`, {
+          token: adminToken,
+          method: "DELETE",
+        })).status,
+        400,
+      );
+
+      const deletion = await request(`/api/users/${user2.id}`, {
+        token: adminToken,
+        method: "DELETE",
+      });
+      assert.equal(deletion.status, 200);
+      assert.equal(await storage.getUser(user2.id), undefined);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await db.delete(users).where(inArray(users.id, [admin.id, user.id, user2.id]));
@@ -1034,6 +1058,12 @@ test(
       });
       assert.equal("password" in result.replies[0].responder!, false);
       assert.equal("email" in result.replies[0].responder!, false);
+      await assert.rejects(
+        () => storage.deleteUserAccount(responder.id),
+        (error: unknown) =>
+          error instanceof UserDeletionError
+          && error.code === "HAS_INQUIRY_HISTORY",
+      );
 
       await assert.rejects(
         () => storage.createInquiry(inquiryInput),
@@ -1041,7 +1071,7 @@ test(
       );
     } finally {
       await db.delete(inquiries).where(eq(inquiries.id, inquiry.id));
-      await db.delete(users).where(eq(users.id, responder.id));
+      await db.delete(users).where(inArray(users.id, [admin.id, responder.id]));
     }
   },
 );
@@ -1659,7 +1689,7 @@ test(
       await db.delete(userMemberships).where(eq(userMemberships.id, membership.id));
       await db.delete(rolePermissions).where(eq(rolePermissions.roleId, role.id));
       await db.delete(permissions).where(eq(permissions.id, permission.id));
-      await db.delete(users).where(eq(users.id, user.id));
+      await db.delete(users).where(inArray(users.id, [admin.id, user.id]));
       await db.delete(roles).where(eq(roles.id, role.id));
       await db.delete(tiers).where(eq(tiers.id, tier.id));
     }
@@ -1994,7 +2024,7 @@ test(
       const finalUser = await storage.getUser(user.id);
       assert.equal(finalUser?.role, "admin");
     } finally {
-      await db.delete(users).where(eq(users.id, user.id));
+      await db.delete(users).where(inArray(users.id, [admin.id, user.id]));
     }
   },
 );

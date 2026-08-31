@@ -93,7 +93,8 @@ export const queryKeys = {
       ["/api/members", "list", params] as const,
   },
   partners: {
-    list: () => ["/api/partners"] as const,
+    list: () => ["/api/partners", "public"] as const,
+    adminList: () => ["/api/partners", "admin"] as const,
   },
 } as const;
 

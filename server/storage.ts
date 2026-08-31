@@ -58,6 +58,18 @@ export class DuplicateInquiryError extends Error {
   }
 }
 
+export type UserDeletionErrorCode = "LAST_ACTIVE_ADMIN" | "HAS_INQUIRY_HISTORY";
+
+export class UserDeletionError extends Error {
+  constructor(
+    public readonly code: UserDeletionErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "UserDeletionError";
+  }
+}
+
 function getPostMetaValueColumns(value: any): Pick<
   PostMeta,
   "value" | "valueText" | "valueNumber" | "valueBoolean" | "valueTimestamp"
@@ -132,6 +144,7 @@ export interface IStorage {
     accountRole?: AccountRole,
   ): Promise<User | undefined>;
   revokeUserSessions(id: string): Promise<boolean>;
+  deleteUserAccount(id: string): Promise<boolean>;
   updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined>;
   bootstrapAdmin(email: string, password?: string): Promise<User>;
   validateUser(email: string, password: string): Promise<User | undefined>;
@@ -687,6 +700,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning({ id: users.id });
     return result.length > 0;
+  }
+
+  async deleteUserAccount(id: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('user-account-deletion'))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user-authorization:${id}`}))`);
+
+      const [user] = await tx.select().from(users).where(eq(users.id, id));
+      if (!user) return false;
+
+      if (user.role === "admin" && user.isActive) {
+        const [otherActiveAdmin] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(and(
+            eq(users.role, "admin"),
+            eq(users.isActive, true),
+            ne(users.id, id),
+          ))
+          .limit(1);
+        if (!otherActiveAdmin) {
+          throw new UserDeletionError(
+            "LAST_ACTIVE_ADMIN",
+            "The last active administrator cannot be deleted",
+          );
+        }
+      }
+
+      const [inquiryHistory] = await tx
+        .select({ count: count() })
+        .from(inquiryReplies)
+        .where(eq(inquiryReplies.respondedBy, id));
+      if ((inquiryHistory?.count || 0) > 0) {
+        throw new UserDeletionError(
+          "HAS_INQUIRY_HISTORY",
+          "Accounts with inquiry reply history must be deactivated instead",
+        );
+      }
+
+      // Permanent account deletion also removes personal registrations and a
+      // linked member profile. Authorship is preserved with a null author via
+      // the posts foreign key, while memberships cascade from the user row.
+      await tx.delete(eventRegistrations).where(eq(eventRegistrations.userId, id));
+      await tx.delete(members).where(eq(members.userId, id));
+      await tx.delete(users).where(eq(users.id, id));
+      return true;
+    });
   }
 
   async getUserCount(): Promise<number> {

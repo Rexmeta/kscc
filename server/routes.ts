@@ -37,6 +37,7 @@ import {
   AuthorizationStateError,
   DuplicateInquiryError,
   EventRegistrationError,
+  UserDeletionError,
   storage,
   type AccountRole,
 } from "./storage";
@@ -566,6 +567,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
       const { role, userType, membershipTier, isActive, name, email } = req.body;
+      if (req.params.id === req.user!.id && isActive === false) {
+        return res.status(400).json({ message: "You cannot deactivate your own account" });
+      }
       const updateData: any = {};
       const accountRole: AccountRole | undefined = role === undefined
         ? undefined
@@ -607,6 +611,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (isUniqueViolation(error)) {
         return res.status(409).json({ message: "Email already in use" });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const userId = z.string().uuid().parse(req.params.id);
+      if (userId === req.user!.id) {
+        return res.status(400).json({ message: "You cannot delete your own account" });
+      }
+
+      const deleted = await storage.deleteUserAccount(userId);
+      if (!deleted) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid user id" });
+      }
+      if (error instanceof UserDeletionError) {
+        return res.status(409).json({ message: error.message, code: error.code });
       }
       res.status(500).json({ message: "Internal server error" });
     }

@@ -68,7 +68,7 @@ export function useAdminUsers(activeTab: string) {
 export function useAdminPartners(activeTab: string) {
   const { isAdmin } = useAuth();
   return useQuery<Partner[]>({
-    queryKey: queryKeys.partners.list(),
+    queryKey: queryKeys.partners.adminList(),
     queryFn: () => fetchJson<Partner[]>('/api/partners'),
     enabled: isAdmin && activeTab === 'partners',
   });

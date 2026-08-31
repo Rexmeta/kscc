@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -13,6 +14,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { Loader2, Save, X } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface UserEditDialogProps {
   user: any;
@@ -28,6 +30,7 @@ export default function UserEditDialog({
   onSuccess,
 }: UserEditDialogProps) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || '',
@@ -35,6 +38,7 @@ export default function UserEditDialog({
     role: user.role || 'user',
     userType: user.userType || 'user',
     membershipTier: user.membershipTier || 'free',
+    isActive: user.isActive ?? true,
   });
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export default function UserEditDialog({
       role: user.role || 'user',
       userType: user.userType || 'user',
       membershipTier: user.membershipTier || 'free',
+      isActive: user.isActive ?? true,
     });
   }, [user]);
 
@@ -91,6 +96,7 @@ export default function UserEditDialog({
         role: formData.role,
         userType: formData.userType,
         membershipTier: formData.membershipTier,
+        isActive: formData.isActive,
       });
 
       toast({
@@ -187,6 +193,25 @@ export default function UserEditDialog({
                 <SelectItem value="platinum">플래티넘</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div>
+              <Label htmlFor="user-active">계정 상태</Label>
+              <p className="text-sm text-muted-foreground">
+                {formData.isActive ? '로그인과 권한 사용이 가능합니다.' : '로그인과 권한 사용이 차단됩니다.'}
+              </p>
+            </div>
+            <Switch
+              id="user-active"
+              checked={formData.isActive}
+              onCheckedChange={(checked) => setFormData((current) => ({
+                ...current,
+                isActive: checked,
+              }))}
+              disabled={currentUser?.id === user.id && formData.isActive}
+              data-testid={`switch-user-active-${user.id}`}
+            />
           </div>
 
           <div className="flex gap-2">
