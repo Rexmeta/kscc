@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
 import type { OrganizationMember } from '@shared/schema';
+import { isExecutiveManagementCategory } from '@shared/organization';
 import { organizationMemberSchema, ORGANIZATION_CATEGORIES } from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
 
@@ -33,6 +34,9 @@ export function EditOrganizationMemberDialog({
   const [category, setCategory] = useState(member.category);
   const [isActive, setIsActive] = useState(member.isActive);
   const [photo, setPhoto] = useState(member.photo || '');
+  const categoryOptions = executivesOnly
+    ? ORGANIZATION_CATEGORIES.filter((cat) => isExecutiveManagementCategory(cat.value))
+    : ORGANIZATION_CATEGORIES;
 
   const form = useForm({
     resolver: zodResolver(organizationMemberSchema),
@@ -174,33 +178,27 @@ export function EditOrganizationMemberDialog({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {!executivesOnly ? (
-              <div>
-                <label className="text-sm font-medium">카테고리 *</label>
-                <Select value={category} onValueChange={(value) => {
-                  setCategory(value);
-                  form.setValue('category', value);
-                }}>
-                  <SelectTrigger data-testid="select-org-edit-category">
-                    <SelectValue placeholder="카테고리 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ORGANIZATION_CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <label className="text-sm font-medium">카테고리</label>
-                <Input
-                  value={ORGANIZATION_CATEGORIES.find((cat) => cat.value === member.category)?.label || member.category}
-                  disabled
-                  data-testid="input-org-edit-category-executives"
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-sm font-medium">카테고리 *</label>
+              <Select value={category} onValueChange={(value) => {
+                setCategory(value);
+                form.setValue('category', value);
+              }}>
+                <SelectTrigger data-testid="select-org-edit-category">
+                  <SelectValue placeholder="카테고리 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {executivesOnly && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  임원진 관리 범위의 카테고리만 선택할 수 있습니다.
+                </p>
+              )}
+            </div>
             {!executivesOnly ? (
               <div>
                 <label className="text-sm font-medium">정렬 순서</label>

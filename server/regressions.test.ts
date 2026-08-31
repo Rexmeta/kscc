@@ -1689,7 +1689,7 @@ test(
         (await request(`/api/organization-members/${activeExecutive.id}`, {
           token: operatorToken,
           method: "PUT",
-          body: { name: "Updated Executive", category: "executives" },
+          body: { name: "Updated Executive", category: "honorary" },
         })).status,
         200,
       );
