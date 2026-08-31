@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { isDatabaseReady } from "./db";
 import { registerHealthRoutes } from "./health";
+import { registerSeoRoutes } from "./seo";
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+  registerSeoRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

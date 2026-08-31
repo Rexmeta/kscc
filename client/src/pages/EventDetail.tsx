@@ -14,6 +14,8 @@ import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
 import { queryKeys } from '@/lib/queryClient';
+import { Seo } from '@/components/Seo';
+import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
 
 export default function EventDetailPage() {
   const { id } = useParams();
@@ -133,6 +135,35 @@ export default function EventDetailPage() {
 
   const translation = getTranslationSafe(post, language);
   const eventMeta = getEventMeta(post);
+  const canonicalPath = `/events/${post.slug}`;
+  const canonicalUrl = absoluteUrl(window.location.origin, localizedPath(canonicalPath, language));
+  const eventImage = post.coverImage || eventMeta.images?.[0] || undefined;
+  const eventJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: translation.seoTitle || translation.title || post.slug,
+    description: translation.seoDescription || translation.excerpt || "",
+    url: canonicalUrl,
+    image: eventImage
+      ? [absoluteUrl(window.location.origin, eventImage)]
+      : undefined,
+    startDate: eventMeta.eventDate?.toISOString(),
+    endDate: eventMeta.endDate?.toISOString(),
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: eventMeta.eventType === "online"
+      ? "https://schema.org/OnlineEventAttendanceMode"
+      : eventMeta.eventType === "hybrid"
+        ? "https://schema.org/MixedEventAttendanceMode"
+        : "https://schema.org/OfflineEventAttendanceMode",
+    location: eventMeta.eventType === "online"
+      ? { "@type": "VirtualLocation", url: canonicalUrl }
+      : { "@type": "Place", name: eventMeta.location || "KSCC event venue" },
+    organizer: { "@type": "Organization", name: SITE_NAME },
+    offers: eventMeta.fee !== null
+      ? { "@type": "Offer", price: eventMeta.fee, priceCurrency: "KRW", url: canonicalUrl }
+      : undefined,
+    inLanguage: language,
+  };
   
   const now = new Date();
   const isPastEvent = eventMeta.eventDate ? eventMeta.eventDate < now : false;
@@ -155,6 +186,18 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title={translation.seoTitle || `${translation.title || post.slug} | ${SITE_NAME}`}
+        description={translation.seoDescription || translation.excerpt || ''}
+        image={eventImage}
+        canonicalPath={canonicalPath}
+        noIndex={post.status !== 'published' || post.visibility !== 'public'}
+        breadcrumbs={[
+          { name: t('events.title'), path: '/events' },
+          { name: translation.title || post.slug, path: canonicalPath },
+        ]}
+        jsonLd={eventJsonLd}
+      />
       {/* Header */}
       <section className="bg-muted py-8">
         <div className="container">

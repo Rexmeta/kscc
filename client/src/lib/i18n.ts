@@ -990,18 +990,26 @@ export function getCurrentLanguage(): Language {
   return currentLanguage;
 }
 
-export function setLanguage(lang: Language): void {
+export function setLanguage(lang: Language, updateUrl = true): void {
   currentLanguage = lang;
   localStorage.setItem('language', lang);
   document.documentElement.lang = lang;
   document.documentElement.className = `lang-${lang}`;
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', lang);
+    window.history.replaceState(window.history.state, '', url);
+  }
 }
 
 export function initializeLanguage(): void {
   const saved = localStorage.getItem('language') as Language;
   const browser = navigator.language.split('-')[0] as Language;
-  const detected = saved || (translations[browser] ? browser : 'ko');
-  setLanguage(detected);
+  const fromUrl = new URLSearchParams(window.location.search).get('lang') as Language;
+  const detected = translations[fromUrl]
+    ? fromUrl
+    : saved || (translations[browser] ? browser : 'ko');
+  setLanguage(detected, false);
 }
 
 export function t(key: keyof TranslationKeys): string {

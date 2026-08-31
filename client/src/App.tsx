@@ -9,6 +9,7 @@ import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Home from "@/pages/Home";
+import { RouteSeo } from "@/components/Seo";
 
 const About = lazy(() => import("@/pages/About"));
 const News = lazy(() => import("@/pages/News"));
@@ -77,6 +78,7 @@ function AppContent() {
     <TooltipProvider>
       <AuthProvider>
         <Toaster />
+        <RouteSeo />
         <Router key={language} />
       </AuthProvider>
     </TooltipProvider>

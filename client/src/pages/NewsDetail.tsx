@@ -13,6 +13,8 @@ import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
 import { queryKeys } from '@/lib/queryClient';
+import { Seo } from '@/components/Seo';
+import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
 
 export default function NewsDetail() {
   // ALL HOOKS MUST BE AT THE TOP (Rules of Hooks)
@@ -103,6 +105,25 @@ export default function NewsDetail() {
   const videos = Array.isArray(videosRaw) ? videosRaw : [];
   const featuredImage = post.coverImage || (images.length > 0 ? images[0] : null);
   const tags = Array.isArray(post.tags) ? post.tags : [];
+  const canonicalPath = `/news/${post.slug}`;
+  const canonicalUrl = absoluteUrl(window.location.origin, localizedPath(canonicalPath, language));
+  const imageUrl = featuredImage
+    ? absoluteUrl(window.location.origin, featuredImage)
+    : undefined;
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: translation.seoTitle || translation.title || post.slug,
+    description: translation.seoDescription || translation.excerpt || "",
+    url: canonicalUrl,
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+    image: imageUrl ? [imageUrl] : undefined,
+    datePublished: post.publishedAt || post.createdAt,
+    dateModified: post.updatedAt,
+    inLanguage: language,
+    author: { "@type": "Organization", name: SITE_NAME },
+    publisher: { "@type": "Organization", name: SITE_NAME },
+  };
   
   // Helper to convert YouTube/Vimeo URLs to embeddable format
   const getEmbedUrl = (url: string): string | null => {
@@ -171,6 +192,19 @@ export default function NewsDetail() {
 
   return (
     <div className="min-h-screen">
+      <Seo
+        title={translation.seoTitle || `${translation.title || post.slug} | ${SITE_NAME}`}
+        description={translation.seoDescription || translation.excerpt || ''}
+        image={featuredImage}
+        type="article"
+        canonicalPath={canonicalPath}
+        noIndex={post.status !== 'published' || post.visibility !== 'public'}
+        breadcrumbs={[
+          { name: t('news.title'), path: '/news' },
+          { name: translation.title || post.slug, path: canonicalPath },
+        ]}
+        jsonLd={articleJsonLd}
+      />
       {/* Back Navigation */}
       <section className="bg-muted py-8">
         <div className="container">
