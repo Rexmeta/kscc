@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
+import { PassThrough } from "node:stream";
 import express from "express";
 import jwt from "jsonwebtoken";
 import { and, eq, inArray } from "drizzle-orm";
@@ -34,6 +35,11 @@ import {
 import { EmailService } from "./email";
 import { issueAuthToken } from "./auth";
 import { sortOrganizationMembers } from "@shared/organization";
+import {
+  canAccessObject,
+  ObjectPermission,
+} from "./objectAcl";
+import { canMutateObjectAcl, ObjectStorageService } from "./objectStorage";
 
 test("organization member ordering is deterministic for public and admin views", () => {
   const members = [
@@ -250,6 +256,137 @@ test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("resource", "delete"), "resource.delete");
   assert.equal(getPostPermissionKey("page", "read"), undefined);
   assert.equal(getPostPermissionKey("news", "attendeeManage"), undefined);
+});
+
+test("managed object intents bind the caller and path, and private reads are not reusable", async () => {
+  const originalSessionSecret = process.env.SESSION_SECRET;
+  const originalPrivateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+  process.env.SESSION_SECRET = `object-intent-test-${randomUUID()}`;
+  process.env.PRIVATE_OBJECT_DIR = "/test-bucket/.private";
+
+  const service = new ObjectStorageService();
+  const ownerId = randomUUID();
+  const otherUserId = randomUUID();
+  const objectPath = "/objects/uploads/object-intent-test";
+  (service as any).createObjectUpload = async () => ({
+    uploadURL: "https://upload.example.test/signed",
+    objectPath,
+  });
+
+  try {
+    const upload = await service.createObjectUploadIntent(ownerId);
+    assert.equal(service.verifyObjectUploadIntent(upload.uploadIntent, ownerId, objectPath), true);
+    assert.equal(service.verifyObjectUploadIntent(upload.uploadIntent, otherUserId, objectPath), false);
+    assert.equal(
+      service.verifyObjectUploadIntent(upload.uploadIntent, ownerId, "/objects/uploads/another-object"),
+      false,
+    );
+
+    const expiredIntent = jwt.sign(
+      {
+        typ: "managed-object-upload",
+        sub: ownerId,
+        objectPath,
+        purpose: "managed-content",
+      },
+      process.env.SESSION_SECRET,
+      { expiresIn: -1 },
+    );
+    assert.equal(service.verifyObjectUploadIntent(expiredIntent, ownerId, objectPath), false);
+    assert.equal(canMutateObjectAcl({
+      ownerId,
+      existingOwner: ownerId,
+      hasValidUploadIntent: true,
+      canEditLinkedPost: false,
+    }), true);
+    assert.equal(canMutateObjectAcl({
+      ownerId: otherUserId,
+      existingOwner: ownerId,
+      hasValidUploadIntent: true,
+      canEditLinkedPost: false,
+    }), false);
+    assert.equal(canMutateObjectAcl({
+      ownerId: otherUserId,
+      existingOwner: ownerId,
+      hasValidUploadIntent: false,
+      canEditLinkedPost: true,
+    }), true);
+    assert.equal(canMutateObjectAcl({
+      ownerId: otherUserId,
+      hasValidUploadIntent: false,
+      canEditLinkedPost: true,
+    }), false);
+
+    assert.throws(
+      () => service.normalizeObjectEntityPath("/objects/../claimed"),
+      /Invalid managed object path/,
+    );
+    assert.throws(
+      () => service.normalizeObjectEntityPath("/objects/uploads/%2E%2E/claimed"),
+      /Invalid managed object path/,
+    );
+    assert.throws(
+      () => service.normalizeObjectEntityPath("https://storage.googleapis.com/other-bucket/object"),
+      /Invalid managed object path/,
+    );
+
+    const policyFor = (visibility: "public" | "private") => JSON.stringify({
+      owner: ownerId,
+      visibility,
+    });
+    const makeFile = (visibility: "public" | "private") => ({
+      name: "test-bucket/.private/uploads/object-intent-test",
+      exists: async () => [true],
+      getMetadata: async () => [{
+        size: "0",
+        contentType: "text/plain",
+        metadata: { "custom:aclPolicy": policyFor(visibility) },
+      }],
+      createReadStream: () => new PassThrough(),
+    });
+
+    const privateFile = makeFile("private") as any;
+    assert.equal(await canAccessObject({
+      userId: undefined,
+      objectFile: privateFile,
+      requestedPermission: ObjectPermission.READ,
+    }), false);
+    assert.equal(await canAccessObject({
+      userId: ownerId,
+      objectFile: privateFile,
+      requestedPermission: ObjectPermission.READ,
+    }), true);
+
+    const privateResponse = new PassThrough() as any;
+    privateResponse.headersSent = false;
+    privateResponse.set = (headers: Record<string, string>) => {
+      privateResponse.responseHeaders = headers;
+    };
+    await service.downloadObject(privateFile, privateResponse);
+    assert.equal(privateResponse.responseHeaders["Cache-Control"], "private, no-store");
+    assert.equal(privateResponse.responseHeaders["Vary"], "Authorization");
+    assert.equal(privateResponse.responseHeaders["Pragma"], "no-cache");
+
+    const publicFile = makeFile("public") as any;
+    assert.equal(await canAccessObject({
+      userId: undefined,
+      objectFile: publicFile,
+      requestedPermission: ObjectPermission.READ,
+    }), true);
+    const publicResponse = new PassThrough() as any;
+    publicResponse.headersSent = false;
+    publicResponse.set = (headers: Record<string, string>) => {
+      publicResponse.responseHeaders = headers;
+    };
+    await service.downloadObject(publicFile, publicResponse);
+    assert.equal(publicResponse.responseHeaders["Cache-Control"], "public, max-age=3600");
+    assert.equal(publicResponse.responseHeaders["Vary"], undefined);
+  } finally {
+    if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = originalSessionSecret;
+    if (originalPrivateObjectDir === undefined) delete process.env.PRIVATE_OBJECT_DIR;
+    else process.env.PRIVATE_OBJECT_DIR = originalPrivateObjectDir;
+  }
 });
 
 test("survey settings validate external links and enforce member visibility", async (t) => {

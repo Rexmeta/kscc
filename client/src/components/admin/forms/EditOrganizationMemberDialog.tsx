@@ -122,7 +122,11 @@ export function EditOrganizationMemberDialog({
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ imageURL: objectPath }),
+        body: JSON.stringify({
+          imageURL: objectPath,
+          visibility: 'public',
+          ...(window.__lastUploadIntent ? { uploadIntent: window.__lastUploadIntent } : {}),
+        }),
       });
     } catch (e) {
       console.error('Failed to set photo ACL:', e);

@@ -5,7 +5,11 @@ export const getResourceObjectAclVisibility = (
   isPublished: boolean,
 ): ObjectVisibility => visibility === 'public' && isPublished ? 'public' : 'private';
 
-export const setObjectAcl = async (objectPath: string, visibility: ObjectVisibility) => {
+export const setObjectAcl = async (
+  objectPath: string,
+  visibility: ObjectVisibility,
+  uploadIntent = window.__lastUploadIntent,
+) => {
   const token = localStorage.getItem('token');
   const response = await fetch('/api/images', {
     method: 'PUT',
@@ -13,7 +17,11 @@ export const setObjectAcl = async (objectPath: string, visibility: ObjectVisibil
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ imageURL: objectPath, visibility }),
+    body: JSON.stringify({
+      imageURL: objectPath,
+      visibility,
+      ...(uploadIntent ? { uploadIntent } : {}),
+    }),
   });
   if (!response.ok) {
     throw new Error(`Failed to set object ACL (${response.status})`);
@@ -40,6 +48,7 @@ export const getUploadParameters = async (_file?: { type?: string }) => {
   });
   const data = await response.json();
   window.__lastUploadObjectPath = data.objectPath;
+  window.__lastUploadIntent = data.uploadIntent;
   return {
     method: 'PUT' as const,
     url: data.uploadURL,

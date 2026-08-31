@@ -25,14 +25,13 @@ import { z } from "zod";
 import { sql, eq } from "drizzle-orm";
 import "./types";
 import {
-  getTokenSessionVersion,
-  isUniqueViolation,
-  issueAuthToken,
-  normalizedEmailSchema,
-  passwordSchema,
-  toSafeUser,
-} from "./auth";
-import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
+  InvalidObjectPathError,
+  ObjectOwnershipError,
+  ObjectStorageService,
+  ObjectNotFoundError,
+  canMutateObjectAcl,
+  objectStorageClient,
+} from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, hasPermission, requirePermission, requireAnyPermission } from "./permissions";
 import {
   AuthorizationStateError,
@@ -45,7 +44,15 @@ import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
 import { isExecutiveManagementCategory } from "@shared/organization";
-
+import { getPostPermissionKey } from "./postPermissions";
+import {
+  getTokenSessionVersion,
+  isUniqueViolation,
+  issueAuthToken,
+  normalizedEmailSchema,
+  passwordSchema,
+  toSafeUser,
+} from "./auth";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
@@ -1269,24 +1276,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAnyPermission("news.create", "event.create", "resource.upload"),
     async (req, res) => {
     try {
-      const { contentType } = req.body || {};
+      const contentType = z.object({
+        contentType: z.string().trim().max(255).optional(),
+      }).strict().parse(req.body || {}).contentType;
       const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL(contentType);
-      
-      // Extract objectPath from uploadURL (format: /replit-objstore-xxx/.private/uploads/uuid)
-      const url = new URL(uploadURL);
-      const pathname = url.pathname;
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      let objectPath = "/objects/uploads/unknown";
-      
-      if (pathname.includes(privateDir)) {
-        const idx = pathname.indexOf(privateDir);
-        const relativePath = pathname.substring(idx + privateDir.length);
-        objectPath = `/objects${relativePath}`;
-      }
-      
-      res.json({ uploadURL, objectPath });
+      const upload = await objectStorageService.createObjectUploadIntent(
+        req.user!.id,
+        contentType,
+      );
+      res.json(upload);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid upload parameters" });
+      }
       console.error("Error getting upload URL:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -1302,7 +1304,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const aclPayloadSchema = z.object({
       imageURL: z.string().min(1),
       visibility: z.enum(["public", "private"]).default("private"),
-    });
+      uploadIntent: z.string().min(1).optional(),
+    }).strict();
 
     const parsedPayload = aclPayloadSchema.safeParse(req.body);
     if (!parsedPayload.success) {
@@ -1313,33 +1316,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+      const objectPath = objectStorageService.normalizeObjectEntityPath(
         parsedPayload.data.imageURL,
-        {
-          owner: userId,
-          visibility: parsedPayload.data.visibility,
-        },
+      );
+      const linkedPost = await storage.getPostByObjectPath(objectPath);
+      const linkedPostPermission = linkedPost
+        ? getPostPermissionKey(linkedPost.postType, "update")
+        : undefined;
+      const canEditLinkedPost = req.user?.role === "admin" ||
+        Boolean(linkedPostPermission && await hasPermission(userId, linkedPostPermission));
+      const hasValidUploadIntent = Boolean(
+        parsedPayload.data.uploadIntent &&
+        objectStorageService.verifyObjectUploadIntent(
+          parsedPayload.data.uploadIntent,
+          userId,
+          objectPath,
+        ),
       );
 
-      // Extract just the file ID from the object path
-      // objectPath format: /replit-objstore-xxx/.private/uploads/file-id
-      // We want: /objects/uploads/file-id
-      const privateDir = objectStorageService.getPrivateObjectDir();
-      let filePath = objectPath;
-      
-      if (objectPath.startsWith(privateDir)) {
-        filePath = objectPath.substring(privateDir.length);
-        if (filePath.startsWith('/')) {
-          filePath = filePath.substring(1);
-        }
+      // A path is only an identifier. New objects require the signed intent
+      // issued to this caller; existing linked resources may be updated by a
+      // caller who can edit the owning post.
+      if (!hasValidUploadIntent && !canEditLinkedPost) {
+        return res.status(403).json({ error: "Object upload intent or linked post edit permission required" });
       }
-      
-      const fullPath = `/objects/${filePath}`;
+
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      const existingPolicy = await objectStorageService.getObjectEntityAclPolicy(objectFile);
+      if (!canMutateObjectAcl({
+        ownerId: userId,
+        existingOwner: existingPolicy?.owner,
+        hasValidUploadIntent,
+        canEditLinkedPost,
+      })) {
+        return res.status(403).json({ error: "Object ownership does not permit this operation" });
+      }
+
+      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+        // Never replace an established owner during an ACL update.
+        owner: existingPolicy?.owner || userId,
+        visibility: parsedPayload.data.visibility,
+        aclRules: existingPolicy?.aclRules,
+      });
 
       res.status(200).json({
-        objectPath: fullPath,
+        objectPath,
       });
     } catch (error) {
+      if (error instanceof InvalidObjectPathError) {
+        return res.status(400).json({ error: "Invalid managed object path" });
+      }
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Object not found" });
+      }
+      if (error instanceof ObjectOwnershipError) {
+        return res.status(403).json({ error: "Object ownership does not permit this operation" });
+      }
       console.error("Error setting image ACL:", error);
       res.status(500).json({ error: "Internal server error" });
     }
@@ -1351,9 +1383,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/objects/:objectPath(*)", optionalAuthenticateToken, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(
-        req.path,
-      );
+      const objectPath = objectStorageService.normalizeObjectEntityPath(req.path);
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
       const aclPolicy = await objectStorageService.getObjectEntityAclPolicy(objectFile);
       if (!aclPolicy) {
         return res.sendStatus(403);
@@ -1364,7 +1395,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: req.user?.id,
           objectFile,
         });
-      const linkedPost = await storage.getPostByObjectPath(req.path);
+      const linkedPost = await storage.getPostByObjectPath(objectPath);
+      let publicCache = aclPolicy.visibility === "public";
 
       let allowed = objectAclAllowed;
       if (linkedPost) {
@@ -1381,14 +1413,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // A private resource object is granted through the post policy, but
         // public resources still require an explicitly public object ACL.
         allowed = postAllowed && (!postIsPublic || aclPolicy.visibility === "public");
+        // A public ACL is still authorization-dependent while the linked post
+        // is not currently public (for example, a draft or member-only post).
+        publicCache = publicCache && postIsPublic;
       }
 
       if (!allowed) {
         return res.sendStatus(403);
       }
 
-      await objectStorageService.downloadObject(objectFile, res);
+      await objectStorageService.downloadObject(objectFile, res, 3600, { publicCache });
     } catch (error) {
+      if (error instanceof InvalidObjectPathError) {
+        return res.sendStatus(404);
+      }
       console.error("Error serving object:", error);
       if (error instanceof ObjectNotFoundError) {
         return res.sendStatus(404);

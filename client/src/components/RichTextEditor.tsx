@@ -42,7 +42,10 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
 
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
-  const setImagePublicAcl = async (objectPath: string) => {
+  const setImagePublicAcl = async (
+    objectPath: string,
+    uploadIntent = window.__lastUploadIntent,
+  ) => {
     const token = localStorage.getItem('token');
     try {
       await fetch('/api/images', {
@@ -51,7 +54,11 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ imageURL: objectPath }),
+        body: JSON.stringify({
+          imageURL: objectPath,
+          visibility: 'public',
+          ...(uploadIntent ? { uploadIntent } : {}),
+        }),
       });
     } catch (e) {
       console.error('Failed to set image ACL:', e);
@@ -72,6 +79,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     });
     const data = await response.json();
     window.__lastUploadObjectPath = data.objectPath;
+    window.__lastUploadIntent = data.uploadIntent;
     console.log('[RichTextEditor] Upload URL received:', data.uploadURL?.substring(0, 80));
     return {
       method: 'PUT' as const,

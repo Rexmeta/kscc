@@ -2,6 +2,7 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
+import jwt from "jsonwebtoken";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -45,6 +46,69 @@ export class ObjectNotFoundError extends Error {
     this.name = "ObjectNotFoundError";
     Object.setPrototypeOf(this, ObjectNotFoundError.prototype);
   }
+}
+
+export class InvalidObjectPathError extends Error {
+  constructor() {
+    super("Invalid managed object path");
+    this.name = "InvalidObjectPathError";
+    Object.setPrototypeOf(this, InvalidObjectPathError.prototype);
+  }
+}
+
+export class ObjectOwnershipError extends Error {
+  constructor() {
+    super("Object ownership does not match the requested operation");
+    this.name = "ObjectOwnershipError";
+    Object.setPrototypeOf(this, ObjectOwnershipError.prototype);
+  }
+}
+
+export class InvalidUploadIntentError extends Error {
+  constructor() {
+    super("Invalid or expired upload intent");
+    this.name = "InvalidUploadIntentError";
+    Object.setPrototypeOf(this, InvalidUploadIntentError.prototype);
+  }
+}
+
+export interface ObjectUploadResult {
+  uploadURL: string;
+  objectPath: string;
+  uploadIntent: string;
+}
+
+interface ObjectUploadIntentPayload extends jwt.JwtPayload {
+  typ: "managed-object-upload";
+  sub: string;
+  objectPath: string;
+  purpose: "managed-content";
+}
+
+const UPLOAD_INTENT_TTL_SEC = 900;
+
+/**
+ * An established owner may only be changed through an authorized linked-post
+ * edit, and even that path never replaces the owner. A linked post without an
+ * existing ACL cannot establish ownership because it has no trusted owner.
+ */
+export function canMutateObjectAcl({
+  ownerId,
+  existingOwner,
+  hasValidUploadIntent,
+  canEditLinkedPost,
+}: {
+  ownerId: string;
+  existingOwner?: string;
+  hasValidUploadIntent: boolean;
+  canEditLinkedPost: boolean;
+}): boolean {
+  if (!hasValidUploadIntent && !canEditLinkedPost) return false;
+  if (!existingOwner) return hasValidUploadIntent;
+  if (hasValidUploadIntent && existingOwner !== ownerId && !canEditLinkedPost) {
+    return false;
+  }
+  return true;
 }
 
 export class ObjectStorageService {
@@ -99,7 +163,12 @@ export class ObjectStorageService {
     return null;
   }
 
-  async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {
+  async downloadObject(
+    file: File,
+    res: Response,
+    cacheTtlSec: number = 3600,
+    options: { publicCache?: boolean } = {},
+  ) {
     try {
       const [metadata] = await file.getMetadata();
       const aclPolicy = await getObjectAclPolicy(file);
@@ -107,7 +176,8 @@ export class ObjectStorageService {
         if (!res.headersSent) res.sendStatus(403);
         return;
       }
-      const isPublic = aclPolicy?.visibility === "public";
+      const isPublic = aclPolicy.visibility === "public";
+      const usePublicCache = options.publicCache ?? isPublic;
 
       let contentType = metadata.contentType || "application/octet-stream";
 
@@ -119,9 +189,16 @@ export class ObjectStorageService {
       res.set({
         "Content-Type": contentType,
         "Content-Length": metadata.size,
-        "Cache-Control": `${
-          isPublic ? "public" : "private"
-        }, max-age=${cacheTtlSec}`,
+        "Cache-Control": usePublicCache
+          ? `public, max-age=${cacheTtlSec}`
+          : "private, no-store",
+        ...(usePublicCache
+          ? {}
+          : {
+              "Pragma": "no-cache",
+              "Expires": "0",
+              "Vary": "Authorization",
+            }),
       });
 
       const stream = file.createReadStream();
@@ -170,7 +247,9 @@ export class ObjectStorageService {
     });
   }
 
-  async getObjectEntityUploadURL(contentType?: string): Promise<string> {
+  private async createObjectUpload(
+    contentType?: string,
+  ): Promise<{ uploadURL: string; objectPath: string }> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -180,30 +259,80 @@ export class ObjectStorageService {
     }
 
     const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+    const entityId = `uploads/${objectId}`;
+    const fullPath = `${privateObjectDir}/${entityId}`;
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
-    return signObjectURL({
+    const uploadURL = await signObjectURL({
       bucketName,
       objectName,
       method: "PUT",
       ttlSec: 900,
       contentType,
     });
+    return {
+      uploadURL,
+      objectPath: `/objects/${entityId}`,
+    };
+  }
+
+  async getObjectEntityUploadURL(contentType?: string): Promise<string> {
+    return (await this.createObjectUpload(contentType)).uploadURL;
+  }
+
+  async createObjectUploadIntent(
+    ownerId: string,
+    contentType?: string,
+  ): Promise<ObjectUploadResult> {
+    if (!ownerId) {
+      throw new InvalidUploadIntentError();
+    }
+
+    const { uploadURL, objectPath } = await this.createObjectUpload(contentType);
+    const uploadIntent = jwt.sign(
+      {
+        typ: "managed-object-upload",
+        sub: ownerId,
+        objectPath,
+        purpose: "managed-content",
+      } satisfies ObjectUploadIntentPayload,
+      getUploadIntentSecret(),
+      {
+        algorithm: "HS256",
+        expiresIn: UPLOAD_INTENT_TTL_SEC,
+      },
+    );
+
+    return { uploadURL, objectPath, uploadIntent };
+  }
+
+  verifyObjectUploadIntent(
+    token: string,
+    ownerId: string,
+    objectPath: string,
+  ): boolean {
+    try {
+      const payload = jwt.verify(token, getUploadIntentSecret(), {
+        algorithms: ["HS256"],
+      });
+      if (
+        typeof payload === "string" ||
+        payload.typ !== "managed-object-upload" ||
+        payload.sub !== ownerId ||
+        payload.objectPath !== objectPath ||
+        payload.purpose !== "managed-content"
+      ) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith("/objects/")) {
-      throw new ObjectNotFoundError();
-    }
-
-    const parts = objectPath.slice(1).split("/");
-    if (parts.length < 2) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = parts.slice(1).join("/");
+    const entityId = this.getEntityIdFromObjectPath(objectPath);
     let entityDir = this.getPrivateObjectDir();
     if (!entityDir.endsWith("/")) {
       entityDir = `${entityDir}/`;
@@ -220,29 +349,34 @@ export class ObjectStorageService {
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
-    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
+    if (rawPath.startsWith("/objects/")) {
+      this.getEntityIdFromObjectPath(rawPath);
       return rawPath;
     }
-  
-    const url = new URL(rawPath);
-    let rawObjectPath = url.pathname;
-    
-    // Remove leading slash for comparison
-    if (rawObjectPath.startsWith("/")) {
-      rawObjectPath = rawObjectPath.slice(1);
+
+    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
+      throw new InvalidObjectPathError();
     }
-  
-    let objectEntityDir = this.getPrivateObjectDir();
-    if (!objectEntityDir.endsWith("/")) {
-      objectEntityDir = `${objectEntityDir}/`;
+
+    try {
+      const url = new URL(rawPath);
+      if (url.search || url.hash) {
+        throw new InvalidObjectPathError();
+      }
+
+      const privateDir = stripSlashes(this.getPrivateObjectDir());
+      const rawObjectPath = decodeURIComponent(url.pathname).replace(/^\/+/, "");
+      if (!rawObjectPath.startsWith(`${privateDir}/`)) {
+        throw new InvalidObjectPathError();
+      }
+
+      const entityId = rawObjectPath.slice(privateDir.length + 1);
+      this.validateEntityId(entityId);
+      return `/objects/${entityId}`;
+    } catch (error) {
+      if (error instanceof InvalidObjectPathError) throw error;
+      throw new InvalidObjectPathError();
     }
-  
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
-      return rawObjectPath;
-    }
-  
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
-    return `/objects/${entityId}`;
   }
 
   async trySetObjectEntityAclPolicy(
@@ -250,11 +384,11 @@ export class ObjectStorageService {
     aclPolicy: ObjectAclPolicy
   ): Promise<string> {
     const normalizedPath = this.normalizeObjectEntityPath(rawPath);
-    if (!normalizedPath.startsWith("/")) {
-      return normalizedPath;
-    }
-
     const objectFile = await this.getObjectEntityFile(normalizedPath);
+    const existingPolicy = await getObjectAclPolicy(objectFile);
+    if (existingPolicy && existingPolicy.owner !== aclPolicy.owner) {
+      throw new ObjectOwnershipError();
+    }
     await setObjectAclPolicy(objectFile, aclPolicy);
     return normalizedPath;
   }
@@ -265,18 +399,48 @@ export class ObjectStorageService {
     ownerId: string,
   ): Promise<string> {
     const normalizedPath = this.normalizeObjectEntityPath(rawPath);
-    if (!normalizedPath.startsWith("/")) {
-      return normalizedPath;
-    }
-
     const objectFile = await this.getObjectEntityFile(normalizedPath);
     const existingPolicy = await getObjectAclPolicy(objectFile);
+    if (!existingPolicy) {
+      throw new ObjectOwnershipError();
+    }
     await setObjectAclPolicy(objectFile, {
-      owner: existingPolicy?.owner || ownerId,
+      owner: existingPolicy.owner,
       visibility,
-      aclRules: existingPolicy?.aclRules,
+      aclRules: existingPolicy.aclRules,
     });
     return normalizedPath;
+  }
+
+  private getEntityIdFromObjectPath(objectPath: string): string {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new InvalidObjectPathError();
+    }
+    const entityId = objectPath.slice("/objects/".length);
+    let decodedEntityId: string;
+    try {
+      decodedEntityId = decodeURIComponent(entityId);
+    } catch {
+      throw new InvalidObjectPathError();
+    }
+    // Keep one canonical representation so encoded separators or dot
+    // segments cannot bypass the namespace checks.
+    if (decodedEntityId !== entityId) {
+      throw new InvalidObjectPathError();
+    }
+    this.validateEntityId(entityId);
+    return entityId;
+  }
+
+  private validateEntityId(entityId: string): void {
+    if (
+      !entityId ||
+      entityId.includes("\\") ||
+      entityId.includes("\0") ||
+      entityId.split("/").some((part) => !part || part === "." || part === "..")
+    ) {
+      throw new InvalidObjectPathError();
+    }
   }
 
   async canAccessObjectEntity({
@@ -298,6 +462,18 @@ export class ObjectStorageService {
   async getObjectEntityAclPolicy(file: File): Promise<ObjectAclPolicy | null> {
     return getObjectAclPolicy(file);
   }
+}
+
+function stripSlashes(value: string): string {
+  return value.replace(/^\/+|\/+$/g, "");
+}
+
+function getUploadIntentSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) {
+    throw new Error("SESSION_SECRET must be set for upload intents");
+  }
+  return secret;
 }
 
 function parseObjectPath(path: string): {

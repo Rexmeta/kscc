@@ -83,6 +83,7 @@ export async function getObjectAclPolicy(
     const parsed = JSON.parse(aclPolicy as string) as Partial<ObjectAclPolicy>;
     if (
       typeof parsed.owner !== "string" ||
+      parsed.owner.trim().length === 0 ||
       (parsed.visibility !== "public" && parsed.visibility !== "private") ||
       (parsed.aclRules !== undefined && !Array.isArray(parsed.aclRules))
     ) {
