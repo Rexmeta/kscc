@@ -109,6 +109,17 @@ export const partners = pgTable("partners", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const surveySettings = pgTable("survey_settings", {
+  id: text("id").primaryKey().default("default"),
+  title: text("title").notNull().default(""),
+  description: text("description").notNull().default(""),
+  externalUrl: text("external_url"),
+  isActive: boolean("is_active").notNull().default(false),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Unified Posts System (WordPress-like)
 export const posts = pgTable("posts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -407,6 +418,35 @@ export const insertPartnerSchema = createInsertSchema(partners).omit({
   createdAt: true,
 });
 
+const httpsUrlSchema = z.string()
+  .trim()
+  .url("유효한 설문 링크를 입력해주세요.")
+  .refine((value) => {
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "설문 링크는 HTTPS 주소여야 합니다.");
+
+export const surveySettingsSchema = z.object({
+  title: z.string().trim().max(200, "설문 제목은 200자 이내로 입력해주세요."),
+  description: z.string().trim().max(1_000, "설문 소개는 1,000자 이내로 입력해주세요."),
+  externalUrl: z.union([httpsUrlSchema, z.literal("")]),
+  isActive: z.boolean(),
+}).strict().superRefine((data, context) => {
+  if (!data.isActive) return;
+  if (!data.title) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["title"], message: "활성 설문에는 제목이 필요합니다." });
+  }
+  if (!data.description) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["description"], message: "활성 설문에는 소개가 필요합니다." });
+  }
+  if (!data.externalUrl) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["externalUrl"], message: "활성 설문에는 설문 링크가 필요합니다." });
+  }
+});
+
 export const insertTierSchema = createInsertSchema(tiers).omit({
   id: true,
   createdAt: true,
@@ -481,6 +521,9 @@ export type SafeUser = Pick<User, "id" | "name">;
 
 export type Partner = typeof partners.$inferSelect;
 export type InsertPartner = z.infer<typeof insertPartnerSchema>;
+
+export type SurveySettings = typeof surveySettings.$inferSelect;
+export type SurveySettingsInput = z.infer<typeof surveySettingsSchema>;
 
 export type Tier = typeof tiers.$inferSelect;
 export type InsertTier = z.infer<typeof insertTierSchema>;

@@ -1,7 +1,7 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postMeta, organizationMembers,
-  tiers, roles, userMemberships,
+  tiers, roles, userMemberships, surveySettings,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
@@ -10,7 +10,8 @@ import {
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
   type PostMeta, type InsertPostMeta, type PostWithTranslations,
-  type OrganizationMember, type InsertOrganizationMember
+  type OrganizationMember, type InsertOrganizationMember,
+  type SurveySettings, type SurveySettingsInput,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne } from "drizzle-orm";
@@ -161,6 +162,10 @@ export interface IStorage {
   createPartner(partner: InsertPartner): Promise<Partner>;
   updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
   deletePartner(id: string): Promise<void>;
+
+  // Survey settings
+  getSurveySettings(): Promise<SurveySettings | undefined>;
+  upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
 
   // Unified Posts System
   /**
@@ -1162,6 +1167,41 @@ export class DatabaseStorage implements IStorage {
 
   async deletePartner(id: string): Promise<void> {
     await db.delete(partners).where(eq(partners.id, id));
+  }
+
+  async getSurveySettings(): Promise<SurveySettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(surveySettings)
+      .where(eq(surveySettings.id, "default"))
+      .limit(1);
+    return settings || undefined;
+  }
+
+  async upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings> {
+    const [storedSettings] = await db
+      .insert(surveySettings)
+      .values({
+        id: "default",
+        title: settings.title,
+        description: settings.description,
+        externalUrl: settings.externalUrl || null,
+        isActive: settings.isActive,
+        updatedBy,
+      })
+      .onConflictDoUpdate({
+        target: surveySettings.id,
+        set: {
+          title: settings.title,
+          description: settings.description,
+          externalUrl: settings.externalUrl || null,
+          isActive: settings.isActive,
+          updatedBy,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return storedSettings;
   }
 
   // Unified Posts System

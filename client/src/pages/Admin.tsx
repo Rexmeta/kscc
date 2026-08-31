@@ -15,6 +15,7 @@ const PartnersTab = lazy(() => import('@/components/admin/tabs/PartnersTab').the
 const OrganizationTab = lazy(() => import('@/components/admin/tabs/OrganizationTab').then((module) => ({ default: module.OrganizationTab })));
 const InquiriesTab = lazy(() => import('@/components/admin/tabs/InquiriesTab').then((module) => ({ default: module.InquiriesTab })));
 const ManualTab = lazy(() => import('@/components/admin/tabs/ManualTab').then((module) => ({ default: module.ManualTab })));
+const SurveyTab = lazy(() => import('@/components/admin/tabs/SurveyTab').then((module) => ({ default: module.SurveyTab })));
 
 const boardTabConfig = [
   { tab: 'articles', permission: 'news.read' },
@@ -38,15 +39,18 @@ export default function AdminPage() {
     .map(({ tab }) => tab);
   const canReadMembers = isAdmin || hasPermission('member.read');
   const canReadInquiries = isAdmin || hasPermission('inquiry.read');
+  const canManageSurvey = isAdmin || hasPermission('survey.manage');
   const canReadExecutives = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
-    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'executives', 'partners', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(hasManual ? ['manual'] : [])];
+    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'executives', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
+    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
-  const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadExecutives ? 'executives' : 'dashboard');
-  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadInquiries || canReadExecutives;
+  const defaultTab = isAdmin
+    ? 'dashboard'
+    : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadExecutives ? 'executives' : canManageSurvey ? 'survey' : 'dashboard');
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadInquiries || canReadExecutives || canManageSurvey;
 
   useEffect(() => {
     if (loading) return;
@@ -115,6 +119,7 @@ export default function AdminPage() {
                 {isAdmin && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
                 {allowedTabs.includes('executives') && <SelectItem value="executives" data-testid="option-tab-executives">임원진</SelectItem>}
                 {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
+                 {allowedTabs.includes('survey') && <SelectItem value="survey" data-testid="option-tab-survey">설문</SelectItem>}
                 {hasManual && (
                   <SelectItem value="manual" data-testid="option-tab-manual">매뉴얼</SelectItem>
                 )}
@@ -135,6 +140,7 @@ export default function AdminPage() {
               {isAdmin && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
                {allowedTabs.includes('executives') && <TabsTrigger value="executives" data-testid="tab-executives" className="text-sm whitespace-nowrap">임원진</TabsTrigger>}
               {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
+               {allowedTabs.includes('survey') && <TabsTrigger value="survey" data-testid="tab-survey" className="text-sm whitespace-nowrap">설문</TabsTrigger>}
               {hasManual && (
                 <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm whitespace-nowrap">매뉴얼</TabsTrigger>
               )}
@@ -168,6 +174,7 @@ export default function AdminPage() {
             )}
             {isAdmin && activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
+             {allowedTabs.includes('survey') && activeTab === 'survey' && <SurveyTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
             {allowedTabs.includes('executives') && activeTab === 'executives' && (
               <OrganizationTab activeTab={activeTab} executivesOnly />

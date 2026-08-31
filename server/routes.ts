@@ -14,6 +14,7 @@ import {
   inquiryStatusSchema,
   memberProfileSchema,
   memberAdminSchema,
+  surveySettingsSchema,
   users,
   type User,
 } from "@shared/schema";
@@ -331,6 +332,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         permissions: Array.from(permissions)
       });
     } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/survey", authenticateToken, async (_req, res) => {
+    try {
+      const settings = await storage.getSurveySettings();
+      if (!settings?.isActive || !settings.externalUrl) {
+        return res.json(null);
+      }
+      res.json({
+        title: settings.title,
+        description: settings.description,
+        externalUrl: settings.externalUrl,
+        isActive: true,
+      });
+    } catch (error) {
+      console.error("Error fetching survey settings:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/admin/survey", authenticateToken, requireAdminOrPermission("survey.manage"), async (_req, res) => {
+    try {
+      const settings = await storage.getSurveySettings();
+      res.json(settings || {
+        title: "",
+        description: "",
+        externalUrl: "",
+        isActive: false,
+      });
+    } catch (error) {
+      console.error("Error fetching admin survey settings:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/admin/survey", authenticateToken, requireAdminOrPermission("survey.manage"), async (req, res) => {
+    try {
+      const settings = surveySettingsSchema.parse(req.body);
+      const savedSettings = await storage.upsertSurveySettings(settings, req.user!.id);
+      res.json(savedSettings);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      console.error("Error updating survey settings:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

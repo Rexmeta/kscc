@@ -16,6 +16,8 @@ import {
   posts,
   rolePermissions,
   roles,
+  surveySettings,
+  surveySettingsSchema,
   tiers,
   userMemberships,
   users,
@@ -40,6 +42,140 @@ test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("resource", "delete"), "resource.delete");
   assert.equal(getPostPermissionKey("page", "read"), undefined);
   assert.equal(getPostPermissionKey("news", "attendeeManage"), undefined);
+});
+
+test("survey settings validate external links and enforce member visibility", async (t) => {
+  assert.throws(() => surveySettingsSchema.parse({
+    title: "Survey",
+    description: "Description",
+    externalUrl: "http://forms.example.test/survey",
+    isActive: true,
+  }));
+  assert.throws(() => surveySettingsSchema.parse({
+    title: "",
+    description: "",
+    externalUrl: "",
+    isActive: true,
+  }));
+
+  if (!databaseAvailable) {
+    t.skip("DATABASE_URL is not configured");
+    return;
+  }
+
+  const { db, storage } = await getDatabase();
+  const originalSessionSecret = process.env.SESSION_SECRET;
+  if (!process.env.SESSION_SECRET) {
+    process.env.SESSION_SECRET = `survey-settings-test-${randomUUID()}`;
+  }
+  const suffix = randomUUID();
+  const originalSettings = await storage.getSurveySettings();
+  const admin = await storage.createUser({
+    email: `survey-admin-${suffix}@example.test`,
+    password: "test-password",
+    name: "Survey Admin",
+    role: "admin",
+    userType: "staff",
+  });
+  const operator = await storage.createUser({
+    email: `survey-operator-${suffix}@example.test`,
+    password: "test-password",
+    name: "Survey Operator",
+    role: "operator",
+    userType: "staff",
+  });
+  const member = await storage.createUser({
+    email: `survey-member-${suffix}@example.test`,
+    password: "test-password",
+    name: "Survey Member",
+    userType: "staff",
+  });
+  await storage.updateUserAuthorization(operator.id, {}, "operator");
+
+  const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+  const app = express();
+  app.use(express.json());
+  const server = await registerRoutes(app);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, resolve);
+    });
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const request = async (
+      path: string,
+      options: { token?: string; method?: string; body?: unknown } = {},
+    ) => {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: options.method,
+        headers: {
+          ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+      });
+      const responseText = await response.text();
+      let body: unknown = responseText;
+      try {
+        body = JSON.parse(responseText);
+      } catch {
+        // Express uses plain text for its default 401 response.
+      }
+      return { status: response.status, body };
+    };
+    const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
+    const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
+    const memberToken = jwt.sign({ id: member.id }, process.env.SESSION_SECRET!);
+    const activeSettings = {
+      title: "회원 의견 조사",
+      description: "협회 서비스 개선을 위한 설문입니다.",
+      externalUrl: "https://forms.example.com/survey",
+      isActive: true,
+    };
+
+    assert.equal((await request("/api/survey")).status, 401);
+    assert.equal((await request("/api/admin/survey", { token: memberToken })).status, 403);
+    assert.equal((await request("/api/admin/survey", { token: operatorToken })).status, 200);
+
+    const invalidUpdate = await request("/api/admin/survey", {
+      token: operatorToken,
+      method: "PUT",
+      body: { ...activeSettings, externalUrl: "javascript:alert(1)" },
+    });
+    assert.equal(invalidUpdate.status, 400);
+
+    const operatorUpdate = await request("/api/admin/survey", {
+      token: operatorToken,
+      method: "PUT",
+      body: activeSettings,
+    });
+    assert.equal(operatorUpdate.status, 200);
+
+    const memberSurvey = await request("/api/survey", { token: memberToken });
+    assert.equal(memberSurvey.status, 200);
+    assert.deepEqual(memberSurvey.body, activeSettings);
+
+    const adminSurvey = await request("/api/admin/survey", { token: adminToken });
+    assert.equal(adminSurvey.status, 200);
+    assert.equal(adminSurvey.body.updatedBy, operator.id);
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => error ? reject(error) : resolve()),
+    );
+    await db.delete(surveySettings).where(eq(surveySettings.id, "default"));
+    if (originalSettings) {
+      await db.insert(surveySettings).values(originalSettings);
+    }
+    await db.delete(users).where(inArray(users.id, [admin.id, operator.id, member.id]));
+    if (originalSessionSecret === undefined) {
+      delete process.env.SESSION_SECRET;
+    } else {
+      process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  }
 });
 
 test("inquiry contracts trim text and reject unsafe or oversized values", () => {

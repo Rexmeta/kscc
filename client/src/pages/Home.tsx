@@ -3,17 +3,20 @@ import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
+import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp, ClipboardList } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { Member, PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys } from '@/lib/queryClient';
+import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 
 export default function Home() {
   const { language } = useLanguage();
+  const { isAuthenticated } = useAuth();
 
   const formatDate = (date?: string | Date | null) => {
     if (!date) return '';
@@ -54,6 +57,22 @@ export default function Home() {
       const response = await fetch('/api/members?limit=12', { signal });
       return response.json();
     },
+  });
+
+  const { data: survey } = useQuery<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive'> | null>({
+    queryKey: ['/api/survey'],
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/survey', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        signal,
+      });
+      if (response.status === 401 || response.status === 403) return null;
+      if (!response.ok) throw new Error('Failed to fetch survey settings');
+      return response.json();
+    },
+    enabled: isAuthenticated,
   });
 
   const events = eventsData?.posts || [];
@@ -118,6 +137,28 @@ export default function Home() {
                 </Button>
               </Link>
             </div>
+
+            {survey?.isActive && survey.externalUrl && (
+              <Card className="mx-auto mt-8 max-w-3xl border-white/20 bg-white/10 text-left text-white shadow-2xl backdrop-blur-lg">
+                <CardContent className="flex flex-col items-start gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 rounded-full bg-white/15 p-3">
+                      <ClipboardList className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">{survey.title}</h2>
+                      <p className="mt-2 text-sm leading-6 text-white/80">{survey.description}</p>
+                    </div>
+                  </div>
+                  <Button asChild size="lg" className="btn-accent shrink-0">
+                    <a href={survey.externalUrl} target="_blank" rel="noopener noreferrer" data-testid="button-home-survey">
+                      설문하기
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {latestNews && (
               <div className="mt-12 rounded-2xl border border-white/15 bg-white/5 p-6 text-left shadow-2xl backdrop-blur-lg">

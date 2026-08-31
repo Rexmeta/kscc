@@ -8,6 +8,7 @@ import type {
   User,
   Partner,
   InquiryWithReplies,
+  SurveySettings,
 } from '@shared/schema';
 
 const authHeaders = () => ({
@@ -82,6 +83,16 @@ export function useAdminInquiries(activeTab: string) {
     queryKey: ['/api/inquiries'],
     queryFn: () => fetchJson<InquiriesResponse>('/api/inquiries'),
     enabled: canRead && activeTab === 'inquiries',
+  });
+}
+
+export function useAdminSurvey(activeTab: string) {
+  const { isAdmin, hasPermission } = useAuth();
+  const canManage = isAdmin || hasPermission('survey.manage');
+  return useQuery<SurveySettings>({
+    queryKey: ['/api/admin/survey'],
+    queryFn: () => fetchJson<SurveySettings>('/api/admin/survey'),
+    enabled: canManage && activeTab === 'survey',
   });
 }
 

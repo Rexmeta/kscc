@@ -108,6 +108,7 @@ const PERMS = [
   // System
   ['system.dashboard', 'system', 'read', '대시보드 접근'],
   ['system.settings', 'system', 'manage', '시스템 설정'],
+  ['survey.manage', 'survey', 'manage', '설문 설정 관리'],
 ] as const;
 
 // Role-Permission mapping (wildcard support: '*' for all, 'resource.*' for all actions on resource)
@@ -160,6 +161,7 @@ const ROLE_PERMS: Record<string, string[]> = {
     'partner.*',
     'inquiry.*',
     'system.dashboard',
+    'survey.manage',
     'organization.executives.read',
     'organization.executives.create',
     'organization.executives.update',
