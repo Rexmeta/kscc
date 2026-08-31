@@ -52,6 +52,12 @@ import {
   ObjectPermission,
 } from "./objectAcl";
 import { canMutateObjectAcl, ObjectStorageService } from "./objectStorage";
+import {
+  canExposeMetaKey,
+  getMetaValueType,
+  isMetaKeyForPostType,
+  validatePostMetaValue,
+} from "@shared/postMetaKeys";
 
 test("organization member ordering is deterministic for public and admin views", () => {
   const members = [
@@ -1280,6 +1286,219 @@ test("scheduled post rules reject conflicting states and resource ACLs follow ti
     "private",
   );
 });
+
+test("post metadata contracts keep public and management fields separate", () => {
+  assert.equal(isMetaKeyForPostType("news", "news.category"), true);
+  assert.equal(isMetaKeyForPostType("event", "news.category"), false);
+  assert.equal(getMetaValueType("event.eventDate"), "timestamp");
+  assert.equal(getMetaValueType("event.fee"), "number");
+
+  assert.equal(canExposeMetaKey("news", "news.images", false), true);
+  assert.equal(canExposeMetaKey("news", "news.viewCount", false), false);
+  assert.equal(canExposeMetaKey("news", "internal.workflow", false), false);
+  assert.equal(canExposeMetaKey("news", "news.viewCount", true), true);
+
+  assert.doesNotThrow(() =>
+    validatePostMetaValue("event", "event.capacity", 100),
+  );
+  assert.doesNotThrow(() =>
+    validatePostMetaValue("event", "event.eventDate", new Date()),
+  );
+  assert.throws(() =>
+    validatePostMetaValue("event", "event.capacity", "100"),
+  );
+  assert.throws(() =>
+    validatePostMetaValue("event", "event.eventDate", "2026-09-01"),
+  );
+  assert.throws(() =>
+    validatePostMetaValue("news", "event.fee", 100),
+  );
+});
+
+test(
+  "post metadata responses are filtered for public, member, editor, and administrator access",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `post-meta-test-${randomUUID()}`;
+    }
+    const suffix = randomUUID();
+    const admin = await storage.createUser({
+      email: `post-meta-admin-${suffix}@example.test`,
+      password: "test-password",
+      name: "Post Metadata Admin",
+      role: "admin",
+      userType: "staff",
+    });
+    const member = await storage.createUser({
+      email: `post-meta-member-${suffix}@example.test`,
+      password: "test-password",
+      name: "Post Metadata Member",
+      userType: "staff",
+    });
+    const post = await storage.createPost({
+      postType: "news",
+      status: "published",
+      visibility: "public",
+      slug: `post-meta-${suffix}`,
+      primaryLocale: "ko",
+      authorId: admin.id,
+      publishedAt: new Date(Date.now() - 60_000),
+    });
+
+    await db.insert(postMeta).values([
+      {
+        postId: post.id,
+        key: "news.category",
+        valueText: "notice",
+      },
+      {
+        postId: post.id,
+        key: "news.viewCount",
+        valueNumber: 17,
+      },
+      {
+        postId: post.id,
+        key: "internal.workflow",
+        valueText: "review",
+      },
+    ]);
+
+    const editorAccess: PostAccessContext = {
+      userId: member.id,
+      isAdmin: false,
+      isEditor: true,
+      managedPostTypes: new Set(["news"]),
+      canReadMembers: false,
+      canReadPremium: false,
+    };
+    const adminAccess: PostAccessContext = {
+      ...editorAccess,
+      userId: admin.id,
+      isAdmin: true,
+      isEditor: false,
+    };
+    const createdPostIds: string[] = [];
+
+    const publicPost = await storage.getPostWithTranslations(post.id, undefined, publicPostAccess);
+    const memberPost = await storage.getPostWithTranslations(
+      post.id,
+      undefined,
+      { ...publicPostAccess, userId: member.id },
+    );
+    const editorPost = await storage.getPostWithTranslations(post.id, undefined, editorAccess);
+    const adminPost = await storage.getPostWithTranslations(post.id, undefined, adminAccess);
+    assert.deepEqual(publicPost?.meta.map(({ key }) => key), ["news.category"]);
+    assert.deepEqual(memberPost?.meta.map(({ key }) => key), ["news.category"]);
+    assert.deepEqual(editorPost?.meta.map(({ key }) => key).sort(), [
+      "internal.workflow",
+      "news.category",
+      "news.viewCount",
+    ]);
+    assert.deepEqual(adminPost?.meta.map(({ key }) => key).sort(), [
+      "internal.workflow",
+      "news.category",
+      "news.viewCount",
+    ]);
+
+    const publicList = await storage.getPosts({
+      postType: "news",
+      status: "published",
+      search: post.slug,
+      compact: true,
+      access: publicPostAccess,
+    });
+    assert.deepEqual(publicList.posts[0]?.meta.map(({ key }) => key), ["news.category"]);
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    const tokenFor = (id: string) => jwt.sign({ id }, process.env.SESSION_SECRET!);
+    const request = (
+      path: string,
+      token: string,
+      options: { method?: string; body?: unknown } = {},
+    ) =>
+      fetch(`http://127.0.0.1:${(server.address() as any).port}${path}`, {
+        method: options.method,
+        headers: { Authorization: `Bearer ${token}` },
+        ...(options.body !== undefined
+          ? {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(options.body),
+            }
+          : {}),
+      });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const publicMeta = await request(`/api/posts/${post.id}/meta`, tokenFor(member.id));
+      assert.equal(publicMeta.status, 200);
+      assert.deepEqual((await publicMeta.json()).map(({ key }: { key: string }) => key), ["news.category"]);
+
+      const hiddenKey = await request(
+        `/api/posts/${post.id}/meta?key=news.viewCount`,
+        tokenFor(member.id),
+      );
+      assert.equal(hiddenKey.status, 404);
+
+      const adminMeta = await request(
+        `/api/posts/${post.id}/meta?admin=true`,
+        tokenFor(admin.id),
+      );
+      assert.equal(adminMeta.status, 200);
+      assert.deepEqual((await adminMeta.json()).map(({ key }: { key: string }) => key).sort(), [
+        "internal.workflow",
+        "news.category",
+        "news.viewCount",
+      ]);
+
+      const rejectedAuthorCreate = await request("/api/posts", tokenFor(admin.id), {
+        method: "POST",
+        body: {
+          postType: "news",
+          slug: `rejected-author-${suffix}`,
+          primaryLocale: "ko",
+          status: "draft",
+          visibility: "public",
+          authorId: member.id,
+        },
+      });
+      assert.equal(rejectedAuthorCreate.status, 400);
+
+      const actorOwnedCreate = await request("/api/posts", tokenFor(admin.id), {
+        method: "POST",
+        body: {
+          postType: "news",
+          slug: `actor-owned-${suffix}`,
+          primaryLocale: "ko",
+          status: "draft",
+          visibility: "public",
+        },
+      });
+      assert.equal(actorOwnedCreate.status, 201);
+      const actorOwnedPost = await actorOwnedCreate.json();
+      createdPostIds.push(actorOwnedPost.id);
+      assert.equal(actorOwnedPost.authorId, admin.id);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await db.delete(posts).where(inArray(posts.id, createdPostIds));
+      await db.delete(posts).where(eq(posts.id, post.id));
+      await db.delete(users).where(inArray(users.id, [admin.id, member.id]));
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
 
 test(
   "database scheduled claims are bounded, idempotent, and reconcile resource ACL markers",

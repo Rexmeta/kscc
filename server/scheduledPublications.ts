@@ -7,6 +7,7 @@ import {
   getResourceAclSyncMarker,
   RESOURCE_ACL_SYNC_META_KEY,
 } from "./postScheduling";
+import { publicPostAccess, type PostAccessContext } from "./postAccess";
 import { storage, type IStorage } from "./storage";
 
 export const DEFAULT_SCHEDULED_PUBLICATION_BATCH_SIZE = 25;
@@ -18,9 +19,18 @@ const MAX_SCHEDULED_PUBLICATION_INTERVAL_MS = 5 * 60_000;
 export interface ScheduledPublicationStorage {
   claimDueScheduledPosts(now: Date, limit: number): Promise<Post[]>;
   getResourcePostsNeedingAcl(now: Date, limit: number): Promise<Post[]>;
-  getPostMeta(postId: string, key: string): Promise<PostMeta | undefined>;
+  getPostMeta(
+    postId: string,
+    key: string,
+    access?: PostAccessContext,
+  ): Promise<PostMeta | undefined>;
   markResourceAclSynchronized(postId: string, marker: string): Promise<void>;
 }
+
+const internalPostMetaAccess: PostAccessContext = {
+  ...publicPostAccess,
+  isAdmin: true,
+};
 
 export interface ScheduledPublicationObjectStorage {
   updateObjectEntityAclVisibility(
@@ -131,10 +141,15 @@ export class ScheduledPublicationRunner {
         const existingMarker = await this.storage.getPostMeta(
           post.id,
           RESOURCE_ACL_SYNC_META_KEY,
+          internalPostMetaAccess,
         );
         if (existingMarker?.valueText === marker) continue;
 
-        const fileMeta = await this.storage.getPostMeta(post.id, "resource.fileUrl");
+        const fileMeta = await this.storage.getPostMeta(
+          post.id,
+          "resource.fileUrl",
+          internalPostMetaAccess,
+        );
         const fileUrl = fileMeta?.valueText ||
           (typeof fileMeta?.value === "string" ? fileMeta.value : "");
         if (!fileUrl) continue;

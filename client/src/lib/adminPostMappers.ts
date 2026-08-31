@@ -28,7 +28,7 @@ export interface NewsFormData {
   publishedAt?: Date | string | null;
 }
 
-export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
+export function mapNewsFormToPost(formData: NewsFormData, _authorId: string): {
   post: Omit<InsertPost, 'id'>;
   translation: Omit<InsertPostTranslation, 'id' | 'postId'>;
   meta: Omit<InsertPostMeta, 'id' | 'postId'>[];
@@ -40,7 +40,6 @@ export function mapNewsFormToPost(formData: NewsFormData, authorId: string): {
       postType: 'news',
       slug,
       primaryLocale: 'ko',
-      authorId,
       status: formData.isPublished ? 'published' : 'draft',
       visibility: 'public',
       isFeatured: false,
@@ -133,7 +132,7 @@ export interface EventFormData {
   publishedAt?: Date | string | null;
 }
 
-export function mapEventFormToPost(formData: EventFormData, authorId: string): {
+export function mapEventFormToPost(formData: EventFormData, _authorId: string): {
   post: Omit<InsertPost, 'id'>;
   translation: Omit<InsertPostTranslation, 'id' | 'postId'>;
   meta: Omit<InsertPostMeta, 'id' | 'postId'>[];
@@ -145,7 +144,6 @@ export function mapEventFormToPost(formData: EventFormData, authorId: string): {
       postType: 'event',
       slug,
       primaryLocale: 'ko',
-      authorId,
       status: formData.isPublished ? 'published' : 'draft',
       visibility: formData.isPublic ? 'public' : 'members',
       isFeatured: false,
@@ -212,8 +210,8 @@ export function mapEventFormToPost(formData: EventFormData, authorId: string): {
       }] : []),
       {
         key: EVENT_META_KEYS.fee,
-        valueText: formData.fee?.toString() || '0',
-        valueNumber: null,
+        valueText: null,
+        valueNumber: formData.fee || 0,
         valueBoolean: null,
         valueTimestamp: null,
         value: null,
@@ -289,7 +287,7 @@ export interface ResourceFormData {
   isPublished: boolean;
 }
 
-export function mapResourceFormToPost(formData: ResourceFormData, authorId: string, fileUrl?: string): {
+export function mapResourceFormToPost(formData: ResourceFormData, _authorId: string, fileUrl?: string): {
   post: Omit<InsertPost, 'id'>;
   translation: Omit<InsertPostTranslation, 'id' | 'postId'>;
   meta: Omit<InsertPostMeta, 'id' | 'postId'>[];
@@ -302,7 +300,6 @@ export function mapResourceFormToPost(formData: ResourceFormData, authorId: stri
       postType: 'resource',
       slug,
       primaryLocale: 'ko',
-      authorId,
       status: formData.isPublished ? 'published' : 'draft',
       visibility: formData.visibility,
       isFeatured: false,

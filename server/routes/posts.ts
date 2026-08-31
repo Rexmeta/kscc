@@ -15,6 +15,10 @@ import {
   InvalidPostScheduleError,
   getResourceAclSyncMarker,
 } from "../postScheduling";
+import {
+  canExposeMetaKey,
+  PostMetaValidationError,
+} from "@shared/postMetaKeys";
 import "../types";
 
 const router = Router();
@@ -86,7 +90,7 @@ const postMetaPayloadSchema = z.object({
   valueNumber: z.number().nullable().optional(),
   valueBoolean: z.boolean().nullable().optional(),
   valueTimestamp: z.coerce.date().nullable().optional(),
-});
+}).strict();
 
 const eventRegistrationRequestSchema = z.object({
   attendeeName: z.string().trim().min(1).max(200),
@@ -339,26 +343,24 @@ function generateSlug(postType: string): string {
 }
 
 function getPostMetaValue(metaData: z.infer<typeof postMetaPayloadSchema>) {
-  if (metaData.valueText !== null && metaData.valueText !== undefined) {
-    return metaData.valueText;
+  const values = [
+    metaData.value,
+    metaData.valueText,
+    metaData.valueNumber,
+    metaData.valueBoolean,
+    metaData.valueTimestamp,
+  ].filter((value) => value !== null && value !== undefined);
+  if (values.length > 1) {
+    throw new PostMetaValidationError("Metadata must contain exactly one value");
   }
-  if (metaData.valueNumber !== null && metaData.valueNumber !== undefined) {
-    return metaData.valueNumber;
-  }
-  if (metaData.valueBoolean !== null && metaData.valueBoolean !== undefined) {
-    return metaData.valueBoolean;
-  }
-  if (metaData.valueTimestamp !== null && metaData.valueTimestamp !== undefined) {
-    return metaData.valueTimestamp;
-  }
-  return metaData.value;
+  return values[0];
 }
 
-const postCreateDataSchema = insertPostSchema.extend({
+const postCreateDataSchema = insertPostSchema.omit({ authorId: true }).extend({
   publishedAt: z.coerce.date().nullable().optional(),
   scheduledAt: z.coerce.date().nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
-});
+}).strict();
 
 const completePostCreateSchema = z.object({
   post: postCreateDataSchema,
@@ -367,10 +369,10 @@ const completePostCreateSchema = z.object({
 });
 
 const completePostUpdateSchema = z.object({
-  post: postCreateDataSchema.partial().omit({ postType: true }),
+  post: postCreateDataSchema.partial().omit({ postType: true }).strict(),
   translation: insertPostTranslationSchema.omit({ postId: true }),
   meta: z.array(postMetaPayloadSchema),
-});
+}).strict();
 
 const postStatusUpdateSchema = z.object({
   status: z.enum(["draft", "published"]),
@@ -389,8 +391,9 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     if (postData.status === "published" &&
       !await requirePostPermission(req, res, postData.postType, "publish")) return;
     
-    // Set author to current user if not provided
-    const authorId = postData.authorId || req.user?.id;
+    // Authorship is assigned by the authenticated actor and cannot be
+    // selected by the request body.
+    const authorId = req.user?.id;
     if (!authorId) {
       return res.status(400).json({ message: "Author ID is required" });
     }
@@ -430,6 +433,9 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post data", errors: error.errors });
+    }
+    if (error instanceof PostMetaValidationError) {
+      return res.status(400).json({ message: error.message });
     }
     console.error("[Posts API] Error creating post:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -528,7 +534,7 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     }
 
     // Validate update data (partial)
-    const updateSchema = insertPostSchema.partial();
+    const updateSchema = postCreateDataSchema.partial().strict();
     const updateData = updateSchema.parse(req.body);
     if (updateData.status !== undefined &&
       updateData.status !== existingPost.status &&
@@ -551,6 +557,9 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid update data", errors: error.errors });
+    }
+    if (error instanceof PostMetaValidationError) {
+      return res.status(400).json({ message: error.message });
     }
     console.error("[Posts API] Error updating post:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -616,7 +625,7 @@ router.post("/:id/translations", authenticateToken, async (req: Request, res: Re
 router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
-    const key = req.query.key as string | undefined;
+    const key = z.string().trim().min(1).max(100).optional().parse(req.query.key);
     const adminMode = req.query.admin === "true";
     if (adminMode) {
       const adminPost = await storage.getPost(id);
@@ -635,17 +644,26 @@ router.get("/:id/meta", optionalAuthenticateToken, async (req: Request, res: Res
     }
     
     if (key) {
+      const managementRead = access.isAdmin ||
+        (access.isEditor && access.managedPostTypes.has(post.postType));
+      if (!canExposeMetaKey(post.postType, key, managementRead)) {
+        // Do not reveal whether a hidden or unknown key exists.
+        return res.status(404).json({ message: "Metadata not found" });
+      }
       // Get specific meta value
-      const value = await storage.getPostMeta(id, key);
+      const value = await storage.getPostMeta(id, key, access);
       res.json({ key, value });
     } else {
       // Get all meta for post
-      const meta = await storage.getPostMetaAll(id);
+      const meta = await storage.getPostMetaAll(id, access);
       res.json(meta);
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });
+    }
+    if (error instanceof PostMetaValidationError) {
+      return res.status(400).json({ message: error.message });
     }
     console.error("[Posts API] Error fetching post meta:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -677,6 +695,9 @@ router.post("/:id/meta", authenticateToken, async (req: Request, res: Response) 
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid meta data", errors: error.errors });
     }
+    if (error instanceof PostMetaValidationError) {
+      return res.status(400).json({ message: error.message });
+    }
     console.error("[Posts API] Error setting post meta:", error);
     res.status(500).json({ message: "Internal server error" });
   }
@@ -688,9 +709,9 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
     const { id } = postIdSchema.parse(req.params);
     
     const incrementSchema = z.object({
-      key: z.string(),
-      amount: z.number().optional().default(1),
-    });
+      key: z.string().trim().min(1).max(100),
+      amount: z.number().int().finite().optional().default(1),
+    }).strict();
     
     const { key, amount } = incrementSchema.parse(req.body);
     
@@ -700,6 +721,9 @@ router.post("/:id/meta/increment", authenticateToken, requireAdmin, async (req: 
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid increment data", errors: error.errors });
+    }
+    if (error instanceof PostMetaValidationError) {
+      return res.status(400).json({ message: error.message });
     }
     console.error("[Posts API] Error incrementing post meta:", error);
     res.status(500).json({ message: "Internal server error" });

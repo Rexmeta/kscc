@@ -182,6 +182,28 @@ test(
       assert.equal(unpublishedPost.status, "draft");
       assert.equal(unpublishedPost.publishedAt, null);
 
+      const attemptedAuthorTransfer = await request(
+        `/api/posts/${post.id}`,
+        admin.id,
+        "PATCH",
+        { authorId: publisher.id },
+      );
+      assert.equal(attemptedAuthorTransfer.status, 400);
+      assert.equal((await storage.getPost(post.id))?.authorId, admin.id);
+
+      const attemptedCompleteAuthorTransfer = await request(
+        `/api/posts/${post.id}`,
+        admin.id,
+        "PATCH",
+        {
+          post: { authorId: publisher.id },
+          translation: { locale: "ko", title: "Should be rejected" },
+          meta: [],
+        },
+      );
+      assert.equal(attemptedCompleteAuthorTransfer.status, 400);
+      assert.equal((await storage.getPost(post.id))?.authorId, admin.id);
+
       await storage.updatePost(post.id, { status: "archived" });
       const archivedPublish = await request(
         `/api/posts/${post.id}/status`,

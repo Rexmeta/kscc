@@ -30,6 +30,12 @@ import {
   RESOURCE_ACL_SYNC_META_KEY,
   validatePostSchedule,
 } from "./postScheduling";
+import {
+  canExposeMetaKey,
+  isMetaKeyForPostType,
+  PostMetaValidationError,
+  validatePostMetaValue,
+} from "@shared/postMetaKeys";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
@@ -85,8 +91,16 @@ function getPostMetaValueColumns(value: any): Pick<
   };
 }
 
-export type { PostAccessContext } from "./postAccess";
-
+function getStoredPostMetaValue(meta: PostMeta): unknown {
+  const values = [
+    meta.value,
+    meta.valueText,
+    meta.valueNumber,
+    meta.valueBoolean,
+    meta.valueTimestamp,
+  ].filter((value) => value !== null && value !== undefined);
+  return values.length === 1 ? values[0] : undefined;
+}
 function boundedPageSize(limit: number | undefined, max: number): number {
   if (limit === undefined || !Number.isFinite(limit)) {
     return Math.min(DEFAULT_PAGE_SIZE, max);
@@ -131,31 +145,50 @@ function preparePostUpdate(currentPost: Post, updates: Partial<Post>): Partial<P
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
+
   getUserByEmail(email: string): Promise<User | undefined>;
+
   getUserCount(): Promise<number>;
+
   getUsers(filters?: {
     limit?: number;
     offset?: number;
+
   }): Promise<{ users: User[]; total: number }>;
+
   createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
+
   createUserWithMember(userData: InsertUser & { role?: string; userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
+
   createUserForRegistration(userData: InsertUser & { userType?: string }): Promise<User>;
+
   createUserWithMemberForRegistration(userData: InsertUser & { userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
+
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+
   updateUserAuthorization(
     id: string,
     updates: Partial<User>,
     accountRole?: AccountRole,
+
   ): Promise<User | undefined>;
+
   revokeUserSessions(id: string): Promise<boolean>;
+
   deleteUserAccount(id: string): Promise<boolean>;
+
   updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined>;
+
   bootstrapAdmin(email: string, password?: string): Promise<User>;
+
   validateUser(email: string, password: string): Promise<User | undefined>;
 
   // Members
+
   getMember(id: string): Promise<Member | undefined>;
+
   getMemberByUserId(userId: string): Promise<Member | undefined>;
+
   getMembers(filters?: {
     country?: string;
     industry?: string;
@@ -164,50 +197,78 @@ export interface IStorage {
     admin?: boolean;
     limit?: number;
     offset?: number;
+
   }): Promise<{ members: Member[]; total: number }>;
+
   createMember(member: InsertMember): Promise<Member>;
+
   updateMember(id: string, updates: Partial<Member>): Promise<Member | undefined>;
 
   // Event Registrations
+
   getEventRegistration(eventId: string, userId: string): Promise<EventRegistration | undefined>;
+
   getEventRegistrationById(id: string): Promise<EventRegistration | undefined>;
+
   getEventRegistrations(eventId: string): Promise<EventRegistration[]>;
+
   getUserRegistrations(userId: string): Promise<UserRegistrationWithEvent[]>;
+
   createEventRegistration(registration: InsertEventRegistration): Promise<EventRegistration | undefined>;
+
   registerForEvent(registration: InsertEventRegistration): Promise<EventRegistration>;
+
   cancelEventRegistration(id: string, userId: string): Promise<EventRegistration>;
+
   updateEventRegistration(id: string, updates: Partial<EventRegistration>): Promise<EventRegistration | undefined>;
 
   // Inquiries
+
   getInquiry(id: string): Promise<Inquiry | undefined>;
+
   getInquiryWithReplies(id: string): Promise<InquiryWithReplies | undefined>;
+
   getInquiries(filters?: {
     status?: string;
     category?: string;
     limit?: number;
     offset?: number;
+
   }): Promise<{ inquiries: Inquiry[]; total: number }>;
+
   createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
+
   updateInquiry(id: string, updates: Partial<Inquiry>): Promise<Inquiry | undefined>;
   
   // Inquiry Replies
+
   getInquiryReplies(inquiryId: string): Promise<InquiryReply[]>;
+
   createInquiryReply(reply: InsertInquiryReply): Promise<InquiryReply>;
+
   updateInquiryReplyEmailStatus(id: string, sent: boolean): Promise<void>;
 
   // Partners
+
   getPartner(id: string): Promise<Partner | undefined>;
+
   getPartners(filters?: {
     active?: boolean;
     limit?: number;
     offset?: number;
+
   }): Promise<{ partners: Partner[]; total: number }>;
+
   createPartner(partner: InsertPartner): Promise<Partner>;
+
   updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
+
   deletePartner(id: string): Promise<void>;
 
   // Survey settings
+
   getSurveySettings(): Promise<SurveySettings | undefined>;
+
   upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
 
   // Unified Posts System
@@ -216,15 +277,24 @@ export interface IStorage {
    * managementRequested only enables the editor path; it never makes a caller
    * an administrator.
    */
+
   getPostAccessContext(userId?: string, managementRequested?: boolean): Promise<PostAccessContext>;
   // Posts
+
   getPost(id: string): Promise<Post | undefined>;
+
   getPostBySlug(slug: string): Promise<Post | undefined>;
+
   getPostByObjectPath(objectPath: string): Promise<Post | undefined>;
+
   claimDueScheduledPosts(now: Date, limit: number): Promise<Post[]>;
+
   getResourcePostsNeedingAcl(now: Date, limit: number): Promise<Post[]>;
+
   getPostBySlugWithTranslations(slug: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
+
   getPostWithTranslations(id: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
+
   getPosts(filters?: {
     postType?: string;
     status?: string;
@@ -241,35 +311,58 @@ export interface IStorage {
     limit?: number;
     offset?: number;
     access?: PostAccessContext;
+
   }): Promise<{ posts: PostWithTranslations[]; total: number }>;
+
   getResourceCategoryCounts(access?: PostAccessContext): Promise<Record<string, number>>;
+
   createPost(post: InsertPost): Promise<Post>;
-  updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined>;
+
+  updatePost(
+    id: string,
+    updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
+  ): Promise<Post | undefined>;
+
   updatePostComplete(
     id: string,
-    updates: Partial<Post>,
+    updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
     translation: InsertPostTranslation,
     metadata: Array<{ key: string; value?: any }>,
+
   ): Promise<Post | undefined>;
+
   deletePost(id: string): Promise<void>;
 
   // Post Translations
+
   getPostTranslation(postId: string, locale: string): Promise<PostTranslation | undefined>;
+
   getPostTranslations(postId: string): Promise<PostTranslation[]>;
+
   createPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation>;
+
   updatePostTranslation(id: string, updates: Partial<PostTranslation>): Promise<PostTranslation | undefined>;
+
   upsertPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation>;
 
   // Post Meta
-  getPostMeta(postId: string, key: string): Promise<PostMeta | undefined>;
-  getPostMetaAll(postId: string): Promise<PostMeta[]>;
+
+  getPostMeta(postId: string, key: string, access?: PostAccessContext): Promise<PostMeta | undefined>;
+
+  getPostMetaAll(postId: string, access?: PostAccessContext): Promise<PostMeta[]>;
+
   setPostMeta(postId: string, key: string, value: any): Promise<PostMeta>;
+
   deletePostMeta(postId: string, key: string): Promise<void>;
-  incrementPostMetaNumber(postId: string, key: string, amount?: number): Promise<void>;
+
+  incrementPostMetaNumber(postId: string, key: string, amount?: number): Promise<number>;
+
   markResourceAclSynchronized(postId: string, marker: string): Promise<void>;
 
   // Organization Members
+
   getOrganizationMember(id: string): Promise<OrganizationMember | undefined>;
+
   getOrganizationMembers(filters?: {
     category?: string;
     categories?: readonly string[];
@@ -277,9 +370,13 @@ export interface IStorage {
     limit?: number;
     offset?: number;
   }): Promise<{ members: OrganizationMember[]; total: number }>;
+
   createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember>;
+
   updateOrganizationMember(id: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember | undefined>;
+
   reorderOrganizationMembers(category: string, memberIds: string[]): Promise<OrganizationMember[]>;
+
   deleteOrganizationMember(id: string): Promise<void>;
 }
 
@@ -1612,7 +1709,7 @@ export class DatabaseStorage implements IStorage {
 
     const [translations, meta] = await Promise.all([
       this.getLocalizedPostTranslations(post.id, post.primaryLocale, locale),
-      this.getPostMetaAll(post.id),
+      this.getPostMetaAll(post.id, access),
     ]);
 
     return {
@@ -1632,7 +1729,7 @@ export class DatabaseStorage implements IStorage {
 
     const [translations, meta] = await Promise.all([
       this.getLocalizedPostTranslations(id, post.primaryLocale, locale),
-      this.getPostMetaAll(id),
+      this.getPostMetaAll(id, access),
     ]);
 
     return {
@@ -1844,15 +1941,26 @@ export class DatabaseStorage implements IStorage {
     
     // Public cards only need the metadata used to render the list.
     const compactMetaKeys = filters?.postType === 'news'
-      ? ['news.category', 'category', 'news.images']
+      ? ['news.category', 'news.images', 'news.videos']
       : filters?.postType === 'event'
-        ? ['event.eventDate', 'event.date', 'event.endDate', 'event.location', 'event.category', 'event.eventType', 'event.capacity', 'event.fee', 'event.registrationDeadline', 'event.images']
+        ? ['event.eventDate', 'event.endDate', 'event.location', 'event.category', 'event.eventType', 'event.capacity', 'event.fee', 'event.registrationDeadline', 'event.speakers', 'event.program', 'event.images']
         : filters?.postType === 'resource'
-          ? ['resource.fileUrl', 'resource.fileName', 'resource.fileType', 'resource.fileSize', 'resource.category', 'resource.accessLevel', 'resource.downloadCount']
+          ? ['resource.fileUrl', 'resource.fileName', 'resource.fileType', 'resource.fileSize', 'resource.category', 'resource.accessLevel']
           : undefined;
     const metaConditions = [inArray(postMeta.postId, postIds)];
-    if (filters?.compact && compactMetaKeys) {
-      metaConditions.push(inArray(postMeta.key, compactMetaKeys));
+    const managementRead = access.isAdmin ||
+      (filters?.postType ? canManagePostType(access, filters.postType) : false);
+    const requestedMetaKeys = filters?.compact && compactMetaKeys
+      ? managementRead
+        ? compactMetaKeys
+        : compactMetaKeys.filter((key) => {
+            const postType = filters.postType!;
+            return isMetaKeyForPostType(postType, key) &&
+              canExposeMetaKey(postType, key, false);
+          })
+      : undefined;
+    if (requestedMetaKeys) {
+      metaConditions.push(inArray(postMeta.key, requestedMetaKeys));
     }
     const allMeta = await db
       .select()
@@ -1868,10 +1976,18 @@ export class DatabaseStorage implements IStorage {
       translationsByPost.set(t.postId, [...existing, t]);
     });
     
-    allMeta.forEach(m => {
+    allMeta
+      .filter((meta) => {
+        const post = postsResult.find(({ id }) => id === meta.postId);
+        if (!post) return false;
+        const postManagementRead = access.isAdmin || canManagePostType(access, post.postType);
+        return canExposeMetaKey(post.postType, meta.key, postManagementRead) &&
+          (postManagementRead || isValidStoredPostMeta(post.postType, meta));
+      })
+      .forEach(m => {
       const existing = metaByPost.get(m.postId) || [];
       metaByPost.set(m.postId, [...existing, m]);
-    });
+      });
     
     // Combine posts with their translations and meta
     const hydratedPosts: PostWithTranslations[] = postsResult.map(post => {
@@ -1966,7 +2082,13 @@ export class DatabaseStorage implements IStorage {
     return newPost;
   }
 
-  async updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined> {
+  async updatePost(
+    id: string,
+    updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
+  ): Promise<Post | undefined> {
+    if ("authorId" in updates) {
+      throw new PostMetaValidationError("Post authorship is server-managed");
+    }
     return db.transaction(async (tx) => {
       const [currentPost] = await tx
         .select()
@@ -1988,10 +2110,13 @@ export class DatabaseStorage implements IStorage {
 
   async updatePostComplete(
     id: string,
-    updates: Partial<Post>,
+    updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
     translation: InsertPostTranslation,
     metadata: Array<{ key: string; value?: any }>,
   ): Promise<Post | undefined> {
+    if ("authorId" in updates) {
+      throw new PostMetaValidationError("Post authorship is server-managed");
+    }
     return db.transaction(async (tx) => {
       const [currentPost] = await tx
         .select()
@@ -2000,6 +2125,9 @@ export class DatabaseStorage implements IStorage {
         .for("update");
       if (!currentPost) return undefined;
 
+      for (const { key, value } of metadata) {
+        validatePostMetaValue(currentPost.postType, key, value);
+      }
       const updateData = preparePostUpdate(currentPost, updates);
       validatePostWrite({ ...currentPost, ...updateData });
       const [updatedPost] = await tx
@@ -2098,7 +2226,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Post Meta
-  async getPostMeta(postId: string, key: string): Promise<PostMeta | undefined> {
+  async getPostMeta(
+    postId: string,
+    key: string,
+    access: PostAccessContext = publicPostAccess,
+  ): Promise<PostMeta | undefined> {
+    const post = await this.getPost(postId);
+    if (!post) return undefined;
+    const managementRead = access.isAdmin || canManagePostType(access, post.postType);
+    if (!isMetaKeyForPostType(post.postType, key) && !managementRead) {
+      throw new PostMetaValidationError(`Metadata key is not valid for ${post.postType}: ${key}`);
+    }
+    if (!canExposeMetaKey(post.postType, key, managementRead)) {
+      return undefined;
+    }
     const [meta] = await db
       .select()
       .from(postMeta)
@@ -2106,15 +2247,34 @@ export class DatabaseStorage implements IStorage {
         eq(postMeta.postId, postId),
         eq(postMeta.key, key)
       ));
-    return meta || undefined;
+    if (!meta) return undefined;
+    if (managementRead || isValidStoredPostMeta(post.postType, meta)) return meta;
+    return undefined;
   }
 
-  async getPostMetaAll(postId: string): Promise<PostMeta[]> {
-    return db.select().from(postMeta).where(eq(postMeta.postId, postId));
+  async getPostMetaAll(
+    postId: string,
+    access: PostAccessContext = publicPostAccess,
+  ): Promise<PostMeta[]> {
+    const post = await this.getPost(postId);
+    if (!post) return [];
+    const meta = await db.select().from(postMeta).where(eq(postMeta.postId, postId));
+    const managementRead = access.isAdmin || canManagePostType(access, post.postType);
+    return meta.filter((item) =>
+      canExposeMetaKey(post.postType, item.key, managementRead) &&
+      (managementRead || isValidStoredPostMeta(post.postType, item)),
+    );
   }
 
   async setPostMeta(postId: string, key: string, value: any): Promise<PostMeta> {
-    const existing = await this.getPostMeta(postId, key);
+    const post = await this.getPost(postId);
+    if (!post) throw new PostMetaValidationError("Post not found");
+    validatePostMetaValue(post.postType, key, value);
+    const existing = await db
+      .select()
+      .from(postMeta)
+      .where(and(eq(postMeta.postId, postId), eq(postMeta.key, key)))
+      .then(([meta]) => meta);
     
     const metaValue = {
       ...getPostMetaValueColumns(value),
@@ -2152,19 +2312,32 @@ export class DatabaseStorage implements IStorage {
     ));
   }
 
-  async incrementPostMetaNumber(postId: string, key: string, amount: number = 1): Promise<void> {
-    const existing = await this.getPostMeta(postId, key);
+  async incrementPostMetaNumber(postId: string, key: string, amount: number = 1): Promise<number> {
+    const post = await this.getPost(postId);
+    if (!post) throw new PostMetaValidationError("Post not found");
+    if (!Number.isInteger(amount) || !Number.isFinite(amount)) {
+      throw new PostMetaValidationError("Increment amount must be an integer");
+    }
+    validatePostMetaValue(post.postType, key, amount);
+    const existing = await db
+      .select()
+      .from(postMeta)
+      .where(and(eq(postMeta.postId, postId), eq(postMeta.key, key)))
+      .then(([meta]) => meta);
     
     if (existing && existing.valueNumber !== null) {
+      const newValue = existing.valueNumber + amount;
       await db
         .update(postMeta)
         .set({ 
-          valueNumber: (existing.valueNumber || 0) + amount,
+          valueNumber: newValue,
           updatedAt: new Date(),
         })
         .where(eq(postMeta.id, existing.id));
+      return newValue;
     } else {
       await this.setPostMeta(postId, key, amount);
+      return amount;
     }
   }
 
@@ -2419,7 +2592,17 @@ function validateEventRegistrationAvailability(
   if (registrationDeadline && registrationDeadline <= now) {
     throw new EventRegistrationError("EVENT_CLOSED", "Event registration is closed");
   }
+}
 
+function isValidStoredPostMeta(postType: string, meta: PostMeta): boolean {
+  const value = getStoredPostMetaValue(meta);
+  if (value === undefined) return false;
+  try {
+    validatePostMetaValue(postType, meta.key, value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validatePostWrite(

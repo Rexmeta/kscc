@@ -497,6 +497,10 @@ export const insertPostSchema = createInsertSchema(posts).omit({
   expiresAt: z.coerce.date().nullable().optional(),
 });
 
+// Authorship is assigned by the authenticated server actor.  This schema is
+// intended for storage/internal callers; HTTP post shapes omit authorId and
+// reject it explicitly.
+
 export const insertPostTranslationSchema = createInsertSchema(postTranslations).omit({
   id: true,
   createdAt: true,

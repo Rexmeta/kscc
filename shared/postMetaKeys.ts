@@ -67,10 +67,57 @@ export const RESOURCE_META_KEYS = {
   
   // Engagement
   downloadCount: 'resource.downloadCount',
+
+  // Internal workflow state
+  aclSynchronizedAt: 'system.resourceAclSynchronizedAt',
   
   // Status (deprecated - use post.status instead)
   // isActive: 'resource.isActive',
 } as const;
+
+export type MetaVisibility = 'public' | 'management' | 'internal';
+
+/**
+ * Metadata is deliberately allow-listed.  Public post DTOs include only
+ * fields that are needed to render a card or detail page; workflow flags and
+ * counters stay available only to management reads.
+ */
+export const POST_META_VISIBILITY: Record<string, MetaVisibility> = {
+  [NEWS_META_KEYS.category]: 'public',
+  [NEWS_META_KEYS.images]: 'public',
+  [NEWS_META_KEYS.videos]: 'public',
+  [NEWS_META_KEYS.viewCount]: 'internal',
+
+  [EVENT_META_KEYS.eventDate]: 'public',
+  [EVENT_META_KEYS.endDate]: 'public',
+  [EVENT_META_KEYS.registrationDeadline]: 'public',
+  [EVENT_META_KEYS.location]: 'public',
+  [EVENT_META_KEYS.category]: 'public',
+  [EVENT_META_KEYS.eventType]: 'public',
+  [EVENT_META_KEYS.capacity]: 'public',
+  [EVENT_META_KEYS.fee]: 'public',
+  [EVENT_META_KEYS.speakers]: 'public',
+  [EVENT_META_KEYS.program]: 'public',
+  [EVENT_META_KEYS.images]: 'public',
+  [EVENT_META_KEYS.isPublic]: 'management',
+  [EVENT_META_KEYS.requiresApproval]: 'management',
+
+  [RESOURCE_META_KEYS.category]: 'public',
+  [RESOURCE_META_KEYS.fileUrl]: 'public',
+  [RESOURCE_META_KEYS.fileName]: 'public',
+  [RESOURCE_META_KEYS.fileSize]: 'public',
+  [RESOURCE_META_KEYS.fileType]: 'public',
+  [RESOURCE_META_KEYS.accessLevel]: 'public',
+  [RESOURCE_META_KEYS.downloadCount]: 'internal',
+  [RESOURCE_META_KEYS.aclSynchronizedAt]: 'internal',
+};
+
+const META_KEYS_BY_POST_TYPE: Record<string, ReadonlySet<string>> = {
+  news: new Set(Object.values(NEWS_META_KEYS)),
+  event: new Set(Object.values(EVENT_META_KEYS)),
+  resource: new Set(Object.values(RESOURCE_META_KEYS)),
+  page: new Set(),
+};
 
 // Combined meta keys
 export const POST_META_KEYS = {
@@ -116,6 +163,7 @@ export interface MetaKeyTypeMap {
   'resource.fileType': 'text';
   'resource.accessLevel': 'text';
   'resource.downloadCount': 'number';
+  'system.resourceAclSynchronizedAt': 'text';
 }
 
 export type MetaValueType = 'text' | 'number' | 'boolean' | 'timestamp' | 'json';
@@ -151,4 +199,62 @@ export function getMetaValueType(key: string): MetaValueType {
   const field = key.split('.')[1];
   
   return typeMap[field as keyof typeof typeMap] || 'text';
+}
+
+export function isMetaKeyForPostType(postType: string, key: string): boolean {
+  return META_KEYS_BY_POST_TYPE[postType]?.has(key) ?? false;
+}
+
+export function getMetaVisibility(key: string): MetaVisibility {
+  // Unknown keys are never public.  Management reads can still inspect them
+  // while administrators repair or migrate old data.
+  return POST_META_VISIBILITY[key] || 'internal';
+}
+
+export function isPublicMetaKey(postType: string, key: string): boolean {
+  return isMetaKeyForPostType(postType, key) && getMetaVisibility(key) === 'public';
+}
+
+export function canExposeMetaKey(
+  postType: string,
+  key: string,
+  managementRead: boolean,
+): boolean {
+  return managementRead || isPublicMetaKey(postType, key);
+}
+
+export class PostMetaValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PostMetaValidationError';
+  }
+}
+
+export function validatePostMetaValue(
+  postType: string,
+  key: string,
+  value: unknown,
+): void {
+  if (!isMetaKeyForPostType(postType, key)) {
+    throw new PostMetaValidationError(`Metadata key is not valid for ${postType}: ${key}`);
+  }
+
+  if (value === null || value === undefined) {
+    throw new PostMetaValidationError(`Metadata value is required for ${key}`);
+  }
+
+  const valueType = getMetaValueType(key);
+  const valid = valueType === 'text'
+    ? typeof value === 'string'
+    : valueType === 'number'
+      ? typeof value === 'number' && Number.isInteger(value) && Number.isFinite(value)
+      : valueType === 'boolean'
+        ? typeof value === 'boolean'
+        : valueType === 'timestamp'
+          ? value instanceof Date && !Number.isNaN(value.getTime())
+          : typeof value === 'object' && value !== null;
+
+  if (!valid) {
+    throw new PostMetaValidationError(`Metadata value has the wrong type for ${key}`);
+  }
 }
