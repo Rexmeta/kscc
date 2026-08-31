@@ -30,6 +30,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { formatLocalizedDate } from '@/lib/i18n';
 
 // Helper to safely get translation
 function getTranslationSafe(post: PostWithTranslations, locale: string) {
@@ -94,15 +97,10 @@ export default function Dashboard() {
     'inquiry.read',
   ]);
 
-  const { data: registrations } = useQuery({
+  const { data: registrations, isLoading: registrationsLoading, isError: registrationsError, refetch: refetchRegistrations } = useQuery<UserRegistrationWithEvent[]>({
     queryKey: ['/api/auth/registrations'],
     queryFn: async () => {
-      const response = await fetch('/api/auth/registrations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      return response.json();
+      return fetchJson<UserRegistrationWithEvent[]>('/api/auth/registrations');
     },
     enabled: isAuthenticated,
   });
@@ -110,14 +108,12 @@ export default function Dashboard() {
   const { data: memberInfo } = useQuery({
     queryKey: ['/api/members/me'],
     queryFn: async () => {
-      const response = await fetch('/api/members/me', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error('Failed to fetch member profile');
-      return response.json();
+      try {
+        return await fetchJson<Member>('/api/members/me');
+      } catch (error: any) {
+        if (error?.status === 404) return null;
+        throw error;
+      }
     },
     enabled: isAuthenticated && !!user,
   });
@@ -222,7 +218,9 @@ export default function Dashboard() {
             <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">로그인이 필요합니다</h2>
             <p className="text-muted-foreground mb-4">대시보드에 접근하려면 로그인해주세요.</p>
-            <Button>로그인</Button>
+             <Button asChild data-testid="button-dashboard-login">
+               <Link href="/login">{t('nav.login')}</Link>
+             </Button>
           </div>
         </Card>
       </div>
@@ -306,7 +304,7 @@ export default function Dashboard() {
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">가입일</label>
                     <p className="text-foreground">
-                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
+                       {user?.createdAt ? formatLocalizedDate(user.createdAt, language) : '-'}
                     </p>
                   </div>
                 </div>
@@ -417,9 +415,15 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {registrations && registrations.length > 0 ? (
+                  <QueryState
+                    isLoading={registrationsLoading}
+                    isError={registrationsError}
+                    onRetry={() => refetchRegistrations()}
+                    empty={!registrations || registrations.length === 0}
+                    emptyMessage={t('home.events.empty')}
+                  >
                     <div className="space-y-4">
-                      {registrations.map((registration: UserRegistrationWithEvent) => (
+                       {(registrations || []).map((registration: UserRegistrationWithEvent) => (
                         <div
                           key={registration.id}
                           className="flex items-start justify-between rounded-lg border p-4"
@@ -443,7 +447,7 @@ export default function Dashboard() {
                                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                         <Calendar className="h-3 w-3" />
                                         <span data-testid={`event-date-${registration.id}`}>
-                                          {new Date(eventMeta.eventDate).toLocaleDateString('ko-KR', {
+                                          {formatLocalizedDate(eventMeta.eventDate, language, {
                                             year: 'numeric',
                                             month: 'long',
                                             day: 'numeric',
@@ -481,7 +485,7 @@ export default function Dashboard() {
                                registration.status === 'attended' ? '참석함' : registration.status}
                             </Badge>
                             <p className="text-xs text-muted-foreground">
-                              등록일: {new Date(registration.createdAt).toLocaleDateString()}
+                               {t('common.date')}: {formatLocalizedDate(registration.createdAt, language)}
                             </p>
                             {registration.status !== 'cancelled' && registration.status !== 'attended' && (
                               <Button
@@ -504,17 +508,7 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground mb-4">등록한 행사가 없습니다.</p>
-                      <Link href="/events">
-                        <Button variant="outline" data-testid="button-browse-events">
-                          행사 둘러보기
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
+                  </QueryState>
                 </CardContent>
               </Card>
             </div>

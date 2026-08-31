@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { InquiryWithReplies } from '@shared/schema';
 import { useAdminInquiries } from '@/hooks/useAdminData';
+import { QueryState } from '@/components/QueryState';
 
 export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -18,11 +19,19 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryWithReplies | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
-  const { data: inquiriesData } = useAdminInquiries(activeTab);
+  const inquiriesQuery = useAdminInquiries(activeTab);
+  const { data: inquiriesData } = inquiriesQuery;
 
   return (
     <TabsContent value="inquiries" className="space-y-6">
       <h2 className="text-2xl font-bold">문의 관리</h2>
+      <QueryState
+        isLoading={inquiriesQuery.isLoading}
+        isError={inquiriesQuery.isError}
+        onRetry={() => inquiriesQuery.refetch()}
+        empty={!inquiriesData?.inquiries?.length}
+        emptyMessage="문의가 없습니다."
+      >
       <div className="space-y-4">
         {inquiriesData?.inquiries?.map((inquiry: InquiryWithReplies) => (
           <div key={inquiry.id} className="p-4 border rounded flex justify-between items-start">
@@ -69,6 +78,7 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
           </div>
         ))}
       </div>
+      </QueryState>
 
       {selectedInquiry && (
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

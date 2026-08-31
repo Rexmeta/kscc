@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Phone, Mail, Clock, MessageSquare, Linkedin, Send, Edit, MapPin, ExternalLink } from 'lucide-react';
+import { Building2, Phone, Mail, Clock, MessageSquare, Send, Edit, MapPin, ExternalLink } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
+import { fetchJson } from '@/lib/queryClient';
 
 const inquirySchema = z.object({
   category: z.string().min(1, '문의 분류를 선택해주세요'),
@@ -63,9 +64,7 @@ export default function ContactPage() {
   const { data: page } = useQuery<PostWithTranslations>({
     queryKey: ['/api/posts/slug', 'contact', language],
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts/slug/contact?locale=${language}`, { signal });
-      if (!response.ok) throw new Error('Page not found');
-      return response.json();
+      return fetchJson(`/api/posts/slug/contact?locale=${language}`, { signal });
     },
   });
 
@@ -161,9 +160,9 @@ export default function ContactPage() {
               <h3 className="mb-6 text-xl font-bold text-foreground">{t('contact.form.title')}</h3>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div>
-                  <label className="form-label">{t('contact.form.category')} *</label>
-                  <Select onValueChange={(value) => setValue('category', value)}>
-                    <SelectTrigger data-testid="select-category">
+                  <label htmlFor="inquiry-category" className="form-label">{t('contact.form.category')} *</label>
+                  <Select onValueChange={(value) => setValue('category', value, { shouldValidate: true })}>
+                    <SelectTrigger id="inquiry-category" aria-describedby={errors.category ? 'error-category' : undefined} data-testid="select-category">
                       <SelectValue placeholder="선택하세요" />
                     </SelectTrigger>
                     <SelectContent>
@@ -174,28 +173,31 @@ export default function ContactPage() {
                     </SelectContent>
                   </Select>
                   {errors.category && (
-                    <p className="text-sm text-destructive mt-1">{errors.category.message}</p>
+                    <p id="error-category" role="alert" className="text-sm text-destructive mt-1">{errors.category.message}</p>
                   )}
                 </div>
                 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="form-label">{t('contact.form.name')} *</label>
+                    <label htmlFor="inquiry-name" className="form-label">{t('contact.form.name')} *</label>
                     <Input
                       placeholder="홍길동"
                       maxLength={100}
+                      id="inquiry-name"
+                      aria-describedby={errors.name ? 'error-name' : undefined}
                       {...register('name')}
                       data-testid="input-name"
                     />
                     {errors.name && (
-                      <p className="text-sm text-destructive mt-1">{errors.name.message}</p>
+                      <p id="error-name" role="alert" className="text-sm text-destructive mt-1">{errors.name.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="form-label">{t('contact.form.company')}</label>
+                    <label htmlFor="inquiry-company" className="form-label">{t('contact.form.company')}</label>
                     <Input
                       placeholder="회사명"
                       maxLength={200}
+                      id="inquiry-company"
                       {...register('companyName')}
                       data-testid="input-company"
                     />
@@ -204,24 +206,27 @@ export default function ContactPage() {
                 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="form-label">{t('contact.form.email')} *</label>
+                    <label htmlFor="inquiry-email" className="form-label">{t('contact.form.email')} *</label>
                     <Input
                       type="email"
                       placeholder="example@email.com"
                       maxLength={254}
+                      id="inquiry-email"
+                      aria-describedby={errors.email ? 'error-email' : undefined}
                       {...register('email')}
                       data-testid="input-email"
                     />
                     {errors.email && (
-                      <p className="text-sm text-destructive mt-1">{errors.email.message}</p>
+                      <p id="error-email" role="alert" className="text-sm text-destructive mt-1">{errors.email.message}</p>
                     )}
                   </div>
                   <div>
-                    <label className="form-label">{t('contact.form.phone')}</label>
+                    <label htmlFor="inquiry-phone" className="form-label">{t('contact.form.phone')}</label>
                     <Input
                       type="tel"
                       placeholder="010-0000-0000"
                       maxLength={50}
+                      id="inquiry-phone"
                       {...register('phone')}
                       data-testid="input-phone"
                     />
@@ -229,36 +234,42 @@ export default function ContactPage() {
                 </div>
                 
                 <div>
-                  <label className="form-label">{t('contact.form.subject')} *</label>
+                  <label htmlFor="inquiry-subject" className="form-label">{t('contact.form.subject')} *</label>
                   <Input
                     placeholder="문의 제목을 입력하세요"
                     maxLength={200}
+                    id="inquiry-subject"
+                    aria-describedby={errors.subject ? 'error-subject' : undefined}
                     {...register('subject')}
                     data-testid="input-subject"
                   />
                   {errors.subject && (
-                    <p className="text-sm text-destructive mt-1">{errors.subject.message}</p>
+                    <p id="error-subject" role="alert" className="text-sm text-destructive mt-1">{errors.subject.message}</p>
                   )}
                 </div>
                 
                 <div>
-                  <label className="form-label">{t('contact.form.message')} *</label>
+                  <label htmlFor="inquiry-message" className="form-label">{t('contact.form.message')} *</label>
                   <Textarea
                     rows={6}
                     placeholder="문의 내용을 입력하세요"
                     maxLength={10000}
+                    id="inquiry-message"
+                    aria-describedby={errors.message ? 'error-message' : undefined}
                     {...register('message')}
                     data-testid="textarea-message"
                   />
                   {errors.message && (
-                    <p className="text-sm text-destructive mt-1">{errors.message.message}</p>
+                    <p id="error-message" role="alert" className="text-sm text-destructive mt-1">{errors.message.message}</p>
                   )}
                 </div>
                 
                 <div className="flex items-start gap-2">
                   <Checkbox
                     id="privacy"
-                    onCheckedChange={(checked) => setValue('privacy', !!checked)}
+                    checked={watch('privacy')}
+                    onCheckedChange={(checked) => setValue('privacy', !!checked, { shouldValidate: true })}
+                    aria-describedby={errors.privacy ? 'error-privacy' : undefined}
                     data-testid="checkbox-privacy"
                   />
                   <label htmlFor="privacy" className="text-sm text-muted-foreground">
@@ -267,7 +278,7 @@ export default function ContactPage() {
                   </label>
                 </div>
                 {errors.privacy && (
-                  <p className="text-sm text-destructive">{errors.privacy.message}</p>
+                  <p id="error-privacy" role="alert" className="text-sm text-destructive">{errors.privacy.message}</p>
                 )}
                 
                 <Button
@@ -303,8 +314,8 @@ export default function ContactPage() {
                       <Phone className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium text-foreground mb-1">{t('contact.office.phone')}</div>
-                      <div className="text-sm text-muted-foreground">+82-2-1234-5678</div>
+                       <div className="font-medium text-foreground mb-1">{t('contact.office.phone')}</div>
+                       <a href="tel:+82212345678" className="text-sm text-primary hover:underline">+82-2-1234-5678</a>
                       <div className="text-sm text-muted-foreground">{t('contact.office.weekdays')}</div>
                     </div>
                   </div>
@@ -314,9 +325,9 @@ export default function ContactPage() {
                       <Mail className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium text-foreground mb-1">{t('contact.office.email')}</div>
-                      <div className="text-sm text-muted-foreground">info@kscc.kr</div>
-                      <div className="text-sm text-muted-foreground">support@kscc.kr</div>
+                       <div className="font-medium text-foreground mb-1">{t('contact.office.email')}</div>
+                       <a href="mailto:info@kscc.kr" className="block text-sm text-primary hover:underline">info@kscc.kr</a>
+                       <a href="mailto:support@kscc.kr" className="block text-sm text-primary hover:underline">support@kscc.kr</a>
                     </div>
                   </div>
                   
@@ -325,18 +336,7 @@ export default function ContactPage() {
                       <MessageSquare className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium text-foreground mb-1">소셜 미디어</div>
-                      <div className="flex gap-3 mt-2">
-                        <a href="#kakao" className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/10 hover:bg-secondary/20 transition-colors">
-                          <MessageSquare className="h-4 w-4 text-secondary" />
-                        </a>
-                        <a href="#wechat" className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 hover:bg-accent/20 transition-colors">
-                          <MessageSquare className="h-4 w-4 text-accent" />
-                        </a>
-                        <a href="#linkedin" className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors">
-                          <Linkedin className="h-4 w-4 text-primary" />
-                        </a>
-                      </div>
+                      {/* Social channels are omitted until real destinations are configured. */}
                     </div>
                   </div>
                 </div>

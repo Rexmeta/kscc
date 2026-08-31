@@ -6,13 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Filter, RefreshCw, Newspaper, Plus, Clock, ChevronRight } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t, formatLocalizedDate } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { PostWithTranslations } from '@shared/schema';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys } from '@/lib/queryClient';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { PagePagination } from '@/components/PagePagination';
 
 export default function NewsPage() {
   const { hasPermission } = useAuth();
@@ -22,7 +25,7 @@ export default function NewsPage() {
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'news', page, category, search, language, limit: 14 }),
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
@@ -36,20 +39,7 @@ export default function NewsPage() {
         compact: 'true',
       });
       
-      const response = await fetch(`/api/posts?${params}`, { signal });
-      
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          toast({
-            title: "접근 권한 없음",
-            description: "로그인이 필요하거나 권한이 없습니다.",
-            variant: "destructive",
-          });
-        }
-        throw new Error('Failed to fetch news');
-      }
-      
-      return response.json();
+       return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
   });
 
@@ -139,12 +129,13 @@ export default function NewsPage() {
       {/* News Content */}
       <section className="py-8">
         <div className="container">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
-            </div>
-          ) : posts.length > 0 ? (
+          <QueryState
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={() => refetch()}
+            empty={posts.length === 0}
+            emptyMessage={t('home.news.empty')}
+          >
             <>
               {/* Featured Section - First article large, next 3 as list */}
               {page === 1 && posts.length >= 1 && (
@@ -157,7 +148,7 @@ export default function NewsPage() {
                     const featuredImage = featured.coverImage || (Array.isArray(images) && images[0]) || null;
                     const formatDate = (date: string | Date) => {
                       const d = typeof date === 'string' ? new Date(date) : date;
-                      return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                      return formatLocalizedDate(d, language, { year: 'numeric', month: '2-digit', day: '2-digit' });
                     };
                     return (
                       <Link href={`/news/${featured.slug}`} className="block group" data-testid={`featured-news-${featured.id}`}>
@@ -201,7 +192,7 @@ export default function NewsPage() {
                       const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
                       const formatDate = (date: string | Date) => {
                         const d = typeof date === 'string' ? new Date(date) : date;
-                        return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                        return formatLocalizedDate(d, language, { year: 'numeric', month: '2-digit', day: '2-digit' });
                       };
                       return (
                         <Link 
@@ -252,7 +243,7 @@ export default function NewsPage() {
                   const featuredImage = post.coverImage || (Array.isArray(images) && images[0]) || null;
                   const formatDate = (date: string | Date) => {
                     const d = typeof date === 'string' ? new Date(date) : date;
-                    return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\. /g, '-').replace('.', '');
+                    return formatLocalizedDate(d, language, { year: 'numeric', month: '2-digit', day: '2-digit' });
                   };
                   return (
                     <Link 
@@ -297,48 +288,9 @@ export default function NewsPage() {
               </div>
               
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-12 flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    data-testid="button-prev-page"
-                  >
-                    {t('common.previous')}
-                  </Button>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={page === pageNum ? "default" : "outline"}
-                        onClick={() => setPage(pageNum)}
-                        data-testid={`button-page-${pageNum}`}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    data-testid="button-next-page"
-                  >
-                    {t('common.next')}
-                  </Button>
-                </div>
-              )}
+              <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
-          ) : (
-            <div className="text-center py-12">
-              <Newspaper className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">뉴스가 없습니다.</p>
-            </div>
-          )}
+          </QueryState>
         </div>
       </section>
     </div>

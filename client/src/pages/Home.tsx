@@ -4,17 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp, ClipboardList } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t, formatLocalizedDate } from '@/lib/i18n';
 import { Partner, PostWithTranslations } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
-import { queryKeys } from '@/lib/queryClient';
+import { queryKeys, fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
 import { trackEvent } from '@/lib/analytics';
-import { fetchPublicPartners } from '@/lib/publicPartners';
 import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
+import { fetchPublicPartners } from '@/lib/publicPartners';
 
 export default function Home() {
   const { language } = useLanguage();
@@ -24,7 +25,7 @@ export default function Home() {
     if (!date) return '';
     const value = typeof date === 'string' ? new Date(date) : date;
     if (Number.isNaN(value.getTime())) return '';
-    return value.toLocaleDateString('ko-KR', {
+    return formatLocalizedDate(value, language, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -35,7 +36,7 @@ export default function Home() {
     if (!date) return '';
     const value = typeof date === 'string' ? new Date(date) : date;
     if (Number.isNaN(value.getTime())) return '';
-    return value.toLocaleString('ko-KR', {
+    return formatLocalizedDate(value, language, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -48,25 +49,23 @@ export default function Home() {
     'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080';
 
   // Fetch upcoming events
-  const { data: eventsData } = useQuery({
+  const { data: eventsData, isLoading: eventsLoading, isError: eventsError, refetch: refetchEvents } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, limit: 3, language }),
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`, { signal });
-      return response.json();
+      return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`, { signal });
     },
   });
 
   // Fetch latest news
-  const { data: newsData } = useQuery({
+  const { data: newsData, isLoading: newsLoading, isError: newsError, refetch: refetchNews } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'news', limit: 3, language }),
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`, { signal });
-      return response.json();
+      return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`, { signal });
     },
   });
 
   // Public partners are served active-only by the API.
-  const { data: partnersData } = useQuery<Partner[]>({
+  const { data: partnersData, isLoading: partnersLoading, isError: partnersError, refetch: refetchPartners } = useQuery<Partner[]>({
     queryKey: queryKeys.partners.list(),
     queryFn: ({ signal }) => fetchPublicPartners(signal),
   });
@@ -74,24 +73,19 @@ export default function Home() {
   const { data: membersData } = useQuery({
     queryKey: queryKeys.members.list({ isPublic: true, limit: 1 }),
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/members?limit=1', { signal });
-      if (!response.ok) throw new Error('Failed to fetch member count');
-      return response.json();
+      return fetchJson<{ total: number }>('/api/members?limit=1', { signal });
     },
   });
 
   const { data: survey } = useQuery<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'> | null>({
     queryKey: ['/api/survey'],
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/survey', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        signal,
-      });
-      if (response.status === 401 || response.status === 403) return null;
-      if (!response.ok) throw new Error('Failed to fetch survey settings');
-      return response.json();
+      try {
+        return await fetchJson<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>('/api/survey', { signal });
+      } catch (error: any) {
+        if (error?.status === 401 || error?.status === 403) return null;
+        throw error;
+      }
     },
     enabled: isAuthenticated,
     refetchInterval: isAuthenticated ? 30_000 : false,
@@ -264,18 +258,17 @@ export default function Home() {
             </Link>
           </div>
           
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {events.length > 0 ? (
-              events.map((post: PostWithTranslations) => (
-                <EventCard key={post.id} post={post} />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">{t('home.events.empty')}</p>
-              </div>
-            )}
-          </div>
+          <QueryState
+            isLoading={eventsLoading}
+            isError={eventsError}
+            onRetry={() => refetchEvents()}
+            empty={events.length === 0}
+            emptyMessage={t('home.events.empty')}
+          >
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {events.map((post: PostWithTranslations) => <EventCard key={post.id} post={post} />)}
+            </div>
+          </QueryState>
         </div>
       </section>
 
@@ -295,18 +288,17 @@ export default function Home() {
             </Link>
           </div>
           
-          <div className="grid gap-6 lg:grid-cols-3">
-            {news.length > 0 ? (
-              news.map((post: PostWithTranslations) => (
-                <NewsCard key={post.id} post={post} />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">{t('home.news.empty')}</p>
-              </div>
-            )}
-          </div>
+          <QueryState
+            isLoading={newsLoading}
+            isError={newsError}
+            onRetry={() => refetchNews()}
+            empty={news.length === 0}
+            emptyMessage={t('home.news.empty')}
+          >
+            <div className="grid gap-6 lg:grid-cols-3">
+              {news.map((post: PostWithTranslations) => <NewsCard key={post.id} post={post} />)}
+            </div>
+          </QueryState>
         </div>
       </section>
 
@@ -318,9 +310,15 @@ export default function Home() {
             <p className="text-muted-foreground">{t('home.partners.subtitle')}</p>
           </div>
           
+          <QueryState
+            isLoading={partnersLoading}
+            isError={partnersError}
+            onRetry={() => refetchPartners()}
+            empty={partners.length === 0}
+            emptyMessage={t('home.partners.empty')}
+          >
           <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-6">
-            {partners.length > 0 ? (
-              partners.slice(0, 12).map((partner: Partner) => (
+            {partners.slice(0, 12).map((partner: Partner) => (
                 <Card key={partner.id} className="card-hover p-6 flex items-center justify-center h-32">
                   <div className="text-center">
                     {partner.logo ? (
@@ -352,14 +350,9 @@ export default function Home() {
                     )}
                   </div>
                 </Card>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">{t('home.partners.empty')}</p>
-              </div>
-            )}
+              ))}
           </div>
+          </QueryState>
           
           <div className="mt-10 text-center">
             <Link href="/members">

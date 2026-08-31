@@ -10,3 +10,4 @@
 - [Server-rendered SEO routing](seo-ssr-routing.md) — wildcard shell routes must derive route metadata from `req.originalUrl`, not the mounted `req.path`.
 - [Management list filters](management-list-filters.md) — all-permitted-category management views must not inherit a default single-category filter.
 - [Scheduled publication coordination](scheduled-publication-coordination.md) — durable post metadata markers preserve ACL retry state without requiring a new schema column.
+- [Frontend query state](frontend-query-state.md) — failed client requests must remain distinguishable from valid empty collections and offer localized retry.

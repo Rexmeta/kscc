@@ -13,6 +13,9 @@ import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
 import { queryKeys } from '@/lib/queryClient';
+import { fetchJson, ApiRequestError } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { formatLocalizedDate } from '@/lib/i18n';
 import { Seo } from '@/components/Seo';
 import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
 
@@ -25,19 +28,16 @@ export default function NewsDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: post, isLoading } = useQuery<PostWithTranslations>({
+  const { data: post, isLoading, isError, refetch } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(id || '', language),
     queryFn: async ({ signal }) => {
       // Try slug first, then fall back to ID
-      let response = await fetch(`/api/posts/slug/${id}?locale=${language}`, { signal });
-      if (!response.ok) {
-        // Fall back to ID-based lookup
-        response = await fetch(`/api/posts/${id}?locale=${language}`, { signal });
-      }
-      if (!response.ok) {
-        throw new Error('News not found');
-      }
-      return response.json();
+       try {
+         return await fetchJson<PostWithTranslations>(`/api/posts/slug/${id}?locale=${language}`, { signal });
+       } catch (error) {
+         if (!(error instanceof ApiRequestError) || error.status !== 404) throw error;
+         return fetchJson<PostWithTranslations>(`/api/posts/${id}?locale=${language}`, { signal });
+       }
     },
     enabled: !!id,
   });
@@ -67,13 +67,12 @@ export default function NewsDetail() {
   });
 
   // CONDITIONAL RETURNS AFTER ALL HOOKS
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
-        </div>
+        <QueryState isLoading={isLoading} isError={isError} onRetry={() => refetch()} empty={false} emptyMessage="">
+          <div />
+        </QueryState>
       </div>
     );
   }
@@ -160,7 +159,7 @@ export default function NewsDetail() {
 
   const formatDate = (date: string | Date) => {
     const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return dateObj.toLocaleDateString('ko-KR', {
+    return formatLocalizedDate(dateObj, language, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

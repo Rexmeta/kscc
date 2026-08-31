@@ -12,6 +12,7 @@ import { EditMemberForm } from '../forms/EditMemberForm';
 import { useAdminMembers } from '@/hooks/useAdminData';
 import { useAuth } from '@/hooks/useAuth';
 import { CreateMemberDialog } from '../forms/CreateMemberDialog';
+import { QueryState } from '@/components/QueryState';
 
 export function MembersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -21,7 +22,8 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { data: membersData } = useAdminMembers(activeTab);
+  const membersQuery = useAdminMembers(activeTab);
+  const { data: membersData } = membersQuery;
   const canCreate = isAdmin || hasPermission('member.create');
   const canUpdate = isAdmin || hasPermission('member.update');
   const canDelete = isAdmin || hasPermission('member.delete');
@@ -35,6 +37,13 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
         }} />}
       </div>
 
+      <QueryState
+        isLoading={membersQuery.isLoading}
+        isError={membersQuery.isError}
+        onRetry={() => membersQuery.refetch()}
+        empty={!membersData?.members?.length}
+        emptyMessage="회원사가 없습니다."
+      >
       <div className="space-y-2">
         {membersData?.members?.map((member: Member) => (
           <div key={member.id} className="flex justify-between items-center p-4 border rounded">
@@ -99,6 +108,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
           </div>
         ))}
       </div>
+      </QueryState>
 
       {selectedMember && (
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

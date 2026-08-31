@@ -13,6 +13,7 @@ import { CreateResourceDialog } from '../forms/CreateResourceDialog';
 import { EditResourceForm } from '../forms/EditResourceForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { PostPublicationToggle } from '../PostPublicationToggle';
+import { QueryState } from '@/components/QueryState';
 
 interface ResourcesTabProps {
   activeTab: string;
@@ -27,7 +28,8 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
   const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { data: resourcesData } = useAdminPosts('resource', activeTab);
+  const resourcesQuery = useAdminPosts('resource', activeTab);
+  const { data: resourcesData } = resourcesQuery;
   const canCreate = isAdmin || hasPermission('resource.upload');
   const canUpdate = isAdmin || hasPermission('resource.update');
   const canPublish = isAdmin || hasPermission('resource.publish');
@@ -54,6 +56,13 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
         )}
       </div>
 
+      <QueryState
+        isLoading={resourcesQuery.isLoading}
+        isError={resourcesQuery.isError}
+        onRetry={() => resourcesQuery.refetch()}
+        empty={!resourcesData?.posts?.length}
+        emptyMessage="자료가 없습니다."
+      >
       <div className="grid gap-4">
         {resourcesData?.posts?.map((resource: PostWithTranslations) => (
           <div key={resource.id} className="p-4 border rounded flex justify-between items-start">
@@ -103,6 +112,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
           </div>
         ))}
       </div>
+      </QueryState>
 
       {selectedResource && editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>

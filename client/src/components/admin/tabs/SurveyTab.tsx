@@ -19,6 +19,7 @@ import {
   surveySettingsSchema,
   type SurveySettingsInput,
 } from '@shared/survey';
+import { QueryState } from '@/components/QueryState';
 
 const defaultValues: SurveySettingsInput = {
   title: '',
@@ -78,13 +79,15 @@ function statusBadge(status: keyof typeof statusLabels) {
 export function SurveyTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: settings } = useAdminSurvey(activeTab);
+  const surveyQuery = useAdminSurvey(activeTab);
+  const { data: settings } = surveyQuery;
   const [historyPage, setHistoryPage] = useState(1);
   const [historySnapshotVersion, setHistorySnapshotVersion] = useState<number>();
   const {
     data: historyData,
     isLoading: isHistoryLoading,
     isError: isHistoryError,
+    refetch: refetchHistory,
   } = useAdminSurveyHistory(activeTab, historyPage, historyPageSize, historySnapshotVersion);
   const form = useForm<SurveySettingsInput>({
     resolver: zodResolver(surveySettingsSchema),
@@ -141,6 +144,13 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
 
   return (
     <TabsContent value="survey" className="space-y-6">
+      <QueryState
+        isLoading={surveyQuery.isLoading}
+        isError={surveyQuery.isError}
+        onRetry={() => surveyQuery.refetch()}
+        empty={!settings}
+        emptyMessage="설문 설정이 없습니다."
+      >
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -272,6 +282,7 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
           </form>
         </CardContent>
       </Card>
+      </QueryState>
 
       <Card>
         <CardHeader>
@@ -296,18 +307,14 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
             </div>
           )}
 
-          {isHistoryLoading && (
-            <p className="py-8 text-center text-sm text-muted-foreground">이력을 불러오는 중...</p>
-          )}
-          {isHistoryError && (
-            <p className="py-8 text-center text-sm text-destructive">
-              변경 이력을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
-            </p>
-          )}
-          {!isHistoryLoading && !isHistoryError && historyData?.history.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">아직 저장된 변경 이력이 없습니다.</p>
-          )}
-          {!isHistoryLoading && !isHistoryError && historyData && historyData.history.length > 0 && (
+          <QueryState
+            isLoading={isHistoryLoading}
+            isError={isHistoryError}
+            onRetry={() => refetchHistory()}
+            empty={!historyData?.history.length}
+            emptyMessage="아직 저장된 변경 이력이 없습니다."
+          >
+          {historyData && historyData.history.length > 0 && (
             <>
               <Table>
                 <TableHeader>
@@ -386,6 +393,7 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
               )}
             </>
           )}
+          </QueryState>
         </CardContent>
       </Card>
     </TabsContent>

@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Edit, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -11,6 +10,7 @@ import type { Partner } from '@shared/schema';
 import { useAdminPartners } from '@/hooks/useAdminData';
 import { PartnerDialog } from '../forms/PartnerDialog';
 import { AdminListPagination } from '../AdminListPagination';
+import { QueryState } from '@/components/QueryState';
 
 export function PartnersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -75,19 +75,13 @@ export function PartnersTab({ activeTab }: { activeTab: string }) {
         />
       )}
 
-      {isLoading && (
-        <div className="p-8 text-center text-muted-foreground">파트너 목록을 불러오는 중...</div>
-      )}
-      {isError && (
-        <Alert variant="destructive">
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>파트너 목록을 불러오지 못했습니다.</span>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>다시 시도</Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!isLoading && !isError && (
+      <QueryState
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => refetch()}
+        empty={!partnersData?.partners.length}
+        emptyMessage="파트너가 없습니다."
+      >
         <div className="border rounded-lg overflow-hidden">
           <div className="divide-y">
             {partnersData?.partners.map((partner: Partner) => (
@@ -145,12 +139,9 @@ export function PartnersTab({ activeTab }: { activeTab: string }) {
                 </div>
               </div>
             ))}
-            {partnersData?.partners.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">파트너가 없습니다</div>
-            )}
           </div>
         </div>
-      )}
+      </QueryState>
       <AdminListPagination
         page={partnersData?.page || page}
         totalPages={partnersData?.totalPages || 0}

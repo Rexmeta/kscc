@@ -14,6 +14,8 @@ import {
   getMemberPosition,
 } from '@/lib/organizationDisplay';
 import { compareOrganizationMembers } from '@shared/organization';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
 
 const CATEGORY_CONFIG = ORGANIZATION_CATEGORY_DISPLAY;
 
@@ -86,7 +88,7 @@ export default function Organization() {
   const { language } = useLanguage();
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery<{
+  const { data, isLoading, isError, refetch } = useQuery<{
     members: OrganizationMember[];
     total: number;
     page: number;
@@ -94,9 +96,7 @@ export default function Organization() {
   }>({
     queryKey: ['/api/organization-members', { page, limit: 50 }],
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/organization-members?isActive=true&page=${page}&limit=50`, { signal });
-      if (!response.ok) throw new Error('Failed to fetch');
-      return response.json();
+      return fetchJson(`/api/organization-members?isActive=true&page=${page}&limit=50`, { signal });
     },
   });
   const members = data?.members;
@@ -148,6 +148,16 @@ export default function Organization() {
               </div>
             ))}
           </div>
+        ) : isError ? (
+          <QueryState
+            isLoading={false}
+            isError
+            onRetry={() => refetch()}
+            empty={false}
+            emptyMessage=""
+          >
+            <div />
+          </QueryState>
         ) : (
           <>
             {CATEGORY_CONFIG.map((cat) => (

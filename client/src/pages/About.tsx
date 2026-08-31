@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Target, Lightbulb, Users, Handshake, Edit, Loader2 } from 'lucide-react';
+import { Building2, Target, Lightbulb, Users, Handshake, Edit } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +8,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
 import ksccLogoPath from '@/assets/kscc_logo.webp';
+import { QueryState } from '@/components/QueryState';
+import { fetchJson } from '@/lib/queryClient';
 
 interface AboutContent {
   hero: { title: string; intro: string };
@@ -25,12 +27,10 @@ export default function AboutPage() {
   const { language } = useLanguage();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const { data: page, isLoading } = useQuery<PostWithTranslations>({
+  const { data: page, isLoading, isError, refetch } = useQuery<PostWithTranslations>({
     queryKey: ['/api/posts/slug', 'about', language],
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts/slug/about?locale=${language}`, { signal });
-      if (!response.ok) throw new Error('Page not found');
-      return response.json();
+      return fetchJson<PostWithTranslations>(`/api/posts/slug/about?locale=${language}`, { signal });
     },
   });
 
@@ -52,18 +52,18 @@ export default function AboutPage() {
 
   const content = parseContent();
 
-  if (isLoading) {
+  if (isLoading || isError || !content) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!content) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">페이지 콘텐츠를 불러올 수 없습니다.</p>
+        <QueryState
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={() => refetch()}
+          empty={!content && !isError}
+          emptyMessage="페이지 콘텐츠를 불러올 수 없습니다."
+        >
+          <div />
+        </QueryState>
       </div>
     );
   }

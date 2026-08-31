@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
-import { queryKeys } from '@/lib/queryClient';
+import { queryKeys, fetchJson } from '@/lib/queryClient';
 import type {
   PostWithTranslations,
   Member,
@@ -15,13 +15,6 @@ import type {
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('token')}`,
 });
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: authHeaders() });
-  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-  return response.json() as Promise<T>;
-}
-
 type PostsResponse = { posts: PostWithTranslations[]; total: number };
 
 export function useAdminPosts(
@@ -38,8 +31,7 @@ export function useAdminPosts(
   const canRead = isAdmin || hasPermission(`${postType}.read`);
   return useQuery<PostsResponse>({
     queryKey: queryKeys.posts.list({ postType, admin: true }),
-    queryFn: () =>
-      fetchJson<PostsResponse>(`/api/posts?postType=${postType}&admin=true`),
+    queryFn: () => fetchJson<PostsResponse>(`/api/posts?postType=${postType}&admin=true`),
     enabled: canRead && activeTab === tabNames[postType],
   });
 }

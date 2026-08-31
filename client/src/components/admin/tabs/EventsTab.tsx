@@ -15,6 +15,9 @@ import { EditEventForm } from '../forms/EditEventForm';
 import { EventRegistrationsDialog } from '../forms/EventRegistrationsDialog';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { PostPublicationToggle } from '../PostPublicationToggle';
+import { QueryState } from '@/components/QueryState';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { formatLocalizedDate } from '@/lib/i18n';
 
 interface EventsTabProps {
   activeTab: string;
@@ -26,11 +29,13 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin, hasPermission } = useAuth();
+  const { language } = useLanguage();
   const [selectedEvent, setSelectedEvent] = useState<PostWithTranslations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
 
-  const { data: eventsData } = useAdminPosts('event', activeTab);
+  const eventsQuery = useAdminPosts('event', activeTab);
+  const { data: eventsData } = eventsQuery;
   const canCreate = isAdmin || hasPermission('event.create');
   const canUpdate = isAdmin || hasPermission('event.update');
   const canPublish = isAdmin || hasPermission('event.publish');
@@ -40,7 +45,7 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
     try {
-      return new Date(dateStr).toLocaleDateString('ko-KR', {
+       return formatLocalizedDate(dateStr, language, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -73,6 +78,13 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
         )}
       </div>
 
+      <QueryState
+        isLoading={eventsQuery.isLoading}
+        isError={eventsQuery.isError}
+        onRetry={() => eventsQuery.refetch()}
+        empty={!eventsData?.posts?.length}
+        emptyMessage="행사가 없습니다."
+      >
       <div className="space-y-4">
         {eventsData?.posts?.map((event: PostWithTranslations) => {
           const eventDate = getMetaValue(event.meta || [], 'event.eventDate');
@@ -158,6 +170,7 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
           );
         })}
       </div>
+      </QueryState>
 
       {selectedEvent && editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>

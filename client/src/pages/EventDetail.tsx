@@ -7,8 +7,9 @@ import { Calendar, MapPin, Users, Clock, DollarSign, ArrowLeft, UserCheck, Edit,
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { t } from '@/lib/i18n';
+import { t, formatLocalizedDate, formatLocalizedNumber } from '@/lib/i18n';
 import { PostWithTranslations } from '@shared/schema';
+import type { UserRegistrationWithEvent } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
@@ -16,24 +17,34 @@ import ShareButtons from '@/components/ShareButtons';
 import { queryKeys } from '@/lib/queryClient';
 import { Seo } from '@/components/Seo';
 import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { getEventRegistrationState } from '@/lib/eventRegistrationState';
+
+const registrationsQueryKey = ['/api/auth/registrations'];
 
 export default function EventDetailPage() {
   const { id } = useParams();
   const [, navigate] = useLocation();
-  const { isAuthenticated, isAdmin, user } = useAuth();
+  const { isAuthenticated, isAdmin, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
 
-  const { data: post, isLoading } = useQuery<PostWithTranslations>({
+  const { data: post, isLoading, isError, refetch } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(id || '', language),
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts/${id}?locale=${language}`, { signal });
-      if (!response.ok) throw new Error('Failed to fetch post');
-      return response.json();
+      return fetchJson<PostWithTranslations>(`/api/posts/${id}?locale=${language}`, { signal });
     },
     enabled: !!id,
   });
+
+  const { data: registrations, isLoading: registrationsLoading, isError: registrationsError } =
+    useQuery<UserRegistrationWithEvent[]>({
+      queryKey: registrationsQueryKey,
+      queryFn: () => fetchJson<UserRegistrationWithEvent[]>('/api/auth/registrations'),
+      enabled: isAuthenticated,
+    });
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -49,7 +60,7 @@ export default function EventDetailPage() {
         title: "행사 신청 완료",
         description: "행사 신청이 성공적으로 완료되었습니다.",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/user/registrations'] });
+      queryClient.invalidateQueries({ queryKey: registrationsQueryKey });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts.detail(id || '', language) });
     },
     onError: (error: any) => {
@@ -108,13 +119,18 @@ export default function EventDetailPage() {
     registerMutation.mutate();
   };
 
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-muted-foreground">로딩 중...</p>
-        </div>
+        <QueryState
+          isLoading={isLoading}
+          isError={isError}
+          onRetry={() => refetch()}
+          empty={false}
+          emptyMessage=""
+        >
+          <div />
+        </QueryState>
       </div>
     );
   }
@@ -173,7 +189,21 @@ export default function EventDetailPage() {
   const isRegistrationClosed = eventMeta.registrationDeadline 
     ? eventMeta.registrationDeadline < now
     : false;
-  const canRegister = !isPastEvent && !isRegistrationClosed;
+  const currentRegistration = registrations?.find((registration) => registration.eventId === post.id);
+  const isRegistered = !!currentRegistration && currentRegistration.status !== 'cancelled';
+  const registrationCount = (post as PostWithTranslations & { registrationCount?: number }).registrationCount;
+  const registrationState = getEventRegistrationState({
+    isRegistered,
+    isPastEvent,
+    isRegistrationClosed,
+    capacity: eventMeta.capacity,
+    registrationCount,
+  });
+  const isFull = registrationState === 'full';
+  const canRegister = registrationState === 'available'
+    && !authLoading
+    && !registrationsLoading
+    && !registrationsError;
 
   const getCategoryBadge = (category: string) => {
     const badgeMap = {
@@ -310,16 +340,16 @@ export default function EventDetailPage() {
                   <div className="flex items-start gap-4">
                     <Calendar className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <h3 className="font-semibold mb-1">일시</h3>
+                <h3 className="font-semibold mb-1">{t('events.date')}</h3>
                       <p className="text-muted-foreground" data-testid="text-event-date">
-                        {eventMeta.eventDate.toLocaleDateString('ko-KR', {
+                         {formatLocalizedDate(eventMeta.eventDate, language, {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
                         })}
                       </p>
                       <p className="text-muted-foreground">
-                        {eventMeta.eventDate.toLocaleTimeString('ko-KR', {
+                         {eventMeta.eventDate.toLocaleTimeString(language === 'ko' ? 'ko-KR' : language === 'zh' ? 'zh-CN' : 'en-US', {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
@@ -336,7 +366,7 @@ export default function EventDetailPage() {
                   <div className="flex items-start gap-4">
                     <MapPin className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <h3 className="font-semibold mb-1">장소</h3>
+                    <h3 className="font-semibold mb-1">{t('events.location')}</h3>
                       <p className="text-muted-foreground" data-testid="text-event-location">{eventMeta.location}</p>
                     </div>
                   </div>
@@ -364,9 +394,9 @@ export default function EventDetailPage() {
                   <div className="flex items-start gap-4">
                     <DollarSign className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <h3 className="font-semibold mb-1">참가비</h3>
+                    <h3 className="font-semibold mb-1">{t('events.fee')}</h3>
                       <p className="text-muted-foreground" data-testid="text-event-fee">
-                        {eventMeta.fee === 0 ? '무료' : `${eventMeta.fee.toLocaleString()}원`}
+                        {eventMeta.fee === 0 ? '무료' : `${formatLocalizedNumber(eventMeta.fee, language)}원`}
                       </p>
                     </div>
                   </div>
@@ -380,9 +410,9 @@ export default function EventDetailPage() {
                   <div className="flex items-start gap-4">
                     <Clock className="h-5 w-5 text-primary mt-1" />
                     <div>
-                      <h3 className="font-semibold mb-1">신청 마감</h3>
+                    <h3 className="font-semibold mb-1">{t('events.deadline')}</h3>
                       <p className="text-muted-foreground">
-                        {eventMeta.registrationDeadline.toLocaleDateString('ko-KR', {
+                         {formatLocalizedDate(eventMeta.registrationDeadline, language, {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
@@ -413,7 +443,7 @@ export default function EventDetailPage() {
           {eventMeta.speakers && eventMeta.speakers.length > 0 && (
             <Card className="mb-8">
               <CardContent className="p-6">
-                <h3 className="text-xl font-semibold mb-4">연사</h3>
+                <h3 className="text-xl font-semibold mb-4">{t('events.speakers')}</h3>
                 <div className="space-y-2">
                   {eventMeta.speakers.map((speaker: any, index: number) => (
                     <div key={index} className="flex items-center gap-2">
@@ -426,15 +456,30 @@ export default function EventDetailPage() {
             </Card>
           )}
 
+          {/* Registration status and action */}
+          {isRegistered && (
+            <Card className="border-primary bg-primary/5" data-testid="registration-state-registered">
+              <CardContent className="p-6 text-center">
+                <p className="font-semibold text-primary">{t('events.registered')}</p>
+              </CardContent>
+            </Card>
+          )}
+          {isFull && !isPastEvent && !isRegistrationClosed && (
+            <Card className="border-destructive" data-testid="registration-state-full">
+              <CardContent className="p-6 text-center">
+                <p className="text-destructive">{t('events.full')}</p>
+              </CardContent>
+            </Card>
+          )}
           {/* Registration Button */}
           {canRegister && (
             <Card className="border-primary bg-primary/5">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold mb-2">이 행사에 참여하시겠습니까?</h3>
+                    <h3 className="text-xl font-semibold mb-2">{t('events.joinQuestion')}</h3>
                     <p className="text-muted-foreground">
-                      {isAuthenticated ? '아래 버튼을 클릭하여 신청하세요' : '로그인이 필요합니다'}
+                      {isAuthenticated ? t('events.clickToRegister') : t('events.loginRequired')}
                     </p>
                   </div>
                   <Button
@@ -443,28 +488,21 @@ export default function EventDetailPage() {
                     disabled={registerMutation.isPending}
                     data-testid="button-register"
                   >
-                    {registerMutation.isPending ? '신청 중...' : '행사 신청'}
+                     {registerMutation.isPending ? t('events.registering') : t('events.register')}
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {isPastEvent && (
+          {registrationState === 'closed' && (
             <Card className="border-secondary">
               <CardContent className="p-6 text-center">
-                <p className="text-muted-foreground">이 행사는 종료되었습니다</p>
+                <p className="text-muted-foreground">{isPastEvent ? t('events.past') : t('events.closed')}</p>
               </CardContent>
             </Card>
           )}
 
-          {isRegistrationClosed && !isPastEvent && (
-            <Card className="border-destructive">
-              <CardContent className="p-6 text-center">
-                <p className="text-destructive">신청 기간이 마감되었습니다</p>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </section>
     </div>

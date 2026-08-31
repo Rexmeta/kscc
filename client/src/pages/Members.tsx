@@ -11,6 +11,9 @@ import { Member } from '@shared/schema';
 import MemberCard from '@/components/MemberCard';
 import { useAuth } from '@/hooks/useAuth';
 import { queryKeys } from '@/lib/queryClient';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { PagePagination } from '@/components/PagePagination';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -31,7 +34,7 @@ export default function MembersPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.members.list({ page, search: debouncedSearch, country, industry, membershipLevel, limit: 12 }),
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
@@ -42,8 +45,7 @@ export default function MembersPage() {
         ...(industry && { industry }),
         ...(membershipLevel && { membershipLevel }),
       });
-      const response = await fetch(`/api/members?${params}`, { signal });
-      return response.json();
+       return fetchJson<{ members: Member[]; totalPages: number }>(`/api/members?${params}`, { signal });
     },
   });
 
@@ -163,12 +165,13 @@ export default function MembersPage() {
       {/* Members Grid */}
       <section className="py-16">
         <div className="container">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="mt-4 text-muted-foreground dark:text-muted-foreground">{t('common.loading')}</p>
-            </div>
-          ) : members.length > 0 ? (
+          <QueryState
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={() => refetch()}
+            empty={members.length === 0}
+            emptyMessage={t('common.empty')}
+          >
             <>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {members.map((member: Member) => (
@@ -177,48 +180,9 @@ export default function MembersPage() {
               </div>
               
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-12 flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    data-testid="button-prev-page"
-                  >
-                    {t('common.previous')}
-                  </Button>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={page === pageNum ? "default" : "outline"}
-                        onClick={() => setPage(pageNum)}
-                        data-testid={`button-page-${pageNum}`}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    data-testid="button-next-page"
-                  >
-                    {t('common.next')}
-                  </Button>
-                </div>
-              )}
+              <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
-          ) : (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-muted-foreground dark:text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground dark:text-muted-foreground">조건에 맞는 회원사가 없습니다.</p>
-            </div>
-          )}
+          </QueryState>
         </div>
       </section>
     </div>

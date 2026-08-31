@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError, apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/useAuth';
 import { AdminListPagination } from '../AdminListPagination';
+import { QueryState } from '@/components/QueryState';
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (
@@ -34,7 +35,8 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  const { data: usersData } = useAdminUsers(activeTab, page);
+  const usersQuery = useAdminUsers(activeTab, page);
+  const { data: usersData } = usersQuery;
 
   useEffect(() => {
     if (usersData && usersData.totalPages > 0 && page > usersData.totalPages) {
@@ -92,8 +94,15 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
   return (
     <TabsContent value="users" className="space-y-6">
       <h2 className="text-2xl font-bold">사용자 관리</h2>
-      <div className="space-y-2">
-        {usersData?.users.map((user: User) => (
+      <QueryState
+        isLoading={usersQuery.isLoading}
+        isError={usersQuery.isError}
+        onRetry={() => usersQuery.refetch()}
+        empty={!usersData?.users.length}
+        emptyMessage="사용자가 없습니다."
+      >
+        <div className="space-y-2">
+          {usersData?.users.map((user: User) => (
           <div key={user.id} className={`flex flex-wrap justify-between items-center gap-3 p-4 border rounded ${
             user.isActive ? '' : 'bg-muted/50 opacity-75'
           }`}>
@@ -114,9 +123,10 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
               >
                 {user.isActive ? '활성' : '비활성'}
               </Badge>
-              <Button
+                <Button
                 size="sm"
                 variant="outline"
+                  aria-label={`${user.name} 수정`}
                 onClick={() => {
                   setSelectedUser(user);
                   setEditDialogOpen(true);
@@ -149,8 +159,9 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
               </Button>
             </div>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </QueryState>
       <AdminListPagination
         page={usersData?.page || page}
         totalPages={usersData?.totalPages || 0}

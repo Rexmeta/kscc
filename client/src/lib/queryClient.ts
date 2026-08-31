@@ -26,6 +26,20 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem("token");
+  const headers = new Headers(init.headers);
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const res = await fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+  await throwIfResNotOk(res);
+  return res.json() as Promise<T>;
+}
 export async function apiRequest(
   method: string,
   url: string,

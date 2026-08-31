@@ -14,6 +14,7 @@ import { CreateNewsDialog } from '../forms/CreateNewsDialog';
 import { EditNewsForm } from '../forms/EditNewsForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { PostPublicationToggle } from '../PostPublicationToggle';
+import { QueryState } from '@/components/QueryState';
 
 export function ArticlesTab({
   activeTab,
@@ -31,7 +32,8 @@ export function ArticlesTab({
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { data: newsData } = useAdminPosts('news', activeTab);
+  const newsQuery = useAdminPosts('news', activeTab);
+  const { data: newsData } = newsQuery;
   const canCreate = isAdmin || hasPermission('news.create');
   const canUpdate = isAdmin || hasPermission('news.update');
   const canPublish = isAdmin || hasPermission('news.publish');
@@ -56,6 +58,13 @@ export function ArticlesTab({
         )}
       </div>
 
+      <QueryState
+        isLoading={newsQuery.isLoading}
+        isError={newsQuery.isError}
+        onRetry={() => newsQuery.refetch()}
+        empty={!newsData?.posts?.length}
+        emptyMessage="뉴스가 없습니다."
+      >
       <div className="grid gap-4">
         {newsData?.posts?.map((article: PostWithTranslations) => (
           <div key={article.id} className="p-4 border rounded flex justify-between items-start gap-4">
@@ -125,6 +134,7 @@ export function ArticlesTab({
           </div>
         ))}
       </div>
+      </QueryState>
 
       {selectedArticle && editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>

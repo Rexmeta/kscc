@@ -38,6 +38,10 @@ export interface TranslationKeys {
   'common.location': string;
   'common.category': string;
   'common.status': string;
+  'common.retry': string;
+  'common.loadError': string;
+  'common.pagination': string;
+  'common.empty': string;
 
   // Hero Section
   'hero.title': string;
@@ -124,6 +128,20 @@ export interface TranslationKeys {
   'events.seatsRemaining': string;
   'events.unlimited': string;
   'events.full': string;
+  'events.registered': string;
+  'events.closed': string;
+  'events.registrationAvailable': string;
+  'events.seatsRemainingCount': string;
+  'events.past': string;
+  'events.joinQuestion': string;
+  'events.clickToRegister': string;
+  'events.loginRequired': string;
+  'events.registering': string;
+  'events.date': string;
+  'events.location': string;
+  'events.fee': string;
+  'events.deadline': string;
+  'events.speakers': string;
 
   // Members
   'members.title': string;
@@ -285,6 +303,10 @@ const translations: Record<Language, TranslationKeys> = {
     'common.location': '장소',
     'common.category': '분류',
     'common.status': '상태',
+    'common.retry': '다시 시도',
+    'common.loadError': '정보를 불러오지 못했습니다.',
+    'common.pagination': '페이지 탐색',
+    'common.empty': '표시할 정보가 없습니다.',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -371,6 +393,20 @@ const translations: Record<Language, TranslationKeys> = {
     'events.seatsRemaining': '잔여 좌석',
     'events.unlimited': '무제한',
     'events.full': '마감',
+    'events.registered': '신청 완료',
+    'events.closed': '신청 마감',
+    'events.registrationAvailable': '신청 가능',
+    'events.seatsRemainingCount': '잔여 좌석',
+    'events.past': '이 행사는 종료되었습니다',
+    'events.joinQuestion': '이 행사에 참여하시겠습니까?',
+    'events.clickToRegister': '아래 버튼을 클릭하여 신청하세요',
+    'events.loginRequired': '로그인이 필요합니다',
+    'events.registering': '신청 중...',
+    'events.date': '일시',
+    'events.location': '장소',
+    'events.fee': '참가비',
+    'events.deadline': '신청 마감',
+    'events.speakers': '연사',
 
     // Members
     'members.title': '회원사 디렉토리',
@@ -530,6 +566,10 @@ const translations: Record<Language, TranslationKeys> = {
     'common.location': 'Location',
     'common.category': 'Category',
     'common.status': 'Status',
+    'common.retry': 'Try again',
+    'common.loadError': 'We could not load this information.',
+    'common.pagination': 'Pagination',
+    'common.empty': 'No information to display.',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -616,6 +656,20 @@ const translations: Record<Language, TranslationKeys> = {
     'events.seatsRemaining': 'Seats Remaining',
     'events.unlimited': 'Unlimited',
     'events.full': 'Full',
+    'events.registered': 'Registered',
+    'events.closed': 'Registration closed',
+    'events.registrationAvailable': 'Registration available',
+    'events.seatsRemainingCount': 'seats remaining',
+    'events.past': 'This event has ended',
+    'events.joinQuestion': 'Would you like to attend this event?',
+    'events.clickToRegister': 'Click the button below to register',
+    'events.loginRequired': 'Login required',
+    'events.registering': 'Registering...',
+    'events.date': 'Date',
+    'events.location': 'Location',
+    'events.fee': 'Fee',
+    'events.deadline': 'Registration deadline',
+    'events.speakers': 'Speakers',
 
     // Members
     'members.title': 'Member Directory',
@@ -775,6 +829,10 @@ const translations: Record<Language, TranslationKeys> = {
     'common.location': '地点',
     'common.category': '分类',
     'common.status': '状态',
+    'common.retry': '重试',
+    'common.loadError': '无法加载此信息。',
+    'common.pagination': '分页导航',
+    'common.empty': '没有可显示的信息。',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',
@@ -861,6 +919,20 @@ const translations: Record<Language, TranslationKeys> = {
     'events.seatsRemaining': '剩余座位',
     'events.unlimited': '无限制',
     'events.full': '已满',
+    'events.registered': '已报名',
+    'events.closed': '报名已截止',
+    'events.registrationAvailable': '可以报名',
+    'events.seatsRemainingCount': '剩余名额',
+    'events.past': '活动已结束',
+    'events.joinQuestion': '您要参加此活动吗？',
+    'events.clickToRegister': '请点击下面的按钮报名',
+    'events.loginRequired': '需要登录',
+    'events.registering': '报名中...',
+    'events.date': '日期',
+    'events.location': '地点',
+    'events.fee': '费用',
+    'events.deadline': '报名截止',
+    'events.speakers': '演讲嘉宾',
 
     // Members
     'members.title': '会员目录',
@@ -1014,4 +1086,21 @@ export function initializeLanguage(): void {
 
 export function t(key: keyof TranslationKeys): string {
   return translations[currentLanguage][key] || key;
+}
+
+export function getLocale(language: Language = currentLanguage): string {
+  return language === 'ko' ? 'ko-KR' : language === 'zh' ? 'zh-CN' : 'en-US';
+}
+
+export function formatLocalizedDate(
+  value: string | Date,
+  language: Language = currentLanguage,
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' },
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(getLocale(language), options);
+}
+
+export function formatLocalizedNumber(value: number, language: Language = currentLanguage): string {
+  return value.toLocaleString(getLocale(language));
 }

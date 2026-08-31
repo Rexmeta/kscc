@@ -5,12 +5,14 @@ import { Edit } from 'lucide-react';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
 import { useAdminPosts } from '@/hooks/useAdminData';
+import { QueryState } from '@/components/QueryState';
 
 export function PagesTab({ activeTab }: { activeTab: string }) {
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
 
-  const { data: pagesData } = useAdminPosts('page', activeTab);
+  const pagesQuery = useAdminPosts('page', activeTab);
+  const { data: pagesData } = pagesQuery;
 
   return (
     <TabsContent value="pages" className="space-y-6">
@@ -18,6 +20,13 @@ export function PagesTab({ activeTab }: { activeTab: string }) {
         <h2 className="text-2xl font-bold">페이지 관리</h2>
       </div>
 
+      <QueryState
+        isLoading={pagesQuery.isLoading}
+        isError={pagesQuery.isError}
+        onRetry={() => pagesQuery.refetch()}
+        empty={!pagesData?.posts?.length}
+        emptyMessage="페이지가 없습니다."
+      >
       <div className="border rounded-lg overflow-hidden">
         <div className="divide-y">
           {pagesData?.posts?.map((page: PostWithTranslations) => {
@@ -56,6 +65,7 @@ export function PagesTab({ activeTab }: { activeTab: string }) {
           )}
         </div>
       </div>
+      </QueryState>
 
       {selectedPage && (
         <PageEditModal

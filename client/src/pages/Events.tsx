@@ -11,6 +11,9 @@ import EventCard from '@/components/EventCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { queryKeys } from '@/lib/queryClient';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { PagePagination } from '@/components/PagePagination';
 
 export default function EventsPage() {
   const { hasPermission } = useAuth();
@@ -20,7 +23,7 @@ export default function EventsPage() {
   const [upcoming, setUpcoming] = useState('true');
   const limit = 9;
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'event', page, category, upcoming, limit, language }),
     queryFn: async ({ signal }) => {
       const offset = (page - 1) * limit;
@@ -34,8 +37,7 @@ export default function EventsPage() {
         ...(category && { tags: category }),
         ...(upcoming === 'true' && { upcoming: 'true' }),
       });
-      const response = await fetch(`/api/posts?${params}`, { signal });
-      return response.json();
+       return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
   });
 
@@ -122,13 +124,14 @@ export default function EventsPage() {
 
       {/* Events Grid */}
       <section className="py-16">
-        <div className="container">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
-            </div>
-          ) : events.length > 0 ? (
+          <div className="container">
+           <QueryState
+             isLoading={isLoading}
+             isError={isError}
+             onRetry={() => refetch()}
+             empty={events.length === 0}
+             emptyMessage={t('home.events.empty')}
+           >
             <>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {events.map((post: PostWithTranslations) => (
@@ -137,48 +140,9 @@ export default function EventsPage() {
               </div>
               
               {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-12 flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    data-testid="button-prev-page"
-                  >
-                    {t('common.previous')}
-                  </Button>
-                  
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={page === pageNum ? "default" : "outline"}
-                        onClick={() => setPage(pageNum)}
-                        data-testid={`button-page-${pageNum}`}
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    data-testid="button-next-page"
-                  >
-                    {t('common.next')}
-                  </Button>
-                </div>
-              )}
+               <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
-          ) : (
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">현재 예정된 행사가 없습니다.</p>
-            </div>
-          )}
+           </QueryState>
         </div>
       </section>
     </div>

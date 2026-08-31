@@ -11,6 +11,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { queryKeys } from '@/lib/queryClient';
+import { fetchJson } from '@/lib/queryClient';
+import { QueryState } from '@/components/QueryState';
+import { PagePagination } from '@/components/PagePagination';
+import { formatLocalizedDate } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
 import type { PostWithTranslations, PostMeta } from '@shared/schema';
 import { deletePost } from '@/lib/adminPostApi';
@@ -65,21 +69,14 @@ export default function ResourcesPage() {
   const { language } = useLanguage();
   const queryClient = useQueryClient();
 
-  const { data: categoryData } = useQuery<{ categories: Record<string, number> }>({
+  const { data: categoryData, isError: categoryError, refetch: refetchCategories } = useQuery<{ categories: Record<string, number> }>({
     queryKey: ['/api/posts/resource/categories', isAuthenticated ? 'authenticated' : 'public'],
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/posts/resource/categories', {
-        signal,
-        headers: isAuthenticated ? {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        } : {},
-      });
-      if (!response.ok) throw new Error('Failed to fetch resource categories');
-      return response.json();
+       return fetchJson('/api/posts/resource/categories', { signal });
     },
   });
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'resource', page, category, language, limit: 20 }),
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams({
@@ -92,34 +89,14 @@ export default function ResourcesPage() {
         compact: 'true',
       });
       
-      const response = await fetch(`/api/posts?${params}`, {
-        signal,
-        headers: isAuthenticated ? {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        } : {}
-      });
-      
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          toast({
-            title: "접근 권한 없음",
-            description: "로그인이 필요하거나 권한이 없습니다.",
-            variant: "destructive",
-          });
-        }
-        throw new Error('Failed to fetch resources');
-      }
-      
-      return response.json();
+       return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
   });
 
   const { data: resourceDetail } = useQuery<PostWithTranslations>({
     queryKey: queryKeys.posts.detail(selectedResource?.id || '', language),
     queryFn: async ({ signal }) => {
-      const response = await fetch(`/api/posts/${selectedResource!.id}?locale=${language}`, { signal });
-      if (!response.ok) throw new Error('Failed to fetch resource');
-      return response.json();
+      return fetchJson<PostWithTranslations>(`/api/posts/${selectedResource!.id}?locale=${language}`, { signal });
     },
     enabled: !!selectedResource?.id,
   });
@@ -351,13 +328,14 @@ export default function ResourcesPage() {
             </div>
             
             <div className="divide-y divide-border">
-              {isLoading ? (
-                <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
-                </div>
-              ) : resources.length > 0 ? (
-                resources.map((resource: PostWithTranslations) => {
+              <QueryState
+                isLoading={isLoading}
+                isError={isError}
+                onRetry={() => refetch()}
+                empty={resources.length === 0}
+                emptyMessage={t('common.empty')}
+              >
+                {resources.map((resource: PostWithTranslations) => {
                   const translation = getTranslation(resource, language);
                    const categoryValue = getMetaValue(resource.meta || [], 'resource.category') || 'uncategorized';
                    const fileType = getMetaValue(resource.meta || [], 'resource.fileType');
@@ -387,7 +365,7 @@ export default function ResourcesPage() {
                             <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                               <span className="flex items-center space-x-1">
                                 <File className="h-4 w-4" />
-                                <span>{new Date(resource.createdAt).toLocaleDateString()}</span>
+                                <span>{formatLocalizedDate(resource.createdAt, language)}</span>
                               </span>
                                <span>
                                  {fileType ? String(fileType).toUpperCase() : '파일 형식 정보 없음'}
@@ -433,38 +411,13 @@ export default function ResourcesPage() {
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div className="text-center py-12">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">자료가 없습니다.</p>
-                </div>
-              )}
+                })}
+              </QueryState>
             </div>
           </Card>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center mt-8 gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                이전
-              </Button>
-              <span className="flex items-center px-4">
-                {page} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                다음
-              </Button>
-            </div>
-          )}
+          <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
 
           {/* Member-Only Notice */}
           {!isAuthenticated && (
@@ -559,7 +512,7 @@ export default function ResourcesPage() {
                   <div>
                     <p className="text-xs text-muted-foreground">등록일</p>
                     <p className="font-medium">
-                      {new Date(resourceForDialog.createdAt).toLocaleDateString('ko-KR', {
+                      {formatLocalizedDate(resourceForDialog.createdAt, language, {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'

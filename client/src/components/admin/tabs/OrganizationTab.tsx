@@ -23,6 +23,7 @@ import {
   getMemberName,
   getMemberPosition,
 } from '@/lib/organizationDisplay';
+import { QueryState } from '@/components/QueryState';
 
 type MembersByCategory = Record<string, OrganizationMember[]>;
 
@@ -62,12 +63,13 @@ export function OrganizationTab({
   const canCreate = isAdmin || (canManageExecutives && hasPermission('organization.executives.create'));
   const canUpdate = isAdmin || (canManageExecutives && hasPermission('organization.executives.update'));
 
-  const { data: orgMembersData } = useAdminOrganizationMembers(
+  const organizationQuery = useAdminOrganizationMembers(
     orgCategoryFilter,
     activeTab,
     executivesOnly,
     page,
   );
+  const { data: orgMembersData } = organizationQuery;
 
   useEffect(() => {
     if (orgMembersData && orgMembersData.totalPages > 0 && page > orgMembersData.totalPages) {
@@ -173,6 +175,13 @@ export function OrganizationTab({
         </div>
       )}
 
+      <QueryState
+        isLoading={organizationQuery.isLoading}
+        isError={organizationQuery.isError}
+        onRetry={() => organizationQuery.refetch()}
+        empty={!orgMembersData?.members.length}
+        emptyMessage="조직 구성원이 없습니다."
+      >
       {displayCategories.map((category) => {
         const members = orderedMembers[category.value] || [];
         if (members.length === 0) return null;
@@ -317,6 +326,7 @@ export function OrganizationTab({
           </section>
         );
       })}
+      </QueryState>
 
       {(!orgMembersData || orgMembersData.members.length === 0) && (
         <div className="p-8 text-center text-muted-foreground">

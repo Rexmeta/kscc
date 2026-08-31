@@ -1,12 +1,21 @@
 import { TabsContent } from '@/components/ui/tabs';
 import { Users, Newspaper, Calendar, MessageSquare } from 'lucide-react';
 import { useAdminDashboard } from '@/hooks/useAdminData';
+import { QueryState } from '@/components/QueryState';
 
 export function DashboardTab({ activeTab }: { activeTab: string }) {
-  const { data: dashboardStats } = useAdminDashboard(activeTab);
+  const dashboardQuery = useAdminDashboard(activeTab);
+  const { data: dashboardStats } = dashboardQuery;
 
   return (
     <TabsContent value="dashboard" className="space-y-6">
+      <QueryState
+        isLoading={dashboardQuery.isLoading}
+        isError={dashboardQuery.isError}
+        onRetry={() => dashboardQuery.refetch()}
+        empty={!dashboardStats?.stats}
+        emptyMessage="통계가 없습니다."
+      >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-6 border rounded-lg">
           <div className="flex items-center justify-between">
@@ -45,6 +54,7 @@ export function DashboardTab({ activeTab }: { activeTab: string }) {
           </div>
         </div>
       </div>
+      </QueryState>
     </TabsContent>
   );
 }

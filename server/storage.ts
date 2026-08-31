@@ -1859,11 +1859,15 @@ export class DatabaseStorage implements IStorage {
       this.getLocalizedPostTranslations(post.id, post.primaryLocale, locale),
       this.getPostMetaAll(post.id, access),
     ]);
+    const registrationCount = post.postType === "event"
+      ? await this.getActiveEventRegistrationCount(post.id)
+      : undefined;
 
     return {
       ...post,
       translations,
       meta,
+      ...(registrationCount !== undefined ? { registrationCount } : {}),
     };
   }
 
@@ -1879,12 +1883,27 @@ export class DatabaseStorage implements IStorage {
       this.getLocalizedPostTranslations(id, post.primaryLocale, locale),
       this.getPostMetaAll(id, access),
     ]);
+    const registrationCount = post.postType === "event"
+      ? await this.getActiveEventRegistrationCount(id)
+      : undefined;
 
     return {
       ...post,
       translations,
       meta,
+      ...(registrationCount !== undefined ? { registrationCount } : {}),
     };
+  }
+
+  private async getActiveEventRegistrationCount(eventId: string): Promise<number> {
+    const [{ activeCount }] = await db
+      .select({ activeCount: count() })
+      .from(eventRegistrations)
+      .where(and(
+        eq(eventRegistrations.eventId, eventId),
+        ne(eventRegistrations.status, "cancelled"),
+      ));
+    return Number(activeCount || 0);
   }
 
   async getPosts(filters?: {
