@@ -10,6 +10,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys } from '@/lib/queryClient';
+import { trackEvent } from '@/lib/analytics';
 import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
@@ -151,7 +152,13 @@ export default function Home() {
                     </div>
                   </div>
                   <Button asChild size="lg" className="btn-accent shrink-0">
-                    <a href={survey.externalUrl} target="_blank" rel="noopener noreferrer" data-testid="button-home-survey">
+                    <a
+                      href={survey.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="button-home-survey"
+                      onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_card' })}
+                    >
                       설문하기
                       <ArrowRight className="h-4 w-4" />
                     </a>
