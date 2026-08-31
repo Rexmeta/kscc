@@ -691,6 +691,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/members", authenticateToken, requireAdminOrPermission("member.create"), async (req, res) => {
+    try {
+      const memberData = memberAdminSchema.parse(req.body);
+      const member = await storage.createMember(memberData);
+      res.status(201).json(member);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid member data" });
+    }
+  });
+
   app.get("/api/admin/members/:id", authenticateToken, requireAdminOrPermission("member.read"), async (req, res) => {
     try {
       const memberId = z.string().uuid().parse(req.params.id);

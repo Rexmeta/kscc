@@ -1763,9 +1763,41 @@ test(
       assert.equal(adminUpdate.body.membershipStatus, "active");
       assert.equal(adminUpdate.body.membershipLevel, "premium");
 
+      const operatorCreate = await request("/api/admin/members", {
+        token: operatorToken,
+        method: "POST",
+        body: {
+          ...newProfile,
+          companyName: "Operator Created Company",
+          contactEmail: `operator-created-${suffix}@example.test`,
+          membershipLevel: "regular",
+          membershipStatus: "active",
+          isPublic: true,
+        },
+      });
+      assert.equal(operatorCreate.status, 201);
+      assert.equal(operatorCreate.body.userId, null);
+      assert.equal(operatorCreate.body.membershipStatus, "active");
+      createdMemberIds.push(operatorCreate.body.id);
+
+      const rejectedAdminCreate = await request("/api/admin/members", {
+        token: ownerToken,
+        method: "POST",
+        body: {
+          ...newProfile,
+          companyName: "Unauthorized Admin Company",
+          contactEmail: `unauthorized-admin-${suffix}@example.test`,
+          membershipLevel: "regular",
+          membershipStatus: "active",
+          isPublic: true,
+        },
+      });
+      assert.equal(rejectedAdminCreate.status, 403);
+
       const operatorList = await request("/api/admin/members", { token: operatorToken });
       assert.equal(operatorList.status, 200);
       assert.ok(operatorList.body.members.some((member: any) => member.id === pendingMember.id));
+      assert.ok(operatorList.body.members.some((member: any) => member.id === operatorCreate.body.id));
 
       const operatorUpdate = await request(`/api/admin/members/${pendingMember.id}`, {
         token: operatorToken,

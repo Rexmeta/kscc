@@ -11,6 +11,7 @@ import type { Member } from '@shared/schema';
 import { EditMemberForm } from '../forms/EditMemberForm';
 import { useAdminMembers } from '@/hooks/useAdminData';
 import { useAuth } from '@/hooks/useAuth';
+import { CreateMemberDialog } from '../forms/CreateMemberDialog';
 
 export function MembersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -21,6 +22,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: membersData } = useAdminMembers(activeTab);
+  const canCreate = isAdmin || hasPermission('member.create');
   const canUpdate = isAdmin || hasPermission('member.update');
   const canDelete = isAdmin || hasPermission('member.delete');
 
@@ -28,6 +30,9 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
     <TabsContent value="members" className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">회원사 관리</h2>
+        {canCreate && <CreateMemberDialog onSuccess={() => {
+          queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+        }} />}
       </div>
 
       <div className="space-y-2">
