@@ -92,14 +92,14 @@ export function useAdminOrganizationMembers(
   const { user, isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
-  const category = executivesOnly ? 'executives' : categoryFilter;
+  const category = executivesOnly ? 'all' : categoryFilter;
   const tabName = executivesOnly ? 'executives' : 'organization';
   return useQuery<OrganizationMember[]>({
     queryKey: ['/api/organization-members', { category, admin: true }],
     queryFn: () => {
       const params = new URLSearchParams();
       params.append('isActive', 'false');
-      if (category && category !== 'all') {
+      if (!executivesOnly && category && category !== 'all') {
         params.append('category', category);
       }
       return fetchJson<OrganizationMember[]>(

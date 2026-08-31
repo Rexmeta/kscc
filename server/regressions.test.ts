@@ -1380,6 +1380,13 @@ test(
       category: "executives",
       isActive: false,
     };
+    const vicePresident = {
+      id: randomUUID(),
+      name: "Vice President",
+      position: "Vice President",
+      category: "vicepresidents",
+      isActive: true,
+    };
     const otherCategoryMember = {
       id: randomUUID(),
       name: "Secretariat Member",
@@ -1397,11 +1404,15 @@ test(
           ? [activeExecutive as any]
           : [activeExecutive as any, inactiveExecutive as any];
       }
+      if (!filters?.category) {
+        return [activeExecutive as any, inactiveExecutive as any, vicePresident as any, otherCategoryMember as any];
+      }
       return [otherCategoryMember as any];
     };
     storage.getOrganizationMember = async (id) => {
       if (id === activeExecutive.id) return activeExecutive as any;
       if (id === inactiveExecutive.id) return inactiveExecutive as any;
+      if (id === vicePresident.id) return vicePresident as any;
       if (id === otherCategoryMember.id) return otherCategoryMember as any;
       return undefined;
     };
@@ -1412,7 +1423,11 @@ test(
       updatedAt: new Date(),
     } as any);
     storage.updateOrganizationMember = async (id, updates) => ({
-      ...(id === activeExecutive.id ? activeExecutive : otherCategoryMember),
+      ...(id === activeExecutive.id
+        ? activeExecutive
+        : id === vicePresident.id
+          ? vicePresident
+          : otherCategoryMember),
       ...updates,
       id,
       updatedAt: new Date(),
@@ -1461,7 +1476,7 @@ test(
       assert.equal(operatorList.status, 200);
       assert.deepEqual(
         operatorList.body.map((member: any) => member.id),
-        [activeExecutive.id, inactiveExecutive.id],
+        [activeExecutive.id, inactiveExecutive.id, vicePresident.id],
       );
 
       assert.equal(
@@ -1514,6 +1529,14 @@ test(
           token: operatorToken,
           method: "PUT",
           body: { name: "Updated Executive", category: "executives" },
+        })).status,
+        200,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${vicePresident.id}`, {
+          token: operatorToken,
+          method: "PUT",
+          body: { name: "Updated Vice President", category: "vicepresidents" },
         })).status,
         200,
       );

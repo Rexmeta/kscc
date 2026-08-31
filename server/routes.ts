@@ -33,6 +33,7 @@ import {
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
+import { isExecutiveManagementCategory } from "@shared/organization";
 
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -966,17 +967,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isActive === 'false' && !isAdmin && !isExecutiveOperator) {
         return res.status(403).json({ message: "Administrative access required" });
       }
-      if (isExecutiveOperator && category && category !== executiveCategory) {
+      if (isExecutiveOperator && category && !isExecutiveManagementCategory(category)) {
         return res.status(403).json({ message: "Operators may only manage executives" });
       }
 
       // The admin UI uses isActive=false to request the complete management
       // list. Public and non-management requests always remain active-only.
       const members = await storage.getOrganizationMembers({
-        category: isExecutiveOperator ? executiveCategory : category,
+        category: isExecutiveOperator ? category : category,
         isActive: (isAdmin || isExecutiveOperator) && isActive === 'false' ? undefined : true,
       });
-      res.json(members);
+      res.json(
+        isExecutiveOperator && !category
+          ? members.filter((member) => isExecutiveManagementCategory(member.category))
+          : members,
+      );
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -996,7 +1001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!member) {
         return res.status(404).json({ message: "Organization member not found" });
       }
-      if (isExecutiveOperator && member.category !== executiveCategory) {
+      if (isExecutiveOperator && !isExecutiveManagementCategory(member.category)) {
         return res.status(403).json({ message: "Operators may only manage executives" });
       }
       if (req.user?.role !== 'admin' && !isExecutiveOperator && !member.isActive) {
@@ -1042,8 +1047,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const updateData = insertOrganizationMemberSchema.partial().parse(req.body);
         if (req.user?.role !== 'admin') {
-          if (member.category !== executiveCategory
-            || (updateData.category && updateData.category !== executiveCategory)) {
+          if (!isExecutiveManagementCategory(member.category)
+            || (updateData.category && !isExecutiveManagementCategory(updateData.category))) {
             return res.status(403).json({ message: "Operators may only manage executives" });
           }
         }

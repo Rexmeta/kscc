@@ -194,7 +194,11 @@ export function EditOrganizationMemberDialog({
             ) : (
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Input value="임원진" disabled data-testid="input-org-edit-category-executives" />
+                <Input
+                  value={ORGANIZATION_CATEGORIES.find((cat) => cat.value === member.category)?.label || member.category}
+                  disabled
+                  data-testid="input-org-edit-category-executives"
+                />
               </div>
             )}
             <div>
