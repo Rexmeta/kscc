@@ -14,7 +14,7 @@ import {
   type SurveySettings, type SurveySettingsInput,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, count, sql, inArray, ne } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
   canReadPost,
@@ -25,7 +25,11 @@ import {
 import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
 import { hasPermission } from "./permissions";
 import { normalizeEmail } from "./auth";
-
+import {
+  InvalidPostScheduleError,
+  RESOURCE_ACL_SYNC_META_KEY,
+  validatePostSchedule,
+} from "./postScheduling";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
@@ -94,6 +98,22 @@ function getEventMetaValue(meta: PostMeta[], keys: string[]): unknown {
   if (item.valueBoolean !== null) return item.valueBoolean;
   if (item.valueTimestamp !== null) return item.valueTimestamp;
   return item.value ?? undefined;
+}
+
+function preparePostUpdate(currentPost: Post, updates: Partial<Post>): Partial<Post> {
+  const updateData = { ...updates };
+  const hasExplicitSchedule = Object.prototype.hasOwnProperty.call(updates, "scheduledAt");
+  const statusChanged = updates.status !== undefined && updates.status !== currentPost.status;
+
+  // An explicit manual publish, unpublish, or archive supersedes a prior
+  // schedule. A caller can intentionally replace it in the same update by
+  // supplying scheduledAt together with status=draft.
+  if (!hasExplicitSchedule &&
+    (updates.status === "published" || statusChanged)) {
+    updateData.scheduledAt = null;
+  }
+
+  return updateData;
 }
 export interface IStorage {
   // Users
@@ -180,6 +200,8 @@ export interface IStorage {
   getPost(id: string): Promise<Post | undefined>;
   getPostBySlug(slug: string): Promise<Post | undefined>;
   getPostByObjectPath(objectPath: string): Promise<Post | undefined>;
+  claimDueScheduledPosts(now: Date, limit: number): Promise<Post[]>;
+  getResourcePostsNeedingAcl(now: Date, limit: number): Promise<Post[]>;
   getPostBySlugWithTranslations(slug: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
   getPostWithTranslations(id: string, locale?: string, access?: PostAccessContext): Promise<PostWithTranslations | undefined>;
   getPosts(filters?: {
@@ -223,6 +245,7 @@ export interface IStorage {
   setPostMeta(postId: string, key: string, value: any): Promise<PostMeta>;
   deletePostMeta(postId: string, key: string): Promise<void>;
   incrementPostMetaNumber(postId: string, key: string, amount?: number): Promise<void>;
+  markResourceAclSynchronized(postId: string, marker: string): Promise<void>;
 
   // Organization Members
   getOrganizationMember(id: string): Promise<OrganizationMember | undefined>;
@@ -1358,6 +1381,87 @@ export class DatabaseStorage implements IStorage {
     return result?.post;
   }
 
+  async claimDueScheduledPosts(now: Date, limit: number): Promise<Post[]> {
+    const boundedLimit = boundedPageSize(limit, 100);
+    return db.transaction(async (tx) => {
+      // The row lock and the status transition share one transaction. A
+      // second instance skips these rows and cannot publish them twice.
+      const duePosts = await tx
+        .select()
+        .from(posts)
+        .where(and(
+          eq(posts.status, "draft"),
+          isNotNull(posts.scheduledAt),
+          lte(posts.scheduledAt, now),
+          isNull(posts.publishedAt),
+          or(isNull(posts.expiresAt), gt(posts.expiresAt, now)),
+          or(isNull(posts.expiresAt), gt(posts.expiresAt, posts.scheduledAt)),
+        )!)
+        .orderBy(asc(posts.scheduledAt))
+        .limit(boundedLimit)
+        .for("update", { skipLocked: true });
+
+      const publishedPosts: Post[] = [];
+      for (const post of duePosts) {
+        const [publishedPost] = await tx
+          .update(posts)
+          .set({
+            status: "published",
+            // The scheduled instant is the canonical publication instant.
+            // `now` is used only for a legacy row missing scheduledAt.
+            publishedAt: post.scheduledAt || now,
+            updatedAt: now,
+          })
+          .where(and(
+            eq(posts.id, post.id),
+            eq(posts.status, "draft"),
+            isNull(posts.publishedAt),
+          )!)
+          .returning();
+        if (publishedPost) publishedPosts.push(publishedPost);
+      }
+      return publishedPosts;
+    });
+  }
+
+  async getResourcePostsNeedingAcl(now: Date, limit: number): Promise<Post[]> {
+    const expectedMarker = sql`concat(
+      to_char(${posts.updatedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      ':',
+      CASE
+        WHEN ${posts.status} = 'published'
+          AND ${posts.visibility} = 'public'
+          AND (${posts.publishedAt} IS NULL OR ${posts.publishedAt} <= ${now})
+          AND (${posts.expiresAt} IS NULL OR ${posts.expiresAt} > ${now})
+        THEN 'public'
+        ELSE 'private'
+      END
+    )`;
+
+    return db
+      .select()
+      .from(posts)
+      .where(and(
+        eq(posts.postType, "resource"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${postMeta} AS resource_file
+          WHERE resource_file.post_id = ${posts.id}
+            AND resource_file.meta_key = 'resource.fileUrl'
+            AND (resource_file.value_text IS NOT NULL OR resource_file.meta_value IS NOT NULL)
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1
+          FROM ${postMeta} AS acl_marker
+          WHERE acl_marker.post_id = ${posts.id}
+            AND acl_marker.meta_key = ${RESOURCE_ACL_SYNC_META_KEY}
+            AND acl_marker.value_text = ${expectedMarker}
+        )`,
+      )!)
+      .orderBy(asc(posts.updatedAt))
+      .limit(boundedPageSize(limit, 100));
+  }
+
   private async getLocalizedPostTranslations(postId: string, primaryLocale: string, locale?: string): Promise<PostTranslation[]> {
     if (!locale) {
       return db
@@ -1742,6 +1846,7 @@ export class DatabaseStorage implements IStorage {
       ...post,
       slug: post.slug || `${post.postType}-${Date.now().toString(36)}`,
     };
+    validatePostWrite(postData);
     const [newPost] = await db
       .insert(posts)
       .values(postData)
@@ -1750,12 +1855,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePost(id: string, updates: Partial<Post>): Promise<Post | undefined> {
-    const [post] = await db
-      .update(posts)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(posts.id, id))
-      .returning();
-    return post || undefined;
+    return db.transaction(async (tx) => {
+      const [currentPost] = await tx
+        .select()
+        .from(posts)
+        .where(eq(posts.id, id))
+        .for("update");
+      if (!currentPost) return undefined;
+
+      const updateData = preparePostUpdate(currentPost, updates);
+      validatePostWrite({ ...currentPost, ...updateData });
+      const [post] = await tx
+        .update(posts)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(eq(posts.id, id))
+        .returning();
+      return post || undefined;
+    });
   }
 
   async updatePostComplete(
@@ -1765,9 +1881,18 @@ export class DatabaseStorage implements IStorage {
     metadata: Array<{ key: string; value?: any }>,
   ): Promise<Post | undefined> {
     return db.transaction(async (tx) => {
+      const [currentPost] = await tx
+        .select()
+        .from(posts)
+        .where(eq(posts.id, id))
+        .for("update");
+      if (!currentPost) return undefined;
+
+      const updateData = preparePostUpdate(currentPost, updates);
+      validatePostWrite({ ...currentPost, ...updateData });
       const [updatedPost] = await tx
         .update(posts)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({ ...updateData, updatedAt: new Date() })
         .where(eq(posts.id, id))
         .returning();
 
@@ -1902,6 +2027,10 @@ export class DatabaseStorage implements IStorage {
       } as any)
       .returning();
     return created;
+  }
+
+  async markResourceAclSynchronized(postId: string, marker: string): Promise<void> {
+    await this.setPostMeta(postId, RESOURCE_ACL_SYNC_META_KEY, marker);
   }
 
   async deletePostMeta(postId: string, key: string): Promise<void> {
@@ -2154,4 +2283,18 @@ function validateEventRegistrationAvailability(
     throw new EventRegistrationError("EVENT_CLOSED", "Event registration is closed");
   }
 
+}
+
+function validatePostWrite(
+  post: Partial<Pick<Post, "publishedAt" | "scheduledAt" | "expiresAt">> & {
+    status?: Post["status"];
+  },
+): void {
+  validatePostSchedule({
+    ...post,
+    status: post.status || "draft",
+    publishedAt: post.publishedAt ?? null,
+    scheduledAt: post.scheduledAt ?? null,
+    expiresAt: post.expiresAt ?? null,
+  });
 }

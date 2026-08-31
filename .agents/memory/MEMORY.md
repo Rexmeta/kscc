@@ -9,3 +9,4 @@
 - [SEO language URLs](seo-language-urls.md) — crawlable language variants use `?lang=ko|en|zh` alongside the SPA's local language preference.
 - [Server-rendered SEO routing](seo-ssr-routing.md) — wildcard shell routes must derive route metadata from `req.originalUrl`, not the mounted `req.path`.
 - [Management list filters](management-list-filters.md) — all-permitted-category management views must not inherit a default single-category filter.
+- [Scheduled publication coordination](scheduled-publication-coordination.md) — durable post metadata markers preserve ACL retry state without requiring a new schema column.

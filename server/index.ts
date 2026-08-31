@@ -6,6 +6,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { isDatabaseReady } from "./db";
 import { registerHealthRoutes } from "./health";
 import { registerSeoRoutes } from "./seo";
+import { startScheduledPublicationWorker } from "./scheduledPublications";
 
 const app = express();
 
@@ -113,4 +114,9 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // The worker is intentionally bounded and overlap-safe. Every instance may
+  // run it; PostgreSQL row locks decide which instance claims each due post.
+  const stopScheduledPublicationWorker = startScheduledPublicationWorker();
+  server.once("close", stopScheduledPublicationWorker);
 })();

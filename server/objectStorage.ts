@@ -15,9 +15,13 @@ import type { Post } from "@shared/schema";
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
 export function getResourceObjectAclVisibility(
-  post: Pick<Post, "status" | "visibility">,
+  post: Pick<Post, "status" | "visibility" | "publishedAt" | "expiresAt">,
+  now = new Date(),
 ): ObjectAclPolicy["visibility"] {
-  return post.status === "published" && post.visibility === "public"
+  return post.status === "published" &&
+    post.visibility === "public" &&
+    (!post.publishedAt || post.publishedAt <= now) &&
+    (!post.expiresAt || post.expiresAt > now)
     ? "public"
     : "private";
 }

@@ -11,6 +11,10 @@ import {
   isManagedPostType,
   type PostAction,
 } from "../postPermissions";
+import {
+  InvalidPostScheduleError,
+  getResourceAclSyncMarker,
+} from "../postScheduling";
 import "../types";
 
 const router = Router();
@@ -91,20 +95,27 @@ const eventRegistrationRequestSchema = z.object({
   companyName: z.string().trim().max(200).optional(),
 }).strict();
 
-async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<void> {
-  if (post.postType !== "resource") return;
+async function syncResourceObjectAcl(post: Post, ownerId: string): Promise<boolean> {
+  if (post.postType !== "resource") return false;
 
   const fileMeta = await storage.getPostMeta(post.id, "resource.fileUrl");
   const fileUrl = fileMeta?.valueText ||
     (typeof fileMeta?.value === "string" ? fileMeta.value : "");
-  if (!fileUrl) return;
+  if (!fileUrl) return false;
 
   const objectStorageService = new ObjectStorageService();
+  const now = new Date();
+  const visibility = getResourceObjectAclVisibility(post, now);
   await objectStorageService.updateObjectEntityAclVisibility(
     fileUrl,
-    getResourceObjectAclVisibility(post),
+    visibility,
     ownerId,
   );
+  await storage.markResourceAclSynchronized(
+    post.id,
+    getResourceAclSyncMarker(post, visibility),
+  );
+  return true;
 }
 
 // GET /api/posts - List posts with filters
@@ -409,6 +420,9 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
 
     res.status(201).json(post);
   } catch (error) {
+    if (error instanceof InvalidPostScheduleError) {
+      return res.status(400).json({ message: error.message });
+    }
     if (createdPostId) {
       await storage.deletePost(createdPostId).catch((cleanupError) => {
         console.error("[Posts API] Failed to clean up partial post creation:", cleanupError);
@@ -453,6 +467,9 @@ router.patch("/:id/status", authenticateToken, async (req: Request, res: Respons
     await syncResourceObjectAcl(updatedPost, req.user!.id);
     res.json(updatedPost);
   } catch (error) {
+    if (error instanceof InvalidPostScheduleError) {
+      return res.status(400).json({ message: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post status", errors: error.errors });
     }
@@ -529,6 +546,9 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
     
     res.json(updatedPost);
   } catch (error) {
+    if (error instanceof InvalidPostScheduleError) {
+      return res.status(400).json({ message: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid update data", errors: error.errors });
     }

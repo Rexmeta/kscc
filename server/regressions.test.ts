@@ -28,6 +28,15 @@ import {
 import { getPostPermissionKey } from "./postPermissions";
 import { canReadPost, publicPostAccess, type PostAccessContext } from "./postAccess";
 import {
+  InvalidPostScheduleError,
+  getResourceAclSyncMarker,
+  validatePostSchedule,
+} from "./postScheduling";
+import {
+  getResourceObjectAclVisibility,
+} from "./objectStorage";
+import { ScheduledPublicationRunner } from "./scheduledPublications";
+import {
   AuthorizationStateError,
   DuplicateInquiryError,
   EventRegistrationError,
@@ -1095,6 +1104,288 @@ test("post visibility policy separates administrator and editor access", () => {
   assert.equal(canReadPost(post({ status: "archived", visibility: "internal" }), admin), true);
   assert.equal(canReadPost(post({ status: "draft" }), publicPostAccess), false);
 });
+
+test("scheduled publications respect clock boundaries, restart retries, and idempotency", async () => {
+  const scheduledAt = new Date("2026-08-31T12:00:00.000Z");
+  const before = new Date(scheduledAt.getTime() - 1);
+  const resource = {
+    id: randomUUID(),
+    postType: "resource",
+    status: "draft",
+    visibility: "public",
+    slug: "scheduled-resource",
+    primaryLocale: "ko",
+    authorId: randomUUID(),
+    publishedAt: null,
+    scheduledAt,
+    expiresAt: null,
+    createdAt: before,
+    updatedAt: before,
+  } as any;
+  const fileMeta = {
+    id: randomUUID(),
+    postId: resource.id,
+    key: "resource.fileUrl",
+    value: null,
+    valueText: "/objects/scheduled-resource",
+    valueNumber: null,
+    valueBoolean: null,
+    valueTimestamp: null,
+    createdAt: before,
+    updatedAt: before,
+  } as any;
+  let claimCount = 0;
+  let aclAttempts = 0;
+  let aclFailuresRemaining = 1;
+  let marker: string | undefined;
+  const fakeStorage = {
+    claimDueScheduledPosts: async (now: Date, _limit: number) => {
+      if (now < scheduledAt || claimCount > 0) return [];
+      claimCount += 1;
+      resource.status = "published";
+      resource.publishedAt = scheduledAt;
+      resource.updatedAt = now;
+      return [resource];
+    },
+    getResourcePostsNeedingAcl: async (_now: Date, _limit: number) =>
+      resource.status === "published" ? [resource] : [],
+    getPostMeta: async (_postId: string, key: string) =>
+      key === "resource.fileUrl"
+        ? fileMeta
+        : marker
+          ? { ...fileMeta, key, valueText: marker }
+          : undefined,
+    markResourceAclSynchronized: async (_postId: string, nextMarker: string) => {
+      marker = nextMarker;
+    },
+  };
+  const events: string[] = [];
+  const objectStorage = {
+    updateObjectEntityAclVisibility: async () => {
+      aclAttempts += 1;
+      if (aclFailuresRemaining > 0) {
+        aclFailuresRemaining -= 1;
+        throw new Error("temporary object storage failure");
+      }
+      return "/objects/scheduled-resource";
+    },
+  };
+  const options = {
+    storage: fakeStorage,
+    logger: (event: string) => events.push(event),
+    objectStorageFactory: () => objectStorage,
+  };
+
+  const beforeRun = await new ScheduledPublicationRunner(options).runOnce(before);
+  assert.deepEqual(beforeRun, { published: 0, aclSynchronized: 0, failures: 0 });
+  assert.equal(resource.status, "draft");
+
+  const firstDueRun = await new ScheduledPublicationRunner(options).runOnce(scheduledAt);
+  assert.equal(firstDueRun.published, 1);
+  assert.equal(firstDueRun.aclSynchronized, 0);
+  assert.equal(firstDueRun.failures, 1);
+  assert.equal(resource.publishedAt, scheduledAt);
+
+  // A restarted worker cannot claim the already-published row, but it retries
+  // the ACL operation whose durable marker was not written.
+  const restartedRun = await new ScheduledPublicationRunner(options).runOnce(
+    new Date(scheduledAt.getTime() + 1),
+  );
+  assert.deepEqual(restartedRun, { published: 0, aclSynchronized: 1, failures: 0 });
+  assert.equal(claimCount, 1);
+  assert.equal(aclAttempts, 2);
+
+  const idempotentRun = await new ScheduledPublicationRunner(options).runOnce(
+    new Date(scheduledAt.getTime() + 2),
+  );
+  assert.deepEqual(idempotentRun, { published: 0, aclSynchronized: 0, failures: 0 });
+  assert.equal(aclAttempts, 2);
+  assert.ok(events.includes("posts_published"));
+  assert.ok(events.includes("resource_acl_sync_failed"));
+});
+
+test("scheduled post rules reject conflicting states and resource ACLs follow time windows", () => {
+  const scheduledAt = new Date("2026-08-31T12:00:00.000Z");
+  assert.throws(
+    () => validatePostSchedule({
+      status: "published",
+      publishedAt: null,
+      scheduledAt,
+      expiresAt: null,
+    }),
+    (error: unknown) => error instanceof InvalidPostScheduleError,
+  );
+  assert.throws(
+    () => validatePostSchedule({
+      status: "draft",
+      publishedAt: null,
+      scheduledAt,
+      expiresAt: scheduledAt,
+    }),
+    (error: unknown) => error instanceof InvalidPostScheduleError,
+  );
+  assert.doesNotThrow(() => validatePostSchedule({
+    status: "draft",
+    publishedAt: null,
+    scheduledAt: new Date(scheduledAt.getTime() - 60_000),
+    expiresAt: null,
+  }));
+
+  const expiresAt = new Date(scheduledAt.getTime() + 60_000);
+  const post = {
+    status: "published",
+    visibility: "public",
+    publishedAt: scheduledAt,
+    expiresAt,
+  } as any;
+  assert.equal(
+    getResourceObjectAclVisibility(post, new Date(scheduledAt.getTime() - 1)),
+    "private",
+  );
+  assert.equal(getResourceObjectAclVisibility(post, scheduledAt), "public");
+  assert.equal(
+    getResourceObjectAclVisibility(post, expiresAt),
+    "private",
+  );
+});
+
+test(
+  "database scheduled claims are bounded, idempotent, and reconcile resource ACL markers",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const now = new Date("2026-08-31T12:00:00.000Z");
+    const suffix = randomUUID();
+    const [futurePost, duePost, expiredPost, invalidPost, resourcePost, manualPost] = await db
+      .insert(posts)
+      .values([
+        {
+          postType: "news",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-future-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: new Date(now.getTime() + 60_000),
+        },
+        {
+          postType: "news",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-due-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: now,
+        },
+        {
+          postType: "news",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-expired-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: new Date(now.getTime() - 60_000),
+          expiresAt: new Date(now.getTime() - 1),
+        },
+        {
+          postType: "news",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-invalid-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: new Date(now.getTime() - 60_000),
+          expiresAt: new Date(now.getTime() - 60_000),
+        },
+        {
+          postType: "resource",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-resource-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: now,
+          expiresAt: new Date(now.getTime() + 60_000),
+        },
+        {
+          postType: "news",
+          status: "draft",
+          visibility: "public",
+          slug: `schedule-manual-${suffix}`,
+          primaryLocale: "ko",
+          scheduledAt: new Date(now.getTime() + 120_000),
+        },
+      ])
+      .returning();
+    await db.insert(postMeta).values({
+      postId: resourcePost.id,
+      key: "resource.fileUrl",
+      valueText: `/objects/scheduled-${suffix}`,
+    });
+
+    try {
+      assert.deepEqual(
+        (await storage.claimDueScheduledPosts(new Date(now.getTime() - 1), 10))
+          .map(({ id }) => id),
+        [],
+      );
+      const claimed = await storage.claimDueScheduledPosts(now, 10);
+      assert.deepEqual(
+        claimed.map(({ id }) => id).sort(),
+        [duePost.id, resourcePost.id].sort(),
+      );
+      assert.equal(claimed.find(({ id }) => id === resourcePost.id)?.publishedAt?.getTime(), now.getTime());
+      assert.deepEqual(
+        (await storage.claimDueScheduledPosts(new Date(now.getTime() + 1), 10))
+          .map(({ id }) => id),
+        [],
+      );
+
+      const aclCandidates = await storage.getResourcePostsNeedingAcl(now, 10);
+      assert.deepEqual(aclCandidates.map(({ id }) => id), [resourcePost.id]);
+      const marker = getResourceAclSyncMarker(
+        resourcePostFromClaim(claimed, resourcePost),
+        getResourceObjectAclVisibility(resourcePostFromClaim(claimed, resourcePost), now),
+      );
+      await storage.markResourceAclSynchronized(resourcePost.id, marker);
+      assert.deepEqual(
+        (await storage.getResourcePostsNeedingAcl(now, 10)).map(({ id }) => id),
+        [],
+      );
+      assert.deepEqual(
+        (await storage.getResourcePostsNeedingAcl(
+          new Date(now.getTime() + 60_000),
+          10,
+        )).map(({ id }) => id),
+        [resourcePost.id],
+      );
+      assert.equal((await storage.getPost(futurePost.id))?.status, "draft");
+      assert.equal((await storage.getPost(expiredPost.id))?.status, "draft");
+      assert.equal((await storage.getPost(invalidPost.id))?.status, "draft");
+
+      const manuallyPublished = await storage.updatePost(manualPost.id, {
+        status: "published",
+        publishedAt: now,
+      });
+      assert.equal(manuallyPublished?.scheduledAt, null);
+      const manuallyRescheduled = await storage.updatePost(manualPost.id, {
+        status: "draft",
+        publishedAt: null,
+        scheduledAt: new Date(now.getTime() + 120_000),
+      });
+      assert.equal(manuallyRescheduled?.status, "draft");
+      assert.equal(manuallyRescheduled?.scheduledAt?.getTime(), now.getTime() + 120_000);
+    } finally {
+      await db.delete(posts).where(inArray(posts.id, [
+        futurePost.id,
+        duePost.id,
+        expiredPost.id,
+        invalidPost.id,
+        resourcePost.id,
+        manualPost.id,
+      ]));
+    }
+  },
+);
+
+function resourcePostFromClaim(claimed: any[], fallback: any) {
+  return claimed.find(({ id }) => id === fallback.id) || fallback;
+}
 
 test(
   "ACL-derived editor contexts scope post lists and details without admin escalation",
