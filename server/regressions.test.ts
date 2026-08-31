@@ -30,6 +30,7 @@ import {
   EventRegistrationError,
 } from "./storage";
 import { EmailService } from "./email";
+import { issueAuthToken } from "./auth";
 import { sortOrganizationMembers } from "@shared/organization";
 
 test("organization member ordering is deterministic for public and admin views", () => {
@@ -51,6 +52,192 @@ test("organization member ordering is deterministic for public and admin views",
 });
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
+
+test(
+  "authentication lifecycle normalizes identities and revokes old credentials",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `auth-lifecycle-test-${randomUUID()}`;
+    }
+    const suffix = randomUUID();
+    const admin = await storage.createUser({
+      email: `auth-admin-${suffix}@example.test`,
+      password: "admin-password",
+      name: "Auth Admin",
+      role: "admin",
+      userType: "staff",
+    });
+    const user = await storage.createUser({
+      email: `auth-user-${suffix}@example.test`,
+      password: "initial-password",
+      name: "Auth User",
+      userType: "staff",
+    });
+    const user2 = await storage.createUser({
+      email: `auth-user-two-${suffix}@example.test`,
+      password: "initial-password",
+      name: "Auth User Two",
+      userType: "staff",
+    });
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        const responseText = await response.text();
+        let body: unknown = responseText;
+        try {
+          body = JSON.parse(responseText);
+        } catch {
+          // Empty responses, such as logout, are expected.
+        }
+        return { status: response.status, body };
+      };
+
+      const weakRegistration = await request("/api/auth/register", {
+        method: "POST",
+        body: {
+          name: "Weak Password",
+          email: `weak-${suffix}@example.test`,
+          password: "short",
+          userType: "staff",
+        },
+      });
+      assert.equal(weakRegistration.status, 400);
+      assert.equal(JSON.stringify(weakRegistration.body).includes("short"), false);
+
+      const initialToken = issueAuthToken(user, process.env.SESSION_SECRET!);
+      const profileEmail = `profile-${suffix}@example.test`;
+      const profileEmailChange = await request("/api/auth/profile", {
+        token: initialToken,
+        method: "PATCH",
+        body: { email: `  ${profileEmail.toUpperCase()}  ` },
+      });
+      assert.equal(profileEmailChange.status, 200);
+      assert.equal((profileEmailChange.body as { email: string }).email, profileEmail);
+      assert.equal((await request("/api/auth/me", { token: initialToken })).status, 403);
+
+      const login = await request("/api/auth/login", {
+        method: "POST",
+        body: {
+          email: `  ${profileEmail.toUpperCase()}  `,
+          password: "initial-password",
+        },
+      });
+      assert.equal(login.status, 200);
+      assert.ok(login.body && typeof login.body === "object");
+      const loginBody = login.body as { user: Record<string, unknown>; token: string };
+      assert.equal(loginBody.user.email, profileEmail);
+      assert.equal("password" in loginBody.user, false);
+      const loginClaims = jwt.decode(loginBody.token) as Record<string, unknown>;
+      assert.equal(loginClaims.id, user.id);
+      assert.equal(typeof loginClaims.sv, "number");
+      assert.equal("email" in loginClaims, false);
+      assert.equal("role" in loginClaims, false);
+
+      const duplicateRegistration = await request("/api/auth/register", {
+        method: "POST",
+        body: {
+          name: "Duplicate Identity",
+          email: ` ${profileEmail.toUpperCase()} `,
+          password: "different-password",
+          userType: "staff",
+        },
+      });
+      assert.equal(duplicateRegistration.status, 400);
+      assert.deepEqual(duplicateRegistration.body, { message: "User already exists" });
+
+      const passwordChange = await request("/api/auth/profile", {
+        token: loginBody.token,
+        method: "PATCH",
+        body: {
+          currentPassword: "initial-password",
+          newPassword: "replacement-password",
+        },
+      });
+      assert.equal(passwordChange.status, 200);
+      assert.equal((await request("/api/auth/me", { token: loginBody.token })).status, 403);
+
+      const replacementLogin = await request("/api/auth/login", {
+        method: "POST",
+        body: { email: profileEmail, password: "replacement-password" },
+      });
+      assert.equal(replacementLogin.status, 200);
+      const replacementToken = (replacementLogin.body as { token: string }).token;
+      assert.equal((await request("/api/auth/logout", {
+        token: replacementToken,
+        method: "POST",
+      })).status, 204);
+      assert.equal((await request("/api/auth/me", { token: replacementToken })).status, 403);
+
+      const adminToken = issueAuthToken(admin, process.env.SESSION_SECRET!);
+      const userToken = issueAuthToken(user2, process.env.SESSION_SECRET!);
+      const adminEmail = `admin-edited-${suffix}@example.test`;
+      const adminEmailChange = await request(`/api/users/${user2.id}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { email: `  ${adminEmail.toUpperCase()}  ` },
+      });
+      assert.equal(adminEmailChange.status, 200);
+      assert.equal((adminEmailChange.body as { email: string }).email, adminEmail);
+      assert.equal((await request("/api/auth/me", { token: userToken })).status, 403);
+
+      const refreshedAfterEmail = await storage.getUser(user2.id);
+      assert.ok(refreshedAfterEmail);
+      const userTokenAfterEmail = issueAuthToken(
+        refreshedAfterEmail!,
+        process.env.SESSION_SECRET!,
+      );
+      const roleChange = await request(`/api/users/${user2.id}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { role: "operator" },
+      });
+      assert.equal(roleChange.status, 200);
+      assert.equal((await request("/api/auth/me", { token: userTokenAfterEmail })).status, 403);
+
+      const refreshedUser2 = await storage.getUser(user2.id);
+      assert.ok(refreshedUser2);
+      const activeToken = issueAuthToken(refreshedUser2!, process.env.SESSION_SECRET!);
+      const deactivation = await request(`/api/users/${user2.id}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { isActive: false },
+      });
+      assert.equal(deactivation.status, 200);
+      assert.equal((await request("/api/auth/me", { token: activeToken })).status, 403);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await db.delete(users).where(inArray(users.id, [admin.id, user.id, user2.id]));
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
 
 test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("news", "read"), "news.read");

@@ -15,7 +15,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData, weixin?: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
   loading: boolean;
@@ -96,12 +96,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', data.token);
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    setPermissions(new Set());
-    localStorage.removeItem('token');
-    setLocation('/');
+  const logout = async () => {
+    const currentToken = token;
+    try {
+      if (currentToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` },
+        });
+      }
+    } catch {
+      // Local logout still completes if the network is unavailable. When the
+      // request reaches the server, the account session version is revoked.
+    } finally {
+      setUser(null);
+      setToken(null);
+      setPermissions(new Set());
+      localStorage.removeItem('token');
+      setLocation('/');
+    }
   };
 
   const hasPermission = (permission: string): boolean => {

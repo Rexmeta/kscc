@@ -20,6 +20,8 @@ export const users = pgTable("users", {
   membershipTier: text("membership_tier").notNull().default("free"), // free, bronze, silver, gold, platinum
   weixin: text("weixin"), // WeChat ID
   isActive: boolean("is_active").notNull().default(true),
+  // Incremented to revoke all previously issued JWTs for this account.
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -24,6 +24,7 @@ import {
 } from "./postAccess";
 import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
 import { hasPermission } from "./permissions";
+import { normalizeEmail } from "./auth";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
@@ -110,6 +111,7 @@ export interface IStorage {
     updates: Partial<User>,
     accountRole?: AccountRole,
   ): Promise<User | undefined>;
+  revokeUserSessions(id: string): Promise<boolean>;
   updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined>;
   bootstrapAdmin(email: string, password?: string): Promise<User>;
   validateUser(email: string, password: string): Promise<User | undefined>;
@@ -239,7 +241,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(eq(users.email, normalizeEmail(email)));
     return user || undefined;
   }
 
@@ -249,6 +251,7 @@ export class DatabaseStorage implements IStorage {
       .insert(users)
       .values({
         ...insertUser,
+        email: normalizeEmail(insertUser.email),
         password: hashedPassword,
       })
       .returning();
@@ -266,6 +269,7 @@ export class DatabaseStorage implements IStorage {
         .insert(users)
         .values({
           ...userData,
+          email: normalizeEmail(userData.email),
           password: hashedPassword,
           userType: 'company', // Force company type
         })
@@ -294,6 +298,7 @@ export class DatabaseStorage implements IStorage {
         .insert(users)
         .values({
           ...userData,
+          email: normalizeEmail(userData.email),
           // Public registration never grants an administrative account. Admin
           // provisioning is an explicit, deployment-controlled operation.
           role: "user",
@@ -315,6 +320,7 @@ export class DatabaseStorage implements IStorage {
         .insert(users)
         .values({
           ...userData,
+          email: normalizeEmail(userData.email),
           // Company registration is also a normal, non-privileged signup.
           role: "user",
           password: hashedPassword,
@@ -350,7 +356,19 @@ export class DatabaseStorage implements IStorage {
 
       const finalRole = accountRole
         || (currentUser.role === "member" ? "user" : currentUser.role as AccountRole);
+      // Authorization synchronization may be requested even when the
+      // effective role/state is unchanged. Only an actual security change
+      // revokes existing credentials.
       const authorizationChanged = accountRole !== undefined || updates.isActive !== undefined;
+      const roleChanged = accountRole !== undefined && finalRole !== currentUser.role;
+      const activeStateChanged = updates.isActive !== undefined
+        && updates.isActive !== currentUser.isActive;
+      const emailChanged = updates.email !== undefined
+        && normalizeEmail(updates.email) !== normalizeEmail(currentUser.email);
+      const securityChanged = roleChanged
+        || activeStateChanged
+        || emailChanged
+        || updates.password !== undefined;
       if (authorizationChanged && !ACCOUNT_ROLE_TO_ACL_ROLE[finalRole]) {
         throw new AuthorizationStateError(`Unsupported account role: ${finalRole}`);
       }
@@ -404,11 +422,16 @@ export class DatabaseStorage implements IStorage {
         targetTierId = fallbackTierId;
       }
 
+      const safeUpdates = {
+        ...updates,
+        ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) } : {}),
+      };
       const [updatedUser] = await tx
         .update(users)
         .set({
-          ...updates,
+          ...safeUpdates,
           ...(authorizationChanged ? { role: finalRole } : {}),
+          ...(securityChanged ? { sessionVersion: sql`${users.sessionVersion} + 1` } : {}),
           updatedAt: new Date(),
         })
         .where(eq(users.id, id))
@@ -490,7 +513,11 @@ export class DatabaseStorage implements IStorage {
 
       const [updatedUser] = await tx
         .update(users)
-        .set({ role: accountRole, updatedAt: new Date() })
+        .set({
+          role: accountRole,
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+          updatedAt: new Date(),
+        })
         .where(eq(users.id, id))
         .returning();
 
@@ -539,7 +566,12 @@ export class DatabaseStorage implements IStorage {
       if (existingUser) {
         [user] = await tx
           .update(users)
-          .set({ role: "admin", isActive: true, updatedAt: new Date() })
+          .set({
+            role: "admin",
+            isActive: true,
+            sessionVersion: sql`${users.sessionVersion} + 1`,
+            updatedAt: new Date(),
+          })
           .where(eq(users.id, existingUser.id))
           .returning();
       } else {
@@ -600,20 +632,38 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
+    const securityChanged = updates.email !== undefined || updates.password !== undefined;
+    const safeUpdates = {
+      ...updates,
+      ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) } : {}),
+      ...(securityChanged ? { sessionVersion: sql`${users.sessionVersion} + 1` } : {}),
+    };
     const [user] = await db
       .update(users)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
   }
 
   async validateUser(email: string, password: string): Promise<User | undefined> {
-    const user = await this.getUserByEmail(email);
+    const user = await this.getUserByEmail(normalizeEmail(email));
     if (!user || !user.isActive) return undefined;
     
     const isValid = await bcrypt.compare(password, user.password);
     return isValid ? user : undefined;
+  }
+
+  async revokeUserSessions(id: string): Promise<boolean> {
+    const result = await db
+      .update(users)
+      .set({
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning({ id: users.id });
+    return result.length > 0;
   }
 
   async getUserCount(): Promise<number> {

@@ -66,9 +66,9 @@ const profileUpdateSchema = z.object({
   ),
   weixin: z.string().optional(),
   currentPassword: z.string().optional(),
-  newPassword: z.string().optional().refine(
-    val => !val || val.length >= 6,
-    '비밀번호는 최소 6자 이상이어야 합니다'
+  newPassword: z.string().max(72, '비밀번호는 72자 이내여야 합니다').optional().refine(
+    (value) => !value || value.length >= 8,
+    { message: '비밀번호는 8자 이상이어야 합니다' },
   ),
 }).refine(
   (data) => {
@@ -83,7 +83,7 @@ const profileUpdateSchema = z.object({
 type ProfileUpdateFormData = z.infer<typeof profileUpdateSchema>;
 
 export default function Dashboard() {
-  const { user, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
+  const { user, isAuthenticated, isAdmin, hasAnyPermission, logout } = useAuth();
   const { toast } = useToast();
   const { language } = useLanguage();
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
@@ -164,11 +164,22 @@ export default function Dashboard() {
 
       return apiRequest('PATCH', '/api/auth/profile', updates);
     },
-    onSuccess: async () => {
+    onSuccess: async (_response, data) => {
+      const emailChanged = Boolean(
+        data.email
+        && user?.email
+        && data.email.trim().toLowerCase() !== user.email.trim().toLowerCase(),
+      );
       toast({
         title: '프로필 업데이트 완료',
-        description: '프로필이 성공적으로 업데이트되었습니다.',
+        description: data.newPassword || emailChanged
+          ? '보안을 위해 다시 로그인해주세요.'
+          : '프로필이 성공적으로 업데이트되었습니다.',
       });
+      if (data.newPassword || emailChanged) {
+        await logout();
+        return;
+      }
       // Wait for user data to refresh before resetting form
       await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setIsProfileDialogOpen(false);
@@ -643,7 +654,7 @@ export default function Dashboard() {
                         <FormControl>
                           <Input 
                             type="password" 
-                            placeholder="새 비밀번호 (최소 6자)" 
+                            placeholder="새 비밀번호 (최소 8자)"
                             {...field} 
                             data-testid="input-new-password"
                           />

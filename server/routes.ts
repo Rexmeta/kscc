@@ -22,6 +22,14 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { sql, eq } from "drizzle-orm";
 import "./types";
+import {
+  getTokenSessionVersion,
+  isUniqueViolation,
+  issueAuthToken,
+  normalizedEmailSchema,
+  passwordSchema,
+  toSafeUser,
+} from "./auth";
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient } from "./objectStorage";
 import { getUserMembershipInfo, getUserPermissions, hasPermission, requirePermission, requireAnyPermission } from "./permissions";
 import {
@@ -155,13 +163,17 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
   if (typeof tokenPayload === 'string' || typeof tokenPayload.id !== 'string') {
     return res.sendStatus(403);
   }
+  const tokenSessionVersion = getTokenSessionVersion(tokenPayload);
+  if (tokenSessionVersion === undefined) {
+    return res.sendStatus(403);
+  }
 
   try {
     // Never trust role or email claims from a long-lived token. Fetching the
     // current account on every protected request makes demotions and
     // deactivations effective immediately.
     const dbUser = await storage.getUser(tokenPayload.id);
-    if (!dbUser || !dbUser.isActive) {
+    if (!dbUser || !dbUser.isActive || (dbUser.sessionVersion ?? 0) !== tokenSessionVersion) {
       return res.sendStatus(403);
     }
 
@@ -182,14 +194,16 @@ export function optionalAuthenticateToken(req: Request, _res: Response, next: Ne
   if (!token) return next();
 
   jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
-    if (err || !user?.id) return next();
+    if (err || !user?.id || typeof user !== "object") return next();
+    const tokenSessionVersion = getTokenSessionVersion(user);
+    if (tokenSessionVersion === undefined) return next();
 
     try {
       // Optional authentication still needs the current account state.
       // Otherwise a demoted or deactivated account could retain access to
       // member-only content through a stale token claim.
       const dbUser = await storage.getUser(user.id);
-      if (dbUser?.isActive) {
+      if (dbUser?.isActive && (dbUser.sessionVersion ?? 0) === tokenSessionVersion) {
         req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
       }
     } catch {
@@ -248,6 +262,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate user data
       const userData = insertUserSchema.parse(baseUserData);
+      userData.email = normalizedEmailSchema.parse(userData.email);
+      passwordSchema.parse(userData.password);
       const existingUser = await storage.getUserByEmail(userData.email);
       
       if (existingUser) {
@@ -290,12 +306,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUserForRegistration({ ...userData, userType: 'staff' });
       }
       
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
+      const token = issueAuthToken(user, JWT_SECRET!);
       
-      res.json({ user: { ...user, password: undefined }, token });
+      res.json({ user: toSafeUser(user), token });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
+      }
+      if (isUniqueViolation(error)) {
+        return res.status(400).json({ message: "User already exists" });
       }
       res.status(500).json({ message: "회원가입 처리 중 오류가 발생했습니다." });
     }
@@ -303,21 +322,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
-      
-      if (!email || !password) {
-        return res.status(400).json({ message: "Email and password required" });
-      }
+      const credentials = z.object({
+        email: normalizedEmailSchema,
+        password: z.string().min(1, "Email and password required"),
+      }).parse(req.body);
 
-      const user = await storage.validateUser(email, password);
+      const user = await storage.validateUser(credentials.email, credentials.password);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET!, { expiresIn: '7d' });
-      res.json({ user: { ...user, password: undefined }, token });
+      const token = issueAuthToken(user, JWT_SECRET!);
+      res.json({ user: toSafeUser(user), token });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+    try {
+      const revoked = await storage.revokeUserSessions(req.user!.id);
+      if (!revoked) {
+        return res.sendStatus(401);
+      }
+      return res.status(204).send();
+    } catch {
+      return res.status(500).json({ message: "Unable to log out" });
     }
   });
 
@@ -333,8 +366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const permissions = await getUserPermissions(req.user!.id);
       
       res.json({ 
-        ...user, 
-        password: undefined,
+        ...toSafeUser(user),
         membership: membership || null,
         permissions: Array.from(permissions)
       });
@@ -392,11 +424,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Profile update schema
   const profileUpdateSchema = z.object({
-    name: z.string().min(1).optional(),
-    email: z.string().email().optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+    email: normalizedEmailSchema.optional(),
     weixin: z.string().optional(),
     currentPassword: z.string().optional(),
-    newPassword: z.string().min(6).optional(),
+    newPassword: passwordSchema.optional(),
   }).refine(
     (data) => {
       // If changing password, currentPassword is required
@@ -449,10 +481,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update profile" });
       }
 
-      res.json({ ...updatedUser, password: undefined });
+      res.json({ ...toSafeUser(updatedUser) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
+      }
+      if (isUniqueViolation(error)) {
+        return res.status(409).json({ message: "Email already in use" });
       }
       res.status(500).json({ message: "Internal server error" });
     }
@@ -506,8 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allUsers.map(async (user) => {
           const membership = await getUserMembershipInfo(user.id);
           return {
-            ...user,
-            password: undefined,
+            ...toSafeUser(user),
             membership: membership || null,
           };
         })
@@ -532,13 +566,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (membershipTier) updateData.membershipTier = membershipTier;
       if (typeof isActive === 'boolean') updateData.isActive = isActive;
       if (name) updateData.name = name;
-      if (email) {
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+      if (email !== undefined) {
+        try {
+          updateData.email = normalizedEmailSchema.parse(email);
+        } catch {
           return res.status(400).json({ message: "Invalid email format" });
         }
-        updateData.email = email;
       }
       
       if (Object.keys(updateData).length === 0) {
@@ -554,13 +587,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      res.json({ ...updatedUser, password: undefined });
+      res.json({ ...toSafeUser(updatedUser) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user role", errors: error.errors });
       }
       if (error instanceof AuthorizationStateError) {
         return res.status(400).json({ message: error.message });
+      }
+      if (isUniqueViolation(error)) {
+        return res.status(409).json({ message: "Email already in use" });
       }
       res.status(500).json({ message: "Internal server error" });
     }
