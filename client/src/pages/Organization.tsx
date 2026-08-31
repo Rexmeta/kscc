@@ -2,81 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { OrganizationMember } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, Award, Building, Briefcase, GraduationCap, UserCheck } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import {
+  ORGANIZATION_CATEGORY_DISPLAY,
+  getCategoryLabel,
+  getMemberDescription,
+  getMemberName,
+  getMemberPosition,
+} from '@/lib/organizationDisplay';
+import { compareOrganizationMembers } from '@shared/organization';
 
-const CATEGORY_CONFIG = [
-  { 
-    value: 'executives', 
-    labels: { ko: '임원진', en: 'Executives', zh: '管理层' },
-    icon: Award,
-    color: 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800'
-  },
-  { 
-    value: 'honorary', 
-    labels: { ko: '명예직', en: 'Honorary', zh: '荣誉职位' },
-    icon: GraduationCap,
-    color: 'bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800'
-  },
-  { 
-    value: 'vicepresidents', 
-    labels: { ko: '부회장', en: 'Vice Presidents', zh: '副会长' },
-    icon: Users,
-    color: 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
-  },
-  { 
-    value: 'directors', 
-    labels: { ko: '이사', en: 'Directors', zh: '理事' },
-    icon: Briefcase,
-    color: 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800'
-  },
-  { 
-    value: 'advisors', 
-    labels: { ko: '고문', en: 'Advisors', zh: '顾问' },
-    icon: UserCheck,
-    color: 'bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800'
-  },
-  { 
-    value: 'secretariat', 
-    labels: { ko: '사무국', en: 'Secretariat', zh: '秘书处' },
-    icon: Building,
-    color: 'bg-sky-100 dark:bg-sky-900/30 border-sky-200 dark:border-sky-800'
-  },
-  { 
-    value: 'committees', 
-    labels: { ko: '위원회', en: 'Committees', zh: '委员会' },
-    icon: Users,
-    color: 'bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800'
-  },
-  { 
-    value: 'organizations', 
-    labels: { ko: '단체회원', en: 'Organization Members', zh: '团体会员' },
-    icon: Building,
-    color: 'bg-slate-100 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800'
-  },
-];
-
-function getMemberName(member: OrganizationMember, language: string): string {
-  if (language === 'en' && member.nameEn) return member.nameEn;
-  if (language === 'zh' && member.nameZh) return member.nameZh;
-  return member.name;
-}
-
-function getMemberPosition(member: OrganizationMember, language: string): string {
-  if (language === 'en' && member.positionEn) return member.positionEn;
-  if (language === 'zh' && member.positionZh) return member.positionZh;
-  return member.position;
-}
-
-function getMemberDescription(member: OrganizationMember, language: string): string | null {
-  if (language === 'en' && member.descriptionEn) return member.descriptionEn;
-  if (language === 'zh' && member.descriptionZh) return member.descriptionZh;
-  return member.description;
-}
-
-function getLabel(labels: { ko: string; en: string; zh: string }, language: string): string {
-  return labels[language as keyof typeof labels] || labels.ko;
-}
+const CATEGORY_CONFIG = ORGANIZATION_CATEGORY_DISPLAY;
 
 function MemberCard({ member, language }: { member: OrganizationMember; language: string }) {
   const name = getMemberName(member, language);
@@ -118,12 +55,12 @@ function CategorySection({
   members, 
   language 
 }: { 
-  category: typeof CATEGORY_CONFIG[0]; 
+  category: (typeof CATEGORY_CONFIG)[number];
   members: OrganizationMember[];
   language: string;
 }) {
   const Icon = category.icon;
-  const categoryLabel = getLabel(category.labels, language);
+  const categoryLabel = getCategoryLabel(category, language);
 
   if (members.length === 0) return null;
 
@@ -158,7 +95,7 @@ export default function Organization() {
   const groupedMembers = CATEGORY_CONFIG.reduce((acc, cat) => {
     acc[cat.value] = (members || [])
       .filter(m => m.category === cat.value)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+       .sort(compareOrganizationMembers);
     return acc;
   }, {} as Record<string, OrganizationMember[]>);
 

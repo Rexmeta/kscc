@@ -113,6 +113,13 @@ const organizationMemberQuerySchema = z.object({
 }).strict();
 
 const organizationMemberIdSchema = z.string().uuid();
+const organizationMemberReorderSchema = z.object({
+  category: z.enum(organizationMemberCategories),
+  memberIds: z.array(z.string().uuid()).min(1).max(200),
+}).strict().refine(
+  (data) => new Set(data.memberIds).size === data.memberIds.length,
+  { message: "Duplicate organization member ids are not allowed" },
+);
 
 function toPublicMember(member: import("@shared/schema").Member) {
   const {
@@ -1073,6 +1080,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
+  app.put(
+    "/api/organization-members/reorder",
+    authenticateToken,
+    requireAdminOrOperatorPermission(executivePermissions.update),
+    async (req, res) => {
+      try {
+        const { category, memberIds } = organizationMemberReorderSchema.parse(req.body);
+        if (req.user?.role !== 'admin' && !isExecutiveManagementCategory(category)) {
+          return res.status(403).json({ message: "Operators may only manage executives" });
+        }
+
+        const members = await storage.reorderOrganizationMembers(category, memberIds);
+        res.json(members);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        res.status(400).json({
+          message: error instanceof Error ? error.message : "Invalid organization member order",
+        });
+      }
+    },
+  );
 
   app.post(
     "/api/organization-members",

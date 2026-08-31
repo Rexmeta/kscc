@@ -30,6 +30,25 @@ import {
   EventRegistrationError,
 } from "./storage";
 import { EmailService } from "./email";
+import { sortOrganizationMembers } from "@shared/organization";
+
+test("organization member ordering is deterministic for public and admin views", () => {
+  const members = [
+    { id: "b", name: "김민수", sortOrder: 10, isActive: true },
+    { id: "a", name: "김민수", sortOrder: 10, isActive: false },
+    { id: "c", name: "이서준", sortOrder: 10, isActive: true },
+    { id: "d", name: "박지훈", sortOrder: 20, isActive: true },
+  ];
+
+  assert.deepEqual(
+    sortOrganizationMembers(members).map((member) => member.id),
+    ["a", "b", "c", "d"],
+  );
+  assert.deepEqual(
+    sortOrganizationMembers(members.filter((member) => member.isActive)).map((member) => member.id),
+    ["b", "c", "d"],
+  );
+});
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -1534,6 +1553,7 @@ test(
     const originalGetOrganizationMember = storage.getOrganizationMember;
     const originalCreateOrganizationMember = storage.createOrganizationMember;
     const originalUpdateOrganizationMember = storage.updateOrganizationMember;
+    const originalReorderOrganizationMembers = storage.reorderOrganizationMembers;
     storage.getOrganizationMembers = async (filters) => {
       if (filters?.category === "executives") {
         return filters?.isActive === true
@@ -1568,6 +1588,11 @@ test(
       id,
       updatedAt: new Date(),
     } as any);
+    storage.reorderOrganizationMembers = async (category, memberIds) => {
+      assert.equal(category, "executives");
+      assert.deepEqual(memberIds, [inactiveExecutive.id, activeExecutive.id]);
+      return [inactiveExecutive, activeExecutive] as any;
+    };
 
     const [{ registerRoutes }] = await Promise.all([import("./routes")]);
     const app = express();
@@ -1699,11 +1724,47 @@ test(
         })).status,
         403,
       );
+      const reordered = await request("/api/organization-members/reorder", {
+        token: operatorToken,
+        method: "PUT",
+        body: {
+          category: "executives",
+          memberIds: [inactiveExecutive.id, activeExecutive.id],
+        },
+      });
+      assert.equal(reordered.status, 200);
+      assert.deepEqual(
+        reordered.body.map((member: any) => member.id),
+        [inactiveExecutive.id, activeExecutive.id],
+      );
+      assert.equal(
+        (await request("/api/organization-members/reorder", {
+          token: operatorToken,
+          method: "PUT",
+          body: {
+            category: "secretariat",
+            memberIds: [otherCategoryMember.id],
+          },
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/organization-members/reorder", {
+          token: memberToken,
+          method: "PUT",
+          body: {
+            category: "executives",
+            memberIds: [inactiveExecutive.id, activeExecutive.id],
+          },
+        })).status,
+        403,
+      );
     } finally {
       storage.getOrganizationMembers = originalGetOrganizationMembers;
       storage.getOrganizationMember = originalGetOrganizationMember;
       storage.createOrganizationMember = originalCreateOrganizationMember;
       storage.updateOrganizationMember = originalUpdateOrganizationMember;
+      storage.reorderOrganizationMembers = originalReorderOrganizationMembers;
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       await db.delete(userMemberships).where(eq(userMemberships.id, membership.id));
       await db.delete(users).where(inArray(users.id, [

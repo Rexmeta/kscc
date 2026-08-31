@@ -201,10 +201,19 @@ export function EditOrganizationMemberDialog({
                 />
               </div>
             )}
-            <div>
-              <label className="text-sm font-medium">정렬 순서</label>
-              <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-edit-sort-order" />
-            </div>
+            {!executivesOnly ? (
+              <div>
+                <label className="text-sm font-medium">정렬 순서</label>
+                <Input type="number" {...form.register('sortOrder', { valueAsNumber: true })} data-testid="input-org-edit-sort-order" />
+              </div>
+            ) : (
+              <div className="flex flex-col justify-center">
+                <label className="text-sm font-medium">정렬 순서</label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  목록의 위·아래 버튼으로 조정합니다.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>

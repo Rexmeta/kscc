@@ -227,6 +227,7 @@ export interface IStorage {
   getOrganizationMembers(filters?: { category?: string; isActive?: boolean }): Promise<OrganizationMember[]>;
   createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember>;
   updateOrganizationMember(id: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember | undefined>;
+  reorderOrganizationMembers(category: string, memberIds: string[]): Promise<OrganizationMember[]>;
   deleteOrganizationMember(id: string): Promise<void>;
 }
 
@@ -1896,7 +1897,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    return query.orderBy(organizationMembers.category, organizationMembers.sortOrder, organizationMembers.name);
+    return query.orderBy(
+      organizationMembers.category,
+      organizationMembers.sortOrder,
+      organizationMembers.name,
+      organizationMembers.id,
+    );
   }
 
   async createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember> {
@@ -1914,6 +1920,49 @@ export class DatabaseStorage implements IStorage {
       .where(eq(organizationMembers.id, id))
       .returning();
     return member || undefined;
+  }
+
+  async reorderOrganizationMembers(category: string, memberIds: string[]): Promise<OrganizationMember[]> {
+    const uniqueMemberIds = new Set(memberIds);
+    if (uniqueMemberIds.size !== memberIds.length) {
+      throw new Error("Duplicate organization member ids are not allowed");
+    }
+
+    return db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`organization-order:${category}`}))`,
+      );
+      const existingMembers = await tx
+        .select({ id: organizationMembers.id })
+        .from(organizationMembers)
+        .where(eq(organizationMembers.category, category));
+
+      const existingIds = new Set(existingMembers.map((member) => member.id));
+      if (
+        existingMembers.length !== memberIds.length
+        || memberIds.some((memberId) => !existingIds.has(memberId))
+      ) {
+        throw new Error("The complete category member list is required to reorder");
+      }
+
+      for (let index = 0; index < memberIds.length; index += 1) {
+        const memberId = memberIds[index];
+        await tx
+          .update(organizationMembers)
+          .set({ sortOrder: index * 10, updatedAt: new Date() })
+          .where(eq(organizationMembers.id, memberId));
+      }
+
+      return tx
+        .select()
+        .from(organizationMembers)
+        .where(eq(organizationMembers.category, category))
+        .orderBy(
+          organizationMembers.sortOrder,
+          organizationMembers.name,
+          organizationMembers.id,
+        );
+    });
   }
 
   async deleteOrganizationMember(id: string): Promise<void> {
