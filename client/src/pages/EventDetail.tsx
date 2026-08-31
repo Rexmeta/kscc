@@ -121,15 +121,18 @@ export default function EventDetailPage() {
 
   if (!post) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">행사를 찾을 수 없습니다</h1>
-          <Button onClick={() => navigate('/events')} data-testid="button-back-to-events">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            목록으로 돌아가기
-          </Button>
+      <>
+        <Seo page="events" canonicalPath={`/events/${id || ''}`} noIndex />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">행사를 찾을 수 없습니다</h1>
+            <Button onClick={() => navigate('/events')} data-testid="button-back-to-events">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              목록으로 돌아가기
+            </Button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 

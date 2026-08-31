@@ -80,18 +80,21 @@ export default function NewsDetail() {
 
   if (!post) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">뉴스를 찾을 수 없습니다</h2>
-          <Link 
-            href="/news"
-            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            뉴스 목록으로
-          </Link>
+      <>
+        <Seo page="news" canonicalPath={`/news/${id || ''}`} noIndex />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">뉴스를 찾을 수 없습니다</h2>
+            <Link
+              href="/news"
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              뉴스 목록으로
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
