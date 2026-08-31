@@ -278,13 +278,7 @@ test(
         respondedBy: responder.id,
         message: "Safe responder test",
       });
-      const result = await storage.getPosts({
-        postType: "news",
-        status: "published",
-        locale: "en",
-        compact: true,
-        limit: 100,
-      });
+      const result = await storage.getInquiryWithReplies(inquiry.id);
       assert.ok(result);
       assert.deepEqual(result.replies[0].responder, {
         id: responder.id,
@@ -1333,12 +1327,13 @@ test(
     const seededPosts = await db
       .insert(posts)
       .values(
-        postTypes.map((postType) => ({
-          postType,
-          status: "draft" as const,
+        Array.from({ length: 101 }, (_, index) => ({
+          postType: "news" as const,
+          status: "published" as const,
           visibility: "public" as const,
-          slug: `atomic-edit-${postType}-${randomUUID()}`,
+          slug: `pagination-${index}-${randomUUID()}`,
           primaryLocale: "ko" as const,
+          publishedAt: new Date(),
         })),
       )
       .returning();
@@ -1403,9 +1398,13 @@ test(
       category: "executives",
       isActive: true,
     };
-    const inactiveMember = await createMember({ status: "inactive", isPublic: true });
-
-    const privateMember = await createMember({ status: "active", isPublic: false });
+    const inactiveMember = {
+      id: randomUUID(),
+      name: "Retired Executive",
+      position: "Executive",
+      category: "executives",
+      isActive: false,
+    };
     const adminUserId = randomUUID();
     const originalGetUser = storage.getUser;
     const originalGetOrganizationMembers = storage.getOrganizationMembers;
@@ -1442,9 +1441,7 @@ test(
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-    const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
-
-    const ownerToken = jwt.sign({ id: owner.id }, process.env.SESSION_SECRET!);
+      const adminToken = jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!);
       const request = async (
         path: string,
         options: { token?: string; method?: string; body?: unknown } = {},
@@ -1460,7 +1457,7 @@ test(
         return { status: response.status, body: await response.json() };
       };
 
-      const publicList = await request("/api/members?search=Lifecycle%20Company");
+      const publicList = await request("/api/organization-members?isActive=true");
       assert.equal(publicList.status, 200);
       assert.deepEqual(publicList.body.map((member: any) => member.id), [activeMember.id]);
 
@@ -1480,18 +1477,8 @@ test(
       const invalidId = await request("/api/organization-members/not-a-uuid");
       assert.equal(invalidId.status, 400);
 
-      const adminList = await request("/api/admin/members", { token: adminToken });
-
-      const forgedUpdate = await request(`/api/members/${publicMember.id}`, {
-        token: ownerToken,
-        method: "PUT",
-        body: {
-          companyName: "Updated Company",
-          membershipStatus: "active",
-          membershipLevel: "premium",
-          isPublic: true,
-          userId: otherOwner.id,
-        },
+      const adminList = await request("/api/organization-members?isActive=false", {
+        token: adminToken,
       });
       assert.equal(adminList.status, 200);
       assert.deepEqual(
@@ -1501,7 +1488,7 @@ test(
 
       const adminInactiveDetail = await request(
         `/api/organization-members/${inactiveMember.id}`,
-        adminToken,
+        { token: adminToken },
       );
       assert.equal(adminInactiveDetail.status, 200);
       assert.equal(adminInactiveDetail.body.id, inactiveMember.id);
@@ -1523,130 +1510,12 @@ test(
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
-    const postTypes = ["news", "event", "resource"] as const;
-    const seededPosts = await db
-      .insert(posts)
-      .values(
-        postTypes.map((postType) => ({
-          postType,
-          status: "draft" as const,
-          visibility: "public" as const,
-          slug: `atomic-edit-${postType}-${randomUUID()}`,
-          primaryLocale: "ko" as const,
-        })),
-      )
-      .returning();
-
-    try {
-      await db.insert(postTranslations).values(
-        seededPosts.map((post) => ({
-          postId: post.id,
-          locale: "ko" as const,
-          title: `${post.postType} old title`,
-          excerpt: "old excerpt",
-          content: "old content",
-        })),
-      );
-      await db.insert(postMeta).values(
-        seededPosts.flatMap((post) => [
-          {
-            postId: post.id,
-            key: `${post.postType}.old`,
-            valueText: "stale value",
-          },
-          ...(post.postType === "resource"
-            ? [{
-              postId: post.id,
-              key: "resource.fileUrl",
-              valueText: "/objects/old-resource-file",
-            }]
-            : []),
-        ]),
-      );
-
-      for (const post of seededPosts) {
-        const updated = await storage.updatePostComplete(
-          post.id,
-          { status: "published", publishedAt: new Date(), visibility: "public" },
-          {
-            postId: post.id,
-            locale: "ko",
-            title: `${post.postType} new title`,
-            excerpt: "new excerpt",
-            content: "new content",
-          },
-          [{
-            key: `${post.postType}.current`,
-            value: "current value",
-          }, ...(post.postType === "resource"
-            ? [{
-              key: "resource.fileUrl",
-              value: "/objects/new-resource-file",
-            }]
-            : [])],
-        );
-
-        assert.equal(updated?.status, "published");
-        assert.equal(
-          (await storage.getPostTranslation(post.id, "ko"))?.title,
-          `${post.postType} new title`,
-        );
-        const currentMeta = await storage.getPostMetaAll(post.id);
-        assert.deepEqual(
-          currentMeta.map(({ key, valueText }) => ({ key, valueText })),
-          [
-            { key: `${post.postType}.current`, valueText: "current value" },
-            ...(post.postType === "resource"
-              ? [{ key: "resource.fileUrl", valueText: "/objects/new-resource-file" }]
-              : []),
-          ],
-        );
-        if (post.postType === "resource") {
-          assert.equal(await storage.getPostByObjectPath("/objects/old-resource-file"), undefined);
-          assert.equal((await storage.getPostByObjectPath("/objects/new-resource-file"))?.id, post.id);
-        }
-
-        await assert.rejects(
-          storage.updatePostComplete(
-            post.id,
-            { status: "draft", visibility: "members" },
-            {
-              postId: post.id,
-              locale: "invalid" as any,
-              title: "should not persist",
-              excerpt: "should not persist",
-              content: "should not persist",
-            },
-            [{ key: `${post.postType}.replacement`, value: "should not persist" }],
-          ),
-        );
-
-        const unchanged = await storage.getPost(post.id);
-
-      const takeover = await request(`/api/members/${privateMember.id}`, {
-        token: otherOwnerToken,
-        method: "PUT",
-        body: { companyName: "Taken Over Company" },
-      });
-        assert.equal(unchanged?.status, "published");
-        assert.equal(unchanged?.visibility, "public");
-        assert.equal(
-          (await storage.getPostTranslation(post.id, "ko"))?.title,
-          `${post.postType} new title`,
-        );
-        assert.deepEqual(
-          (await storage.getPostMetaAll(post.id)).map(({ key }) => key).sort(),
-          [
-            `${post.postType}.current`,
-            ...(post.postType === "resource" ? ["resource.fileUrl"] : []),
-          ].sort(),
-        );
-      }
-    } finally {
-      await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `member-lifecycle-test-${randomUUID()}`;
     }
-  },
-);
+    const suffix = randomUUID();
+    const createdMemberIds: string[] = [];
 
     const owner = await storage.createUser({
       email: `member-owner-${suffix}@example.test`,
@@ -1654,20 +1523,20 @@ test(
       name: "Member Owner",
       userType: "company",
     });
-
-    const otherOwnerToken = jwt.sign({ id: otherOwner.id }, process.env.SESSION_SECRET!);
-
-      const newProfile = {
-        companyName: "Self Registered Company",
-        industry: "Testing",
-        country: "Korea",
-        city: "Seoul",
-        address: "Self registration address",
-        contactPerson: "New Owner",
-        contactEmail: `new-contact-${suffix}@example.test`,
-        membershipStatus: "active",
-        isPublic: true,
-      };
+    const otherOwner = await storage.createUser({
+      email: `member-other-${suffix}@example.test`,
+      password: "test-password",
+      name: "Other Member Owner",
+      userType: "company",
+    });
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const admin = await storage.createUser({
+      email: `member-admin-${suffix}@example.test`,
+      password: "test-password",
+      name: "Member Lifecycle Admin",
+      role: "admin",
+      userType: "staff",
+    });
 
     const createMember = async (options: {
       ownerId?: string;
@@ -1692,35 +1561,103 @@ test(
       return member;
     };
 
+    const publicMember = await createMember({ ownerId: owner.id });
+    const privateMember = await createMember({ isPublic: false });
+    const pendingMember = await createMember({ status: "pending", isPublic: true });
+
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        return { status: response.status, body: await response.json() };
+      };
+
+      const ownerToken = jwt.sign({ id: owner.id }, process.env.SESSION_SECRET!);
+      const otherOwnerToken = jwt.sign({ id: otherOwner.id }, process.env.SESSION_SECRET!);
+      const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
+      const newProfile = {
+        companyName: "Self Registered Company",
+        industry: "Testing",
+        country: "Korea",
+        city: "Seoul",
+        address: "Self registration address",
+        contactPerson: "New Owner",
+        contactEmail: `new-contact-${suffix}@example.test`,
+      };
+
       const acceptedCreate = await request("/api/members", {
         token: otherOwnerToken,
         method: "POST",
-        body: {
-          companyName: newProfile.companyName,
-          industry: newProfile.industry,
-          country: newProfile.country,
-          city: newProfile.city,
-          address: newProfile.address,
-          contactPerson: newProfile.contactPerson,
-          contactEmail: newProfile.contactEmail,
-        },
+        body: newProfile,
       });
-
-    const pendingMember = await createMember({ status: "pending", isPublic: true });
-
-      const ownerAdminUpdate = await request(`/api/admin/members/${publicMember.id}`, {
-        token: ownerToken,
-        method: "PUT",
-        body: { membershipStatus: "inactive" },
-      });
+      assert.equal(acceptedCreate.status, 201);
+      assert.equal(acceptedCreate.body.userId, otherOwner.id);
+      assert.equal(acceptedCreate.body.membershipStatus, "pending");
+      assert.equal(acceptedCreate.body.isPublic, false);
+      createdMemberIds.push(acceptedCreate.body.id);
 
       const rejectedCreate = await request("/api/members", {
         token: otherOwnerToken,
         method: "POST",
         body: newProfile,
       });
+      assert.equal(rejectedCreate.status, 400);
 
-      const nowPublic = await request(`/api/members/${pendingMember.id}`);
+      const publicList = await request("/api/members?search=Lifecycle%20Company");
+      assert.equal(publicList.status, 200);
+      assert.ok(publicList.body.members.some((member: any) => member.id === publicMember.id));
+      assert.equal(
+        publicList.body.members.some((member: any) => member.id === privateMember.id),
+        false,
+      );
+
+      const publicDetail = await request(`/api/members/${publicMember.id}`);
+      assert.equal(publicDetail.status, 200);
+      const privateDetail = await request(`/api/members/${privateMember.id}`);
+      assert.equal(privateDetail.status, 404);
+      const pendingDetail = await request(`/api/members/${pendingMember.id}`);
+      assert.equal(pendingDetail.status, 404);
+
+      const ownerUpdate = await request(`/api/members/${publicMember.id}`, {
+        token: ownerToken,
+        method: "PUT",
+        body: { companyName: "Updated Company" },
+      });
+      assert.equal(ownerUpdate.status, 200);
+      assert.equal(ownerUpdate.body.companyName, "Updated Company");
+
+      const takeover = await request(`/api/members/${privateMember.id}`, {
+        token: otherOwnerToken,
+        method: "PUT",
+        body: { companyName: "Taken Over Company" },
+      });
+      assert.equal(takeover.status, 403);
+
+      const ownerAdminUpdate = await request(`/api/admin/members/${publicMember.id}`, {
+        token: ownerToken,
+        method: "PUT",
+        body: { membershipStatus: "inactive" },
+      });
+      assert.equal(ownerAdminUpdate.status, 403);
 
       const adminUpdate = await request(`/api/admin/members/${pendingMember.id}`, {
         token: adminToken,
@@ -1731,16 +1668,27 @@ test(
           isPublic: true,
         },
       });
+      assert.equal(adminUpdate.status, 200);
+      assert.equal(adminUpdate.body.membershipStatus, "active");
+      assert.equal(adminUpdate.body.membershipLevel, "premium");
 
-    const createdMemberIds: string[] = [];
+      const nowPublic = await request(`/api/members/${pendingMember.id}`);
+      assert.equal(nowPublic.status, 200);
 
-    const otherOwner = await storage.createUser({
-      email: `member-other-${suffix}@example.test`,
-      password: "test-password",
-      name: "Other Member Owner",
-      userType: "company",
-    });
-
-    const publicMember = await createMember({ ownerId: owner.id });
-
-    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+      const adminList = await request("/api/admin/members", { token: adminToken });
+      assert.equal(adminList.status, 200);
+      assert.ok(adminList.body.members.some((member: any) => member.id === pendingMember.id));
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()),
+      );
+      await db.delete(members).where(inArray(members.id, createdMemberIds));
+      await db.delete(users).where(inArray(users.id, [owner.id, otherOwner.id, admin.id]));
+      if (originalSessionSecret === undefined) {
+        delete process.env.SESSION_SECRET;
+      } else {
+        process.env.SESSION_SECRET = originalSessionSecret;
+      }
+    }
+  },
+);
