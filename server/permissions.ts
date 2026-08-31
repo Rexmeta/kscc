@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { eq, and, or, gt, isNull, lte } from 'drizzle-orm';
+import { eq, and, or, gt, isNull, lte, inArray } from 'drizzle-orm';
 import { users, userMemberships, roles, rolePermissions, permissions, tiers } from '../shared/schema';
 import { db } from './db';
 
@@ -187,4 +187,47 @@ export async function getUserMembershipInfo(userId: string) {
     .limit(1);
 
   return result[0] || null;
+}
+
+/**
+ * Load effective memberships for a collection of users in one query. Admin
+ * list pages use this instead of turning membership enrichment into an
+ * N+1 query pattern.
+ */
+export async function getUserMembershipInfoBatch(userIds: string[]) {
+  if (userIds.length === 0) return new Map<string, Awaited<ReturnType<typeof getUserMembershipInfo>>>();
+
+  const now = new Date();
+  const result = await db
+    .select({
+      userId: userMemberships.userId,
+      membershipId: userMemberships.id,
+      tierCode: tiers.code,
+      tierName: tiers.name,
+      roleCode: roles.code,
+      roleName: roles.name,
+      isActive: userMemberships.isActive,
+      startedAt: userMemberships.startedAt,
+      expiresAt: userMemberships.expiresAt,
+    })
+    .from(userMemberships)
+    .innerJoin(tiers, eq(userMemberships.tierId, tiers.id))
+    .innerJoin(roles, eq(userMemberships.roleId, roles.id))
+    .where(and(
+      inArray(userMemberships.userId, userIds),
+      eq(userMemberships.isActive, true),
+      eq(roles.isActive, true),
+      eq(tiers.isActive, true),
+      lte(userMemberships.startedAt, now),
+      or(isNull(userMemberships.expiresAt), gt(userMemberships.expiresAt, now)),
+    ));
+
+  const memberships = new Map<string, Awaited<ReturnType<typeof getUserMembershipInfo>>>();
+  for (const membership of result) {
+    if (!memberships.has(membership.userId)) {
+      const { userId: _userId, ...membershipInfo } = membership;
+      memberships.set(membership.userId, membershipInfo);
+    }
+  }
+  return memberships;
 }

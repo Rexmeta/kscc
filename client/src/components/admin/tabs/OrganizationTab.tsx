@@ -15,6 +15,7 @@ import { CreateOrganizationMemberDialog } from '../forms/CreateOrganizationMembe
 import { EditOrganizationMemberDialog } from '../forms/EditOrganizationMemberDialog';
 import { ORGANIZATION_CATEGORIES } from '../adminSchemas';
 import { useAdminOrganizationMembers } from '@/hooks/useAdminData';
+import { AdminListPagination } from '../AdminListPagination';
 import {
   ORGANIZATION_CATEGORY_DISPLAY,
   getCategoryLabel,
@@ -56,6 +57,7 @@ export function OrganizationTab({
   const [selectedOrgMember, setSelectedOrgMember] = useState<OrganizationMember | null>(null);
   const [orderedMembers, setOrderedMembers] = useState<MembersByCategory>({});
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const canManageExecutives = user?.role === 'operator';
   const canCreate = isAdmin || (canManageExecutives && hasPermission('organization.executives.create'));
   const canUpdate = isAdmin || (canManageExecutives && hasPermission('organization.executives.update'));
@@ -64,12 +66,19 @@ export function OrganizationTab({
     orgCategoryFilter,
     activeTab,
     executivesOnly,
+    page,
   );
+
+  useEffect(() => {
+    if (orgMembersData && orgMembersData.totalPages > 0 && page > orgMembersData.totalPages) {
+      setPage(orgMembersData.totalPages);
+    }
+  }, [orgMembersData, page]);
 
   useEffect(() => {
     setOrderedMembers(
       groupMembers(
-        sortOrganizationMembers(orgMembersData || []),
+        sortOrganizationMembers(orgMembersData?.members || []),
         orgCategoryFilter,
         executivesOnly,
       ),
@@ -309,11 +318,17 @@ export function OrganizationTab({
         );
       })}
 
-      {(!orgMembersData || orgMembersData.length === 0) && (
+      {(!orgMembersData || orgMembersData.members.length === 0) && (
         <div className="p-8 text-center text-muted-foreground">
           등록된 조직 구성원이 없습니다
         </div>
       )}
+      <AdminListPagination
+        page={orgMembersData?.page || page}
+        totalPages={orgMembersData?.totalPages || 0}
+        onPageChange={setPage}
+        testId="pagination-organization-members"
+      />
 
       {selectedOrgMember && (
         <EditOrganizationMemberDialog

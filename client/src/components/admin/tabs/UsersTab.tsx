@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Edit, Power, RotateCcw, Trash2 } from 'lucide-react';
 import UserEditDialog from '@/components/UserEditDialog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '@shared/schema';
 import { useAdminUsers } from '@/hooks/useAdminData';
 import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError, apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/useAuth';
+import { AdminListPagination } from '../AdminListPagination';
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (
@@ -31,8 +32,15 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { data: usersData } = useAdminUsers(activeTab);
+  const { data: usersData } = useAdminUsers(activeTab, page);
+
+  useEffect(() => {
+    if (usersData && usersData.totalPages > 0 && page > usersData.totalPages) {
+      setPage(usersData.totalPages);
+    }
+  }, [usersData, page]);
 
   const refreshUsers = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/users'] });
@@ -85,7 +93,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
     <TabsContent value="users" className="space-y-6">
       <h2 className="text-2xl font-bold">사용자 관리</h2>
       <div className="space-y-2">
-        {usersData?.map((user: User) => (
+        {usersData?.users.map((user: User) => (
           <div key={user.id} className={`flex flex-wrap justify-between items-center gap-3 p-4 border rounded ${
             user.isActive ? '' : 'bg-muted/50 opacity-75'
           }`}>
@@ -143,6 +151,12 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
           </div>
         ))}
       </div>
+      <AdminListPagination
+        page={usersData?.page || page}
+        totalPages={usersData?.totalPages || 0}
+        onPageChange={setPage}
+        testId="pagination-users"
+      />
 
       {selectedUser && (
         <UserEditDialog

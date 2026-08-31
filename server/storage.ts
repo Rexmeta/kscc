@@ -33,6 +33,7 @@ import {
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
 const MAX_POST_PAGE_SIZE = 100;
+const MAX_ADMIN_COLLECTION_PAGE_SIZE = 50;
 
 export type EventRegistrationErrorCode =
   | "EVENT_NOT_FOUND"
@@ -132,7 +133,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserCount(): Promise<number>;
-  getUsers(): Promise<User[]>;
+  getUsers(filters?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ users: User[]; total: number }>;
   createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
   createUserWithMember(userData: InsertUser & { role?: string; userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
   createUserForRegistration(userData: InsertUser & { userType?: string }): Promise<User>;
@@ -193,7 +197,11 @@ export interface IStorage {
 
   // Partners
   getPartner(id: string): Promise<Partner | undefined>;
-  getPartners(active?: boolean): Promise<Partner[]>;
+  getPartners(filters?: {
+    active?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ partners: Partner[]; total: number }>;
   createPartner(partner: InsertPartner): Promise<Partner>;
   updatePartner(id: string, updates: Partial<Partner>): Promise<Partner | undefined>;
   deletePartner(id: string): Promise<void>;
@@ -262,7 +270,13 @@ export interface IStorage {
 
   // Organization Members
   getOrganizationMember(id: string): Promise<OrganizationMember | undefined>;
-  getOrganizationMembers(filters?: { category?: string; isActive?: boolean }): Promise<OrganizationMember[]>;
+  getOrganizationMembers(filters?: {
+    category?: string;
+    categories?: readonly string[];
+    isActive?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ members: OrganizationMember[]; total: number }>;
   createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember>;
   updateOrganizationMember(id: string, updates: Partial<OrganizationMember>): Promise<OrganizationMember | undefined>;
   reorderOrganizationMembers(category: string, memberIds: string[]): Promise<OrganizationMember[]>;
@@ -754,8 +768,26 @@ export class DatabaseStorage implements IStorage {
     return result?.count || 0;
   }
 
-  async getUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(desc(users.createdAt));
+  async getUsers(filters?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ users: User[]; total: number }> {
+    const limit = boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters?.offset);
+    const [[totalResult], usersResult] = await Promise.all([
+      db.select({ count: count() }).from(users),
+      db
+        .select()
+        .from(users)
+        .orderBy(desc(users.createdAt), desc(users.id))
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    return {
+      users: usersResult,
+      total: totalResult?.count || 0,
+    };
   }
 
   // Members
@@ -1271,20 +1303,40 @@ export class DatabaseStorage implements IStorage {
     return partner || undefined;
   }
 
-  async getPartners(active?: boolean): Promise<Partner[]> {
+  async getPartners(filters?: {
+    active?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ partners: Partner[]; total: number }> {
     let query = db.select().from(partners);
+    let countQuery = db.select({ count: count() }).from(partners);
+    const limit = boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters?.offset);
 
-    if (active !== undefined) {
+    if (filters?.active !== undefined) {
       // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
-      query = query.where(eq(partners.isActive, active));
+      query = query.where(eq(partners.isActive, filters.active));
+      // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
+      countQuery = countQuery.where(eq(partners.isActive, filters.active));
     }
 
-    return query.orderBy(
-      asc(partners.order),
-      asc(partners.name),
-      asc(partners.createdAt),
-      asc(partners.id),
-    );
+    const [[totalResult], partnersResult] = await Promise.all([
+      countQuery,
+      query
+        .orderBy(
+          asc(partners.order),
+          asc(partners.name),
+          asc(partners.createdAt),
+          asc(partners.id),
+        )
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    return {
+      partners: partnersResult,
+      total: totalResult?.count || 0,
+    };
   }
 
   async createPartner(partner: InsertPartner): Promise<Partner> {
@@ -2122,12 +2174,24 @@ export class DatabaseStorage implements IStorage {
     return member || undefined;
   }
 
-  async getOrganizationMembers(filters?: { category?: string; isActive?: boolean }): Promise<OrganizationMember[]> {
+  async getOrganizationMembers(filters?: {
+    category?: string;
+    categories?: readonly string[];
+    isActive?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ members: OrganizationMember[]; total: number }> {
     let query = db.select().from(organizationMembers);
+    let countQuery = db.select({ count: count() }).from(organizationMembers);
     const conditions = [];
+    const limit = boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters?.offset);
 
     if (filters?.category) {
       conditions.push(eq(organizationMembers.category, filters.category));
+    }
+    if (filters?.categories && filters.categories.length > 0) {
+      conditions.push(inArray(organizationMembers.category, filters.categories));
     }
     if (filters?.isActive !== undefined) {
       conditions.push(eq(organizationMembers.isActive, filters.isActive));
@@ -2138,15 +2202,28 @@ export class DatabaseStorage implements IStorage {
       if (whereCondition) {
         // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
         query = query.where(whereCondition);
+        // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
+        countQuery = countQuery.where(whereCondition);
       }
     }
 
-    return query.orderBy(
-      organizationMembers.category,
-      organizationMembers.sortOrder,
-      organizationMembers.name,
-      organizationMembers.id,
-    );
+    const [[totalResult], membersResult] = await Promise.all([
+      countQuery,
+      query
+        .orderBy(
+          organizationMembers.category,
+          organizationMembers.sortOrder,
+          organizationMembers.name,
+          organizationMembers.id,
+        )
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    return {
+      members: membersResult,
+      total: totalResult?.count || 0,
+    };
   }
 
   async createOrganizationMember(member: InsertOrganizationMember): Promise<OrganizationMember> {

@@ -32,7 +32,14 @@ import {
   canMutateObjectAcl,
   objectStorageClient,
 } from "./objectStorage";
-import { getUserMembershipInfo, getUserPermissions, hasPermission, requirePermission, requireAnyPermission } from "./permissions";
+import {
+  getUserMembershipInfo,
+  getUserMembershipInfoBatch,
+  getUserPermissions,
+  hasPermission,
+  requirePermission,
+  requireAnyPermission,
+} from "./permissions";
 import {
   AuthorizationStateError,
   DuplicateInquiryError,
@@ -74,6 +81,15 @@ const inquiryQuerySchema = z.object({
   category: inquiryCategorySchema.optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
+
+const paginatedCollectionQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(50),
+}).strict();
+
+const partnerQuerySchema = paginatedCollectionQuerySchema.extend({
+  admin: z.enum(["true", "false"]).optional(),
 }).strict();
 
 const inquiryIdSchema = z.string().uuid();
@@ -128,6 +144,8 @@ const executivePermissions = {
 const organizationMemberQuerySchema = z.object({
   category: z.enum(organizationMemberCategories).optional(),
   isActive: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(50),
 }).strict();
 
 const organizationMemberIdSchema = z.string().uuid();
@@ -545,21 +563,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User management routes (Admin only)
   app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const allUsers = await storage.getUsers();
-      
-      // Get membership info for each user
-      const usersWithMembership = await Promise.all(
-        allUsers.map(async (user) => {
-          const membership = await getUserMembershipInfo(user.id);
-          return {
-            ...toSafeUser(user),
-            membership: membership || null,
-          };
-        })
+      const { page, limit } = paginatedCollectionQuerySchema.parse(req.query);
+      const result = await storage.getUsers({
+        limit,
+        offset: (page - 1) * limit,
+      });
+      const memberships = await getUserMembershipInfoBatch(
+        result.users.map((user) => user.id),
       );
+
+      const usersWithMembership = result.users.map((user) => ({
+        ...toSafeUser(user),
+        membership: memberships.get(user.id) || null,
+      }));
       
-      res.json(usersWithMembership);
+      res.json({
+        users: usersWithMembership,
+        total: result.total,
+        page,
+        totalPages: Math.ceil(result.total / limit),
+      });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid user query", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1044,27 +1071,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Partners routes
   app.get("/api/partners", optionalAuthenticateToken, async (req, res) => {
     try {
-      // Public consumers only receive active partners. The admin tab uses the
-      // same endpoint with a current admin token to manage inactive records.
-      const isAdmin = req.user?.role === "admin";
-      const partners = await storage.getPartners(isAdmin ? undefined : true);
-      if (isAdmin) {
-        return res.json(partners);
+      const parsedQuery = partnerQuerySchema.parse(req.query);
+      const isAdminRequested = parsedQuery.admin === "true";
+      if (isAdminRequested && req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
       }
+
+      const result = await storage.getPartners({
+        active: isAdminRequested ? undefined : true,
+        limit: parsedQuery.limit,
+        offset: (parsedQuery.page - 1) * parsedQuery.limit,
+      });
 
       // Do not let legacy rows with invalid links reach the public browser
       // surface. New writes are validated by insert/updatePartnerSchema, but
       // older data may predate that contract.
-      const safePartners = partners
-        .filter((partner) => partnerUrlSchema.safeParse(partner.logo).success)
-        .map((partner) => ({
-          ...partner,
-          website: partner.website && partnerUrlSchema.safeParse(partner.website).success
-            ? partner.website
-            : null,
-        }));
-      res.json(safePartners);
+      const responsePartners = isAdminRequested
+        ? result.partners
+        : result.partners
+          .filter((partner) => partnerUrlSchema.safeParse(partner.logo).success)
+          .map((partner) => ({
+            ...partner,
+            website: partner.website && partnerUrlSchema.safeParse(partner.website).success
+              ? partner.website
+              : null,
+          }));
+      res.json({
+        partners: responsePartners,
+        total: result.total,
+        page: parsedQuery.page,
+        totalPages: Math.ceil(result.total / parsedQuery.limit),
+      });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid partner query", errors: error.errors });
+      }
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -1130,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid organization member query" });
       }
 
-      const { category, isActive } = parsedQuery.data;
+      const { category, isActive, page, limit } = parsedQuery.data;
       const isAdmin = req.user?.role === 'admin';
       const isExecutiveOperator = req.user?.role === 'operator'
         && await hasPermission(req.user.id, executivePermissions.read);
@@ -1143,15 +1184,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // The admin UI uses isActive=false to request the complete management
       // list. Public and non-management requests always remain active-only.
-      const members = await storage.getOrganizationMembers({
-        category: isExecutiveOperator ? category : category,
+      const result = await storage.getOrganizationMembers({
+        category,
+        categories: isExecutiveOperator && !category ? organizationMemberCategories.filter(
+          (memberCategory) => isExecutiveManagementCategory(memberCategory),
+        ) : undefined,
         isActive: (isAdmin || isExecutiveOperator) && isActive === 'false' ? undefined : true,
+        limit,
+        offset: (page - 1) * limit,
       });
-      res.json(
-        isExecutiveOperator && !category
-          ? members.filter((member) => isExecutiveManagementCategory(member.category))
-          : members,
-      );
+      res.json({
+        members: result.members,
+        total: result.total,
+        page,
+        totalPages: Math.ceil(result.total / limit),
+      });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

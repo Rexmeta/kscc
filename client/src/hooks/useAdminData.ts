@@ -56,20 +56,24 @@ export function useAdminMembers(activeTab: string) {
   });
 }
 
-export function useAdminUsers(activeTab: string) {
+type UsersResponse = { users: User[]; total: number; page: number; totalPages: number };
+
+export function useAdminUsers(activeTab: string, page: number) {
   const { isAdmin } = useAuth();
-  return useQuery<User[]>({
-    queryKey: ['/api/users'],
-    queryFn: () => fetchJson<User[]>('/api/users'),
+  return useQuery<UsersResponse>({
+    queryKey: ['/api/users', { page, limit: 50 }],
+    queryFn: () => fetchJson<UsersResponse>(`/api/users?page=${page}&limit=50`),
     enabled: isAdmin && activeTab === 'users',
   });
 }
 
-export function useAdminPartners(activeTab: string) {
+type PartnersResponse = { partners: Partner[]; total: number; page: number; totalPages: number };
+
+export function useAdminPartners(activeTab: string, page: number) {
   const { isAdmin } = useAuth();
-  return useQuery<Partner[]>({
-    queryKey: queryKeys.partners.adminList(),
-    queryFn: () => fetchJson<Partner[]>('/api/partners'),
+  return useQuery<PartnersResponse>({
+    queryKey: ['/api/partners', { admin: true, page, limit: 50 }],
+    queryFn: () => fetchJson<PartnersResponse>(`/api/partners?admin=true&page=${page}&limit=50`),
     enabled: isAdmin && activeTab === 'partners',
   });
 }
@@ -100,21 +104,24 @@ export function useAdminOrganizationMembers(
   categoryFilter: string,
   activeTab: string,
   executivesOnly = false,
+  page = 1,
 ) {
   const { user, isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const category = executivesOnly ? 'all' : categoryFilter;
   const tabName = executivesOnly ? 'executives' : 'organization';
-  return useQuery<OrganizationMember[]>({
-    queryKey: ['/api/organization-members', { category, admin: true }],
+  return useQuery<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>({
+    queryKey: ['/api/organization-members', { category, admin: true, page, limit: 50 }],
     queryFn: () => {
       const params = new URLSearchParams();
       params.append('isActive', 'false');
+      params.append('page', page.toString());
+      params.append('limit', '50');
       if (!executivesOnly && category && category !== 'all') {
         params.append('category', category);
       }
-      return fetchJson<OrganizationMember[]>(
+      return fetchJson<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>(
         `/api/organization-members?${params.toString()}`
       );
     },

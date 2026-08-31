@@ -12,6 +12,8 @@ import {
   insertPartnerSchema,
   inquiries,
   members,
+  organizationMembers,
+  partners,
   permissions,
   postMeta,
   postTranslations,
@@ -2164,7 +2166,7 @@ test(
 );
 
 test(
-  "member and post page sizes stay bounded for invalid and oversized limits",
+  "collection page sizes stay bounded for invalid and oversized limits",
   { skip: !databaseAvailable },
   async () => {
     const { db, storage } = await getDatabase();
@@ -2197,6 +2199,40 @@ test(
         })),
       )
       .returning({ id: members.id });
+    const seededUsers = await db
+      .insert(users)
+      .values(
+        Array.from({ length: 51 }, (_, index) => ({
+          email: `collection-pagination-${randomUUID()}-${index}@example.test`,
+          password: "test-password",
+          name: `Pagination User ${index}`,
+        })),
+      )
+      .returning({ id: users.id });
+    const seededPartners = await db
+      .insert(partners)
+      .values(
+        Array.from({ length: 51 }, (_, index) => ({
+          name: `Pagination Partner ${index}`,
+          logo: `https://example.test/logo-${index}.png`,
+          category: "partner",
+          isActive: true,
+          order: index,
+        })),
+      )
+      .returning({ id: partners.id });
+    const seededOrganizationMembers = await db
+      .insert(organizationMembers)
+      .values(
+        Array.from({ length: 51 }, (_, index) => ({
+          name: `Pagination Organization Member ${index}`,
+          position: "Member",
+          category: "secretariat",
+          isActive: true,
+          sortOrder: index,
+        })),
+      )
+      .returning({ id: organizationMembers.id });
 
     try {
       const memberResults = await Promise.all([
@@ -2213,10 +2249,41 @@ test(
       assert.equal(memberResults[0].members.length, 50);
       assert.equal(memberResults[1].members.length, 1);
       assert.equal(memberResults[2].members.length, 50);
+      const userResults = await Promise.all([
+        storage.getUsers({ limit: 10_000 }),
+        storage.getUsers({ limit: -10 }),
+        storage.getUsers({ limit: Number.NaN }),
+      ]);
+      const partnerResults = await Promise.all([
+        storage.getPartners({ limit: 10_000 }),
+        storage.getPartners({ limit: -10 }),
+        storage.getPartners({ limit: Number.NaN }),
+      ]);
+      const organizationResults = await Promise.all([
+        storage.getOrganizationMembers({ limit: 10_000 }),
+        storage.getOrganizationMembers({ limit: -10 }),
+        storage.getOrganizationMembers({ limit: Number.NaN }),
+      ]);
+      assert.equal(userResults[0].users.length, 50);
+      assert.equal(userResults[1].users.length, 1);
+      assert.equal(userResults[2].users.length, 50);
+      assert.equal(partnerResults[0].partners.length, 50);
+      assert.equal(partnerResults[1].partners.length, 1);
+      assert.equal(partnerResults[2].partners.length, 50);
+      assert.equal(organizationResults[0].members.length, 50);
+      assert.equal(organizationResults[1].members.length, 1);
+      assert.equal(organizationResults[2].members.length, 50);
       assert.equal(postResults[0].posts.length, 100);
       assert.equal(postResults[1].posts.length, 1);
       assert.equal(postResults[2].posts.length, 50);
     } finally {
+      await db.delete(organizationMembers).where(
+        inArray(organizationMembers.id, seededOrganizationMembers.map(({ id }) => id)),
+      );
+      await db.delete(partners).where(
+        inArray(partners.id, seededPartners.map(({ id }) => id)),
+      );
+      await db.delete(users).where(inArray(users.id, seededUsers.map(({ id }) => id)));
       await db.delete(members).where(inArray(members.id, seededMembers.map(({ id }) => id)));
       await db.delete(posts).where(inArray(posts.id, seededPosts.map(({ id }) => id)));
     }
@@ -2266,8 +2333,12 @@ test(
             isActive: true,
           } as any)
         : undefined;
-    storage.getOrganizationMembers = async (filters) =>
-      filters?.isActive === true ? [activeMember as any] : [activeMember as any, inactiveMember as any];
+    storage.getOrganizationMembers = async (filters) => {
+      const result = filters?.isActive === true
+        ? [activeMember as any]
+        : [activeMember as any, inactiveMember as any];
+      return { members: result, total: result.length };
+    };
     storage.getOrganizationMember = async (id) => {
       if (id === activeMember.id) return activeMember as any;
       if (id === inactiveMember.id) return inactiveMember as any;
@@ -2303,7 +2374,10 @@ test(
 
       const publicList = await request("/api/organization-members?isActive=true");
       assert.equal(publicList.status, 200);
-      assert.deepEqual(publicList.body.map((member: any) => member.id), [activeMember.id]);
+      assert.deepEqual(publicList.body.members.map((member: any) => member.id), [activeMember.id]);
+      assert.equal(publicList.body.total, 1);
+      assert.equal(publicList.body.page, 1);
+      assert.equal(publicList.body.totalPages, 1);
 
       const inactiveListAttempt = await request("/api/organization-members?isActive=false");
       assert.equal(inactiveListAttempt.status, 403);
@@ -2326,7 +2400,7 @@ test(
       });
       assert.equal(adminList.status, 200);
       assert.deepEqual(
-        adminList.body.map((member: any) => member.id),
+        adminList.body.members.map((member: any) => member.id),
         [activeMember.id, inactiveMember.id],
       );
 
@@ -2461,14 +2535,18 @@ test(
     const originalReorderOrganizationMembers = storage.reorderOrganizationMembers;
     storage.getOrganizationMembers = async (filters) => {
       if (filters?.category === "executives") {
-        return filters?.isActive === true
+        const members = filters?.isActive === true
           ? [activeExecutive as any]
           : [activeExecutive as any, inactiveExecutive as any];
+        return { members, total: members.length };
       }
       if (!filters?.category) {
-        return [activeExecutive as any, inactiveExecutive as any, vicePresident as any, otherCategoryMember as any];
+        const members = filters?.categories
+          ? [activeExecutive as any, inactiveExecutive as any, vicePresident as any]
+          : [activeExecutive as any, inactiveExecutive as any, vicePresident as any, otherCategoryMember as any];
+        return { members, total: members.length };
       }
-      return [otherCategoryMember as any];
+      return { members: [otherCategoryMember as any], total: 1 };
     };
     storage.getOrganizationMember = async (id) => {
       if (id === activeExecutive.id) return activeExecutive as any;
@@ -2541,7 +2619,7 @@ test(
       });
       assert.equal(operatorList.status, 200);
       assert.deepEqual(
-        operatorList.body.map((member: any) => member.id),
+        operatorList.body.members.map((member: any) => member.id),
         [activeExecutive.id, inactiveExecutive.id, vicePresident.id],
       );
 

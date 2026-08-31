@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { OrganizationMember } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { Users } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import {
@@ -82,15 +84,29 @@ function CategorySection({
 
 export default function Organization() {
   const { language } = useLanguage();
+  const [page, setPage] = useState(1);
 
-  const { data: members, isLoading } = useQuery<OrganizationMember[]>({
-    queryKey: ['/api/organization-members'],
+  const { data, isLoading } = useQuery<{
+    members: OrganizationMember[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>({
+    queryKey: ['/api/organization-members', { page, limit: 50 }],
     queryFn: async ({ signal }) => {
-      const response = await fetch('/api/organization-members?isActive=true', { signal });
+      const response = await fetch(`/api/organization-members?isActive=true&page=${page}&limit=50`, { signal });
       if (!response.ok) throw new Error('Failed to fetch');
       return response.json();
     },
   });
+  const members = data?.members;
+  const totalPages = data?.totalPages || 0;
+
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const groupedMembers = CATEGORY_CONFIG.reduce((acc, cat) => {
     acc[cat.value] = (members || [])
@@ -145,6 +161,29 @@ export default function Organization() {
             {(!members || members.length === 0) && (
               <div className="text-center py-16 text-muted-foreground">
                 {t('org.noMembers')}
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div className="mt-10 flex items-center justify-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1}
+                  data-testid="button-org-prev-page"
+                >
+                  {t('common.previous')}
+                </Button>
+                <span className="text-sm text-muted-foreground" aria-live="polite">
+                  {page} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                  data-testid="button-org-next-page"
+                >
+                  {t('common.next')}
+                </Button>
               </div>
             )}
           </>

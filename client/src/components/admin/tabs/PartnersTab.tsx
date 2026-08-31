@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -10,14 +10,22 @@ import { apiRequest } from '@/lib/queryClient';
 import type { Partner } from '@shared/schema';
 import { useAdminPartners } from '@/hooks/useAdminData';
 import { PartnerDialog } from '../forms/PartnerDialog';
+import { AdminListPagination } from '../AdminListPagination';
 
 export function PartnersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: partnersData, isLoading, isError, refetch } = useAdminPartners(activeTab);
+  const [page, setPage] = useState(1);
+  const { data: partnersData, isLoading, isError, refetch } = useAdminPartners(activeTab, page);
   const [selectedPartner, setSelectedPartner] = useState<Partner>();
   const [createOpen, setCreateOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string>();
+
+  useEffect(() => {
+    if (partnersData && partnersData.totalPages > 0 && page > partnersData.totalPages) {
+      setPage(partnersData.totalPages);
+    }
+  }, [partnersData, page]);
 
   const invalidatePartners = () => {
     queryClient.invalidateQueries({
@@ -82,7 +90,7 @@ export function PartnersTab({ activeTab }: { activeTab: string }) {
       {!isLoading && !isError && (
         <div className="border rounded-lg overflow-hidden">
           <div className="divide-y">
-            {partnersData?.map((partner: Partner) => (
+            {partnersData?.partners.map((partner: Partner) => (
               <div
                 key={partner.id}
                 className={`p-4 flex items-center justify-between gap-4 ${partner.isActive ? '' : 'opacity-70 bg-muted/30'}`}
@@ -137,12 +145,18 @@ export function PartnersTab({ activeTab }: { activeTab: string }) {
                 </div>
               </div>
             ))}
-            {partnersData?.length === 0 && (
+            {partnersData?.partners.length === 0 && (
               <div className="p-8 text-center text-muted-foreground">파트너가 없습니다</div>
             )}
           </div>
         </div>
       )}
+      <AdminListPagination
+        page={partnersData?.page || page}
+        totalPages={partnersData?.totalPages || 0}
+        onPageChange={setPage}
+        testId="pagination-partners"
+      />
     </TabsContent>
   );
 }
