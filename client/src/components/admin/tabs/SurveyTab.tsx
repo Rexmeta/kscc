@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useAdminSurvey } from '@/hooks/useAdminData';
-import { surveySettingsSchema, type SurveySettingsInput } from '@shared/schema';
+import { surveySettingsSchema, type SurveySettingsInput } from '@shared/survey';
 
 const defaultValues: SurveySettingsInput = {
   title: '',
