@@ -664,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/members", authenticateToken, requireAdmin, async (req, res) => {
+  app.get("/api/admin/members", authenticateToken, requireAdminOrPermission("member.read"), async (req, res) => {
     try {
       const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema
         .parse(req.query);
@@ -691,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.get("/api/admin/members/:id", authenticateToken, requireAdminOrPermission("member.read"), async (req, res) => {
     try {
       const memberId = z.string().uuid().parse(req.params.id);
       const member = await storage.getMember(memberId);
@@ -707,7 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/admin/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/admin/members/:id", authenticateToken, requireAdminOrPermission("member.update"), async (req, res) => {
     try {
       const memberId = z.string().uuid().parse(req.params.id);
       const member = await storage.getMember(memberId);
@@ -725,7 +725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/members/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.delete("/api/members/:id", authenticateToken, requireAdminOrPermission("member.delete"), async (req, res) => {
     try {
       const member = await storage.getMember(req.params.id);
       if (!member) {

@@ -14,3 +14,9 @@ Adding permissions to a seeded ACL role also requires an idempotent data backfil
 **Why:** A newly added operator menu permission existed in source definitions but was absent from the live role mappings, hiding the menu until the database was repaired.
 
 **How to apply:** Ship a narrowly scoped ensure/backfill step with the permission definition and run it after schema setup or role-definition changes.
+
+Operator staff screens must be gated by the current granular permission as well as the account role; member-company management uses member.read, member.update, and member.delete.
+
+**Why:** Showing a staff tab without matching API authorization creates a broken UI, while authorizing an entire role without checking the assigned permission defeats ACL changes.
+
+**How to apply:** Use the same permission checks for tab visibility, data-fetch enablement, mutation controls, and server middleware.

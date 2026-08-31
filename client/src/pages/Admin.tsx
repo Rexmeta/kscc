@@ -36,16 +36,17 @@ export default function AdminPage() {
   const boardTabs = boardTabConfig
     .filter(({ permission }) => isAdmin || hasPermission(permission))
     .map(({ tab }) => tab);
+  const canReadMembers = isAdmin || hasPermission('member.read');
   const canReadInquiries = isAdmin || hasPermission('inquiry.read');
   const canReadExecutives = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
     ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'executives', 'partners', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(hasManual ? ['manual'] : [])];
+    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
   const defaultTab = isAdmin ? 'dashboard' : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadExecutives ? 'executives' : 'dashboard');
-  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadInquiries || canReadExecutives;
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadInquiries || canReadExecutives;
 
   useEffect(() => {
     if (loading) return;
@@ -105,7 +106,7 @@ export default function AdminPage() {
               <SelectContent>
                 {isAdmin && <SelectItem value="dashboard" data-testid="option-tab-dashboard">대시보드</SelectItem>}
                 {isAdmin && <SelectItem value="users" data-testid="option-tab-users">사용자</SelectItem>}
-                {isAdmin && <SelectItem value="members" data-testid="option-tab-members">회원</SelectItem>}
+                 {allowedTabs.includes('members') && <SelectItem value="members" data-testid="option-tab-members">회원사</SelectItem>}
                 {allowedTabs.includes('articles') && <SelectItem value="articles" data-testid="option-tab-articles">뉴스</SelectItem>}
                 {allowedTabs.includes('events') && <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>}
                 {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
@@ -125,7 +126,7 @@ export default function AdminPage() {
             <TabsList className="inline-flex w-max min-w-full gap-1">
               {isAdmin && <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="text-sm whitespace-nowrap">대시보드</TabsTrigger>}
               {isAdmin && <TabsTrigger value="users" data-testid="tab-users" className="text-sm whitespace-nowrap">사용자</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="members" data-testid="tab-members" className="text-sm whitespace-nowrap">회원</TabsTrigger>}
+               {allowedTabs.includes('members') && <TabsTrigger value="members" data-testid="tab-members" className="text-sm whitespace-nowrap">회원사</TabsTrigger>}
               {allowedTabs.includes('articles') && <TabsTrigger value="articles" data-testid="tab-articles" className="text-sm whitespace-nowrap">뉴스</TabsTrigger>}
               {allowedTabs.includes('events') && <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>}
               {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
@@ -143,7 +144,7 @@ export default function AdminPage() {
           <Suspense fallback={<div className="py-12 text-center text-muted-foreground">로딩 중...</div>}>
             {isAdmin && activeTab === 'dashboard' && <DashboardTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'users' && <UsersTab activeTab={activeTab} />}
-            {isAdmin && activeTab === 'members' && <MembersTab activeTab={activeTab} />}
+            {allowedTabs.includes('members') && activeTab === 'members' && <MembersTab activeTab={activeTab} />}
             {allowedTabs.includes('articles') && activeTab === 'articles' && (
               <ArticlesTab
                 activeTab={activeTab}

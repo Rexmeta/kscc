@@ -45,12 +45,13 @@ export function useAdminPosts(
 type MembersResponse = { members: Member[]; total: number; page: number; totalPages: number };
 
 export function useAdminMembers(activeTab: string) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
+  const canRead = isAdmin || hasPermission('member.read');
   return useQuery<MembersResponse>({
     queryKey: ['/api/admin/members'],
     queryFn: () =>
       fetchJson<MembersResponse>('/api/admin/members'),
-    enabled: isAdmin && activeTab === 'members',
+    enabled: canRead && activeTab === 'members',
   });
 }
 

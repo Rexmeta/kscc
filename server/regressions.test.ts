@@ -1619,6 +1619,14 @@ test(
       role: "admin",
       userType: "staff",
     });
+    const operator = await storage.createUser({
+      email: `member-operator-${suffix}@example.test`,
+      password: "test-password",
+      name: "Member Lifecycle Operator",
+      role: "operator",
+      userType: "staff",
+    });
+    await storage.updateUserAuthorization(operator.id, {}, "operator");
 
     const createMember = async (options: {
       ownerId?: string;
@@ -1676,6 +1684,7 @@ test(
       const ownerToken = jwt.sign({ id: owner.id }, process.env.SESSION_SECRET!);
       const otherOwnerToken = jwt.sign({ id: otherOwner.id }, process.env.SESSION_SECRET!);
       const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
+      const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
       const newProfile = {
         companyName: "Self Registered Company",
         industry: "Testing",
@@ -1754,8 +1763,27 @@ test(
       assert.equal(adminUpdate.body.membershipStatus, "active");
       assert.equal(adminUpdate.body.membershipLevel, "premium");
 
+      const operatorList = await request("/api/admin/members", { token: operatorToken });
+      assert.equal(operatorList.status, 200);
+      assert.ok(operatorList.body.members.some((member: any) => member.id === pendingMember.id));
+
+      const operatorUpdate = await request(`/api/admin/members/${pendingMember.id}`, {
+        token: operatorToken,
+        method: "PUT",
+        body: { membershipStatus: "inactive" },
+      });
+      assert.equal(operatorUpdate.status, 200);
+      assert.equal(operatorUpdate.body.membershipStatus, "inactive");
+
+      const operatorDeleteTarget = await createMember({});
+      const operatorDelete = await request(`/api/members/${operatorDeleteTarget.id}`, {
+        token: operatorToken,
+        method: "DELETE",
+      });
+      assert.equal(operatorDelete.status, 200);
+
       const nowPublic = await request(`/api/members/${pendingMember.id}`);
-      assert.equal(nowPublic.status, 200);
+      assert.equal(nowPublic.status, 404);
 
       const adminList = await request("/api/admin/members", { token: adminToken });
       assert.equal(adminList.status, 200);
@@ -1765,7 +1793,7 @@ test(
         server.close((error) => error ? reject(error) : resolve()),
       );
       await db.delete(members).where(inArray(members.id, createdMemberIds));
-      await db.delete(users).where(inArray(users.id, [owner.id, otherOwner.id, admin.id]));
+      await db.delete(users).where(inArray(users.id, [owner.id, otherOwner.id, admin.id, operator.id]));
       if (originalSessionSecret === undefined) {
         delete process.env.SESSION_SECRET;
       } else {

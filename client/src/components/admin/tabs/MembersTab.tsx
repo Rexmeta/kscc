@@ -10,20 +10,24 @@ import { apiRequest } from '@/lib/queryClient';
 import type { Member } from '@shared/schema';
 import { EditMemberForm } from '../forms/EditMemberForm';
 import { useAdminMembers } from '@/hooks/useAdminData';
+import { useAuth } from '@/hooks/useAuth';
 
 export function MembersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin, hasPermission } = useAuth();
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: membersData } = useAdminMembers(activeTab);
+  const canUpdate = isAdmin || hasPermission('member.update');
+  const canDelete = isAdmin || hasPermission('member.delete');
 
   return (
     <TabsContent value="members" className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">회원 관리</h2>
+        <h2 className="text-2xl font-bold">회원사 관리</h2>
       </div>
 
       <div className="space-y-2">
@@ -51,37 +55,41 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
               >
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setSelectedMember(member);
-                  setEditDialogOpen(true);
-                }}
-                data-testid={`button-edit-member-${member.id}`}
-              >
-                <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  if (confirm('정말 이 회원을 삭제하시겠습니까?')) {
-                    try {
-                      const response = await apiRequest('DELETE', `/api/members/${member.id}`, null);
-                      if (response.ok) {
-                        toast({ title: "회원이 삭제되었습니다" });
-                        queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+              {canUpdate && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedMember(member);
+                    setEditDialogOpen(true);
+                  }}
+                  data-testid={`button-edit-member-${member.id}`}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    if (confirm('정말 이 회원을 삭제하시겠습니까?')) {
+                      try {
+                        const response = await apiRequest('DELETE', `/api/members/${member.id}`, null);
+                        if (response.ok) {
+                          toast({ title: "회원이 삭제되었습니다" });
+                          queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+                        }
+                      } catch (error) {
+                        toast({ title: "삭제 실패", variant: "destructive" });
                       }
-                    } catch (error) {
-                      toast({ title: "삭제 실패", variant: "destructive" });
                     }
-                  }
-                }}
-                data-testid={`button-delete-member-${member.id}`}
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+                  }}
+                  data-testid={`button-delete-member-${member.id}`}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              )}
             </div>
           </div>
         ))}
@@ -148,12 +156,14 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
                   </div>
                 )}
               </div>
-              <Button onClick={() => {
-                setViewDialogOpen(false);
-                setEditDialogOpen(true);
-              }} className="w-full">
-                편집하기
-              </Button>
+              {canUpdate && (
+                <Button onClick={() => {
+                  setViewDialogOpen(false);
+                  setEditDialogOpen(true);
+                }} className="w-full">
+                  편집하기
+                </Button>
+              )}
             </div>
           </DialogContent>
         </Dialog>
