@@ -2303,6 +2303,87 @@ async function createPost(
 }
 
 test(
+  "event lists include past events while current/upcoming filters keep active events",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const now = Date.now();
+    const eventIds: string[] = [];
+
+    const createEvent = async (slug: string, eventDate: Date, endDate: Date) => {
+      const [event] = await db
+        .insert(posts)
+        .values({
+          postType: "event",
+          status: "published",
+          visibility: "public",
+          slug: `${slug}-${randomUUID()}`,
+          primaryLocale: "ko",
+          publishedAt: new Date(now - 60_000),
+        })
+        .returning();
+      eventIds.push(event.id);
+      await db.insert(postMeta).values([
+        {
+          postId: event.id,
+          key: "event.eventDate",
+          valueTimestamp: eventDate,
+        },
+        {
+          postId: event.id,
+          key: "event.endDate",
+          valueTimestamp: endDate,
+        },
+      ]);
+      return event;
+    };
+
+    const pastEvent = await createEvent(
+      "event-list-past",
+      new Date(now - 2 * 60 * 60 * 1000),
+      new Date(now - 60 * 60 * 1000),
+    );
+    const currentEvent = await createEvent(
+      "event-list-current",
+      new Date(now - 60 * 60 * 1000),
+      new Date(now + 60 * 60 * 1000),
+    );
+    const futureEvent = await createEvent(
+      "event-list-future",
+      new Date(now + 2 * 60 * 60 * 1000),
+      new Date(now + 3 * 60 * 60 * 1000),
+    );
+
+    try {
+      const allEvents = await storage.getPosts({
+        postType: "event",
+        status: "published",
+        compact: true,
+        limit: 100,
+      });
+      const allEventIds = new Set(allEvents.posts.map(({ id }) => id));
+      assert.equal(allEventIds.has(pastEvent.id), true);
+      assert.equal(allEventIds.has(currentEvent.id), true);
+      assert.equal(allEventIds.has(futureEvent.id), true);
+
+      const currentAndUpcomingEvents = await storage.getPosts({
+        postType: "event",
+        status: "published",
+        upcoming: true,
+        compact: true,
+        limit: 100,
+      });
+      const currentAndUpcomingIds = new Set(currentAndUpcomingEvents.posts.map(({ id }) => id));
+      assert.equal(currentAndUpcomingIds.has(pastEvent.id), false);
+      assert.equal(currentAndUpcomingIds.has(currentEvent.id), true);
+      assert.equal(currentAndUpcomingIds.has(futureEvent.id), true);
+    } finally {
+      await db.delete(posts).where(inArray(posts.id, eventIds));
+    }
+  },
+);
+
+test(
   "effective ACL changes are reflected without a process restart",
   { skip: !databaseAvailable },
   async () => {

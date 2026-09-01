@@ -72,7 +72,7 @@ const postQuerySchema = z.object({
   authorId: z.string().uuid().optional(),
   locale: z.enum(['ko', 'en', 'zh']).optional(),
   search: z.string().optional(), // Search term for title/content/excerpt/slug
-  upcoming: z.enum(['true', 'false']).optional(), // Filter for upcoming events (eventDate > now)
+  upcoming: z.enum(['true', 'false']).optional(), // Filter for current and upcoming events
   compact: z.enum(['true', 'false']).optional(),
   admin: z.enum(['true', 'false']).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),

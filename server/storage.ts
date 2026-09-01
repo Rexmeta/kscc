@@ -998,8 +998,11 @@ export class DatabaseStorage implements IStorage {
         const eventDate = getEventMeta(post, "event.eventDate") ??
           getEventMeta(post, "event.date");
         if (!(eventDate instanceof Date) && typeof eventDate !== "string") return null;
-        const parsedDate = new Date(eventDate);
-        if (Number.isNaN(parsedDate.getTime()) || parsedDate < now) return null;
+        const parsedDate = parseEventDateTime(eventDate);
+        const eventEndDate = getEventMeta(post, "event.endDate");
+        const parsedEndDate = parseEventDateTime(eventEndDate);
+        const relevantUntil = parsedEndDate || parsedDate;
+        if (!parsedDate || !relevantUntil || relevantUntil < now) return null;
         const location = getEventMeta(post, "event.location");
         return {
           id: post.id,
@@ -2177,7 +2180,7 @@ export class DatabaseStorage implements IStorage {
     let countQuery = db.select({ count: count() }).from(posts);
 
     const conditions = [];
-    const upcomingEventDate = filters?.upcoming && filters?.postType === "event"
+    const eventStartDate = filters?.upcoming && filters?.postType === "event"
       ? sql<Date | null>`(
           SELECT COALESCE(
             ${postMeta.valueTimestamp},
@@ -2193,6 +2196,27 @@ export class DatabaseStorage implements IStorage {
           ORDER BY CASE WHEN ${postMeta.key} = 'event.eventDate' THEN 0 ELSE 1 END
           LIMIT 1
         )`
+      : undefined;
+    const eventEndDate = filters?.upcoming && filters?.postType === "event"
+      ? sql<Date | null>`(
+          SELECT COALESCE(
+            ${postMeta.valueTimestamp},
+            CASE
+              WHEN ${postMeta.valueText} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+              THEN (${postMeta.valueText}::timestamp AT TIME ZONE 'Asia/Seoul')::timestamp
+              ELSE NULL
+            END
+          )
+          FROM ${postMeta}
+          WHERE ${postMeta.postId} = ${posts.id}
+            AND ${postMeta.key} = 'event.endDate'
+          LIMIT 1
+        )`
+      : undefined;
+    // An event remains relevant to the homepage until it ends. Events without
+    // an end date fall back to their start date for the upcoming filter.
+    const upcomingEventDate = eventStartDate && eventEndDate
+      ? sql<Date | null>`COALESCE(${eventEndDate}, ${eventStartDate})`
       : undefined;
 
     if (filters?.postType) {
@@ -2304,8 +2328,8 @@ export class DatabaseStorage implements IStorage {
       ) OR ${posts.slug} ILIKE ${searchTerm})`);
     }
 
-    // Upcoming events filtering (SQL-level for correct pagination)
-    // Check event.date key with valueText containing date string
+    // Current and upcoming events filtering (SQL-level for correct pagination).
+    // Use the end date when present so an event in progress remains visible.
     if (upcomingEventDate) {
       conditions.push(sql`${upcomingEventDate} >= CURRENT_TIMESTAMP`);
     }
@@ -2323,7 +2347,7 @@ export class DatabaseStorage implements IStorage {
     const postsQuery = query
       .orderBy(
         ...(upcomingEventDate
-          ? [asc(upcomingEventDate), asc(posts.id)]
+          ? [asc(eventStartDate!), asc(posts.id)]
           : [desc(posts.publishedAt), desc(posts.id)]),
       )
       .limit(boundedPageSize(filters?.limit, MAX_POST_PAGE_SIZE))

@@ -20,7 +20,7 @@ export default function EventsPage() {
   const { language } = useLanguage();
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
-  const [upcoming, setUpcoming] = useState('true');
+  const [upcoming, setUpcoming] = useState('');
   const limit = 9;
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -51,7 +51,7 @@ export default function EventsPage() {
 
   const handleReset = () => {
     setCategory('');
-    setUpcoming('true');
+    setUpcoming('');
     setPage(1);
     refetch();
   };
@@ -63,7 +63,7 @@ export default function EventsPage() {
         <div className="container">
           <div className="text-center">
             <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('events.title')}</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Upcoming Events / 即将举行的活动</p>
+            <p className="text-lg text-muted-foreground dark:text-muted-foreground">{t('events.subtitle')}</p>
           </div>
         </div>
       </section>

@@ -116,6 +116,7 @@ export interface TranslationKeys {
 
   // Events
   'events.title': string;
+  'events.subtitle': string;
   'events.upcoming': string;
   'events.register': string;
   'events.categories.networking': string;
@@ -384,7 +385,8 @@ const translations: Record<Language, TranslationKeys> = {
     'news.viewAll': '전체 뉴스',
 
     // Events
-    'events.title': '다가오는 행사',
+    'events.title': '전체 행사',
+    'events.subtitle': '지난 행사와 예정된 행사를 모두 확인하세요',
     'events.upcoming': '예정된 행사',
     'events.register': '신청하기',
     'events.categories.networking': '네트워킹',
@@ -651,7 +653,8 @@ const translations: Record<Language, TranslationKeys> = {
     'news.viewAll': 'All News',
 
     // Events
-    'events.title': 'Upcoming Events',
+    'events.title': 'All Events',
+    'events.subtitle': 'Browse past, ongoing, and upcoming events',
     'events.upcoming': 'Scheduled Events',
     'events.register': 'Register',
     'events.categories.networking': 'Networking',
@@ -918,7 +921,8 @@ const translations: Record<Language, TranslationKeys> = {
     'news.viewAll': '全部新闻',
 
     // Events
-    'events.title': '即将举行的活动',
+    'events.title': '全部活动',
+    'events.subtitle': '查看过去、进行中和即将举行的活动',
     'events.upcoming': '预定活动',
     'events.register': '报名',
     'events.categories.networking': '网络交流',
