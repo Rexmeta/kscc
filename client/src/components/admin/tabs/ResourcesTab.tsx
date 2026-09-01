@@ -37,6 +37,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
 
   const invalidate = () => {
     queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
+    queryClient.invalidateQueries({ queryKey: ['/api/posts/resource/categories'] });
     queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
   };
 

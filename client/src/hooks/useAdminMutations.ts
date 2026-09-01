@@ -14,6 +14,10 @@ const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) => {
   });
   queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
 };
+
+const invalidateResourceCategoryCounts = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: ['/api/posts/resource/categories'] });
+};
 const invalidateMembers = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
     predicate: (query) => query.queryKey[0] === '/api/members',
@@ -215,6 +219,7 @@ export function useCreateResourcePost(options: {
     onSuccess: () => {
       toast({ title: '자료가 생성되었습니다' });
       invalidatePosts(queryClient);
+      invalidateResourceCategoryCounts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -259,6 +264,7 @@ export function useUpdateResourcePost(options: {
     onSuccess: () => {
       toast({ title: '자료가 수정되었습니다' });
       invalidatePosts(queryClient);
+      invalidateResourceCategoryCounts(queryClient);
       options.onSuccess();
     },
     onError: (error) => {
@@ -275,6 +281,7 @@ export function useDeleteResourcePost(onSuccess?: () => void) {
     onSuccess: () => {
       toast({ title: '자료가 삭제되었습니다' });
       invalidatePosts(queryClient);
+      invalidateResourceCategoryCounts(queryClient);
       onSuccess?.();
     },
     onError: () => {
