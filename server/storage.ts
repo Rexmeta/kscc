@@ -1,6 +1,6 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
-  posts, postTranslations, postMeta, organizationMembers,
+  posts, postTranslations, postTranslationHistory, postMeta, organizationMembers,
   tiers, roles, userMemberships, surveySettings, surveySettingsHistory,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
@@ -9,6 +9,7 @@ import {
   type SafeUser,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
+  type PostTranslationHistory,
   type PostMeta, type InsertPostMeta, type PostWithTranslations,
   type OrganizationMember, type InsertOrganizationMember,
    type SurveySettings, type SurveySettingsInput, type SurveySettingsHistory,
@@ -60,6 +61,9 @@ export type EventRegistrationErrorCode =
 export type AccountRole = "admin" | "operator" | "user";
 
 export type SurveySettingsHistoryEntry = SurveySettingsHistory;
+export type PageTranslationHistoryEntry = PostTranslationHistory & {
+  postSlug: string;
+};
 export class DuplicateInquiryError extends Error {
   constructor() {
     super("A matching inquiry was submitted recently");
@@ -340,7 +344,7 @@ export interface IStorage {
     updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
     translation: InsertPostTranslation,
     metadata: Array<{ key: string; value?: any }>,
-
+    changedBy?: string,
   ): Promise<Post | undefined>;
 
   deletePost(id: string): Promise<void>;
@@ -355,7 +359,13 @@ export interface IStorage {
 
   updatePostTranslation(id: string, updates: Partial<PostTranslation>): Promise<PostTranslation | undefined>;
 
-  upsertPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation>;
+  upsertPostTranslation(translation: InsertPostTranslation, changedBy?: string): Promise<PostTranslation>;
+
+  getPageTranslationHistory(filters?: {
+    postId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ history: PageTranslationHistoryEntry[]; total: number }>;
 
   // Post Meta
 
@@ -2443,6 +2453,7 @@ export class DatabaseStorage implements IStorage {
     updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
     translation: InsertPostTranslation,
     metadata: Array<{ key: string; value?: any }>,
+    changedBy?: string,
   ): Promise<Post | undefined> {
     if ("authorId" in updates) {
       throw new PostMetaValidationError("Post authorship is server-managed");
@@ -2477,6 +2488,25 @@ export class DatabaseStorage implements IStorage {
         ))
         .limit(1);
 
+      const translationFields = [
+        "locale",
+        "title",
+        "subtitle",
+        "excerpt",
+        "content",
+        "seoTitle",
+        "seoDescription",
+        "seoKeywords",
+      ] as const;
+      const translationChanged = !existingTranslation ||
+        translationFields.some((field) => {
+          const existingValue = existingTranslation?.[field] ?? null;
+          const nextValue = translation[field] ?? null;
+          return field === "seoKeywords"
+            ? JSON.stringify(existingValue) !== JSON.stringify(nextValue)
+            : existingValue !== nextValue;
+        });
+
       if (existingTranslation) {
         await tx
           .update(postTranslations)
@@ -2486,6 +2516,21 @@ export class DatabaseStorage implements IStorage {
         await tx
           .insert(postTranslations)
           .values(translation);
+      }
+
+      if (currentPost.postType === "page" && changedBy && translationChanged) {
+        const [actor] = await tx
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, changedBy))
+          .limit(1);
+        await tx.insert(postTranslationHistory).values({
+          postId: id,
+          locale: translation.locale,
+          changedBy,
+          changedByName: actor?.name || "알 수 없음",
+          changedAt: new Date(),
+        });
       }
 
       // An edit sends the complete intended metadata set. Replacing the
@@ -2545,14 +2590,117 @@ export class DatabaseStorage implements IStorage {
     return translation || undefined;
   }
 
-  async upsertPostTranslation(translation: InsertPostTranslation): Promise<PostTranslation> {
-    const existing = await this.getPostTranslation(translation.postId, translation.locale as string);
-    
-    if (existing) {
-      return (await this.updatePostTranslation(existing.id, translation))!;
-    }
-    
-    return this.createPostTranslation(translation);
+  async upsertPostTranslation(
+    translation: InsertPostTranslation,
+    changedBy?: string,
+  ): Promise<PostTranslation> {
+    return db.transaction(async (tx) => {
+      const [post] = await tx
+        .select({ postType: posts.postType })
+        .from(posts)
+        .where(eq(posts.id, translation.postId))
+        .limit(1);
+      const [existing] = await tx
+        .select()
+        .from(postTranslations)
+        .where(and(
+          eq(postTranslations.postId, translation.postId),
+          eq(postTranslations.locale, translation.locale as any),
+        ))
+        .for("update")
+        .limit(1);
+
+      const translationFields = [
+        "locale",
+        "title",
+        "subtitle",
+        "excerpt",
+        "content",
+        "seoTitle",
+        "seoDescription",
+        "seoKeywords",
+      ] as const;
+      const translationChanged = !existing ||
+        translationFields.some((field) => {
+          const existingValue = existing?.[field] ?? null;
+          const nextValue = translation[field] ?? null;
+          return field === "seoKeywords"
+            ? JSON.stringify(existingValue) !== JSON.stringify(nextValue)
+            : existingValue !== nextValue;
+        });
+      const changedAt = new Date();
+      let savedTranslation: PostTranslation;
+
+      if (existing) {
+        [savedTranslation] = await tx
+          .update(postTranslations)
+          .set({ ...translation, updatedAt: changedAt })
+          .where(eq(postTranslations.id, existing.id))
+          .returning();
+      } else {
+        [savedTranslation] = await tx
+          .insert(postTranslations)
+          .values(translation)
+          .returning();
+      }
+
+      if (post?.postType === "page" && changedBy && translationChanged) {
+        const [actor] = await tx
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, changedBy))
+          .limit(1);
+        await tx.insert(postTranslationHistory).values({
+          postId: translation.postId,
+          locale: translation.locale,
+          changedBy,
+          changedByName: actor?.name || "알 수 없음",
+          changedAt,
+        });
+      }
+
+      return savedTranslation;
+    });
+  }
+
+  async getPageTranslationHistory(
+    filters: { postId?: string; limit?: number; offset?: number } = {},
+  ): Promise<{ history: PageTranslationHistoryEntry[]; total: number }> {
+    const limit = boundedPageSize(filters.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters.offset);
+    const conditions = [
+      eq(posts.postType, "page"),
+      ...(filters.postId ? [eq(postTranslationHistory.postId, filters.postId)] : []),
+    ];
+
+    const [totalResult, history] = await Promise.all([
+      db
+        .select({ count: count() })
+        .from(postTranslationHistory)
+        .innerJoin(posts, eq(postTranslationHistory.postId, posts.id))
+        .where(and(...conditions)),
+      db
+        .select({
+          id: postTranslationHistory.id,
+          postId: postTranslationHistory.postId,
+          postSlug: posts.slug,
+          locale: postTranslationHistory.locale,
+          changedBy: postTranslationHistory.changedBy,
+          changedByName: postTranslationHistory.changedByName,
+          changedAt: postTranslationHistory.changedAt,
+        })
+        .from(postTranslationHistory)
+        .innerJoin(posts, eq(postTranslationHistory.postId, posts.id))
+        .where(and(...conditions))
+        .orderBy(desc(postTranslationHistory.changedAt), desc(postTranslationHistory.id))
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    return {
+      history,
+      total: Number(totalResult[0]?.count ?? 0),
+    };
   }
 
   // Post Meta

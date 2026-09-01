@@ -83,6 +83,10 @@ const postIdSchema = z.object({
   id: z.string().uuid(),
 });
 const localeQuerySchema = z.enum(['ko', 'en', 'zh']).optional();
+const translationHistoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
 
 const postMetaPayloadSchema = z.object({
   key: z.string().trim().min(1).max(100),
@@ -240,6 +244,33 @@ router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: R
     emitOperationalEvent("post.operation", "error", {
       correlationId: getCorrelationId(req),
       operation: "read_by_slug",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/posts/history - List page translation changes for operators
+router.get("/history", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    if (!await requirePostPermission(req, res, "page", "read")) return;
+    const { page, limit } = translationHistoryQuerySchema.parse(req.query);
+    const result = await storage.getPageTranslationHistory({
+      limit,
+      offset: (page - 1) * limit,
+    });
+    res.json({
+      ...result,
+      page,
+      totalPages: Math.ceil(result.total / limit),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid translation history query", errors: error.errors });
+    }
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "translation_history_read",
       errorType: error instanceof Error ? error.name : "UnknownError",
     });
     res.status(500).json({ message: "Internal server error" });
@@ -453,7 +484,7 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
       await storage.upsertPostTranslation({
         postId: post.id,
         ...completeCreate.translation,
-      });
+      }, req.user!.id);
       for (const metaData of completeCreate.meta) {
         await storage.setPostMeta(post.id, metaData.key, getPostMetaValue(metaData));
       }
@@ -574,6 +605,7 @@ router.patch("/:id", authenticateToken, async (req: Request, res: Response) => {
           key: metaData.key,
           value: getPostMetaValue(metaData),
         })),
+        req.user!.id,
       );
       if (!updatedPost) {
         return res.status(404).json({ message: "Post not found" });
@@ -669,7 +701,7 @@ router.post("/:id/translations", authenticateToken, async (req: Request, res: Re
     const translation = await storage.upsertPostTranslation({
       postId: id,
       ...translationData,
-    });
+    }, req.user!.id);
 
     res.json(translation);
   } catch (error) {
@@ -679,6 +711,42 @@ router.post("/:id/translations", authenticateToken, async (req: Request, res: Re
     emitOperationalEvent("post.operation", "error", {
       correlationId: getCorrelationId(req),
       operation: "translation_upsert",
+      errorType: error instanceof Error ? error.name : "UnknownError",
+    });
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/posts/:id/translation-history - List changes for one page
+router.get("/:id/translation-history", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = postIdSchema.parse(req.params);
+    const existingPost = await storage.getPost(id);
+    if (!existingPost) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    if (existingPost.postType !== "page") {
+      return res.status(404).json({ message: "Page not found" });
+    }
+    if (!await requirePostPermission(req, res, "page", "read")) return;
+    const { page, limit } = translationHistoryQuerySchema.parse(req.query);
+    const result = await storage.getPageTranslationHistory({
+      postId: id,
+      limit,
+      offset: (page - 1) * limit,
+    });
+    res.json({
+      ...result,
+      page,
+      totalPages: Math.ceil(result.total / limit),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: "Invalid translation history request", errors: error.errors });
+    }
+    emitOperationalEvent("post.operation", "error", {
+      correlationId: getCorrelationId(req),
+      operation: "translation_history_read",
       errorType: error instanceof Error ? error.name : "UnknownError",
     });
     res.status(500).json({ message: "Internal server error" });

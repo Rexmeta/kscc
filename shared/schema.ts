@@ -187,6 +187,20 @@ export const postTranslations = pgTable("post_translations", {
   localeIdx: index("post_translations_locale_idx").on(table.locale),
 }));
 
+export const postTranslationHistory = pgTable("post_translation_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  locale: localeEnum("locale").notNull(),
+  changedBy: uuid("changed_by").references(() => users.id, { onDelete: "set null" }),
+  changedByName: text("changed_by_name").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  postLocaleChangedAtIdx: index("post_translation_history_post_locale_changed_at_idx")
+    .on(table.postId, table.locale, table.changedAt.desc(), table.id.desc()),
+  changedAtIdx: index("post_translation_history_changed_at_idx")
+    .on(table.changedAt.desc(), table.id.desc()),
+}));
+
 export const postMeta = pgTable("post_meta", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
@@ -351,6 +365,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     references: [users.id],
   }),
   translations: many(postTranslations),
+  translationHistory: many(postTranslationHistory),
   meta: many(postMeta),
   registrations: many(eventRegistrations),
 }));
@@ -359,6 +374,17 @@ export const postTranslationsRelations = relations(postTranslations, ({ one }) =
   post: one(posts, {
     fields: [postTranslations.postId],
     references: [posts.id],
+  }),
+}));
+
+export const postTranslationHistoryRelations = relations(postTranslationHistory, ({ one }) => ({
+  post: one(posts, {
+    fields: [postTranslationHistory.postId],
+    references: [posts.id],
+  }),
+  actor: one(users, {
+    fields: [postTranslationHistory.changedBy],
+    references: [users.id],
   }),
 }));
 
@@ -584,6 +610,8 @@ export type InsertPost = z.infer<typeof insertPostSchema>;
 
 export type PostTranslation = typeof postTranslations.$inferSelect;
 export type InsertPostTranslation = z.infer<typeof insertPostTranslationSchema>;
+
+export type PostTranslationHistory = typeof postTranslationHistory.$inferSelect;
 
 export type PostMeta = typeof postMeta.$inferSelect;
 export type InsertPostMeta = z.infer<typeof insertPostMetaSchema>;

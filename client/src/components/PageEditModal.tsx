@@ -88,6 +88,7 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/posts/slug', page.slug] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts/history'] });
     },
   });
 

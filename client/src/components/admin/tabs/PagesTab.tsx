@@ -1,18 +1,31 @@
 import { useState } from 'react';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Edit } from 'lucide-react';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
-import { useAdminPosts } from '@/hooks/useAdminData';
+import { useAdminPageTranslationHistory, useAdminPosts } from '@/hooks/useAdminData';
 import { QueryState } from '@/components/QueryState';
 
 export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: boolean }) {
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const pagesQuery = useAdminPosts('page', activeTab);
+  const historyQuery = useAdminPageTranslationHistory(activeTab, historyPage);
   const { data: pagesData } = pagesQuery;
+  const { data: historyData } = historyQuery;
+  const localeLabels = { ko: '한국어', en: '영어', zh: '중국어' } as const;
+  const formatDateTime = (value: Date | string) => {
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime())
+      ? '알 수 없음'
+      : date.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+  };
 
   return (
     <TabsContent value="pages" className="space-y-6">
@@ -68,6 +81,79 @@ export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: b
         </div>
       </div>
       </QueryState>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>페이지 번역 변경 이력</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <QueryState
+            isLoading={historyQuery.isLoading}
+            isError={historyQuery.isError}
+            onRetry={() => historyQuery.refetch()}
+            empty={!historyData?.history.length}
+            emptyMessage="아직 저장된 변경 이력이 없습니다."
+          >
+            {historyData && historyData.history.length > 0 && (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>페이지</TableHead>
+                        <TableHead>언어</TableHead>
+                        <TableHead>변경 담당자</TableHead>
+                        <TableHead>변경 일시</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyData.history.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell className="font-medium">/{entry.postSlug}</TableCell>
+                          <TableCell>{localeLabels[entry.locale]}</TableCell>
+                          <TableCell>{entry.changedByName || '알 수 없음'}</TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {formatDateTime(entry.changedAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {historyData.totalPages > 1 && (
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground">
+                      {historyData.page} / {historyData.totalPages} 페이지 · 총 {historyData.total}건
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={historyPage <= 1}
+                        onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                        aria-label="이전 페이지 변경 이력"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        이전
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={historyPage >= historyData.totalPages}
+                        onClick={() => setHistoryPage((page) => Math.min(historyData.totalPages, page + 1))}
+                        aria-label="다음 페이지 변경 이력"
+                      >
+                        다음
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </QueryState>
+        </CardContent>
+      </Card>
 
       {selectedPage && (
         <PageEditModal

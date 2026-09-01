@@ -10,6 +10,7 @@ import type {
   InquiryWithReplies,
   SurveySettings,
   SurveySettingsHistory,
+  PostTranslationHistory,
 } from '@shared/schema';
 import type { AdminDashboardSnapshot } from '@shared/adminDashboard';
 
@@ -101,6 +102,34 @@ export type SurveyHistoryResponse = {
   totalPages: number;
   snapshotVersion: number;
 };
+
+export type PageTranslationHistoryEntry = PostTranslationHistory & {
+  postSlug: string;
+};
+
+export type PageTranslationHistoryResponse = {
+  history: PageTranslationHistoryEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+};
+
+export function useAdminPageTranslationHistory(
+  activeTab: string,
+  page: number,
+  limit = 10,
+) {
+  const { isAdmin, hasPermission } = useAuth();
+  const canRead = isAdmin || hasPermission('page.read');
+  return useQuery<PageTranslationHistoryResponse>({
+    queryKey: ['/api/posts/history', { page, limit }],
+    queryFn: () => fetchJson<PageTranslationHistoryResponse>(
+      `/api/posts/history?page=${page}&limit=${limit}`,
+    ),
+    enabled: canRead && activeTab === 'pages',
+  });
+}
+
 export function useAdminOrganizationMembers(
   categoryFilter: string,
   activeTab: string,

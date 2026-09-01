@@ -415,6 +415,55 @@ test(
         },
       );
       assert.equal(updatedTranslation.status, 200);
+      const pageHistory = await request(
+        `/api/posts/${page.id}/translation-history`,
+        reader.id,
+      );
+      assert.equal(pageHistory.status, 200);
+      const pageHistoryBody = await pageHistory.json();
+      const englishChange = pageHistoryBody.history.find(
+        (entry: { locale: string }) => entry.locale === "en",
+      );
+      assert.equal(englishChange.changedBy, editor.id);
+      assert.equal(englishChange.changedByName, editor.name);
+      assert.ok(englishChange.changedAt);
+      assert.equal("content" in englishChange, false);
+
+      const allPageHistory = await request("/api/posts/history", reader.id);
+      assert.equal(allPageHistory.status, 200);
+      assert.ok(
+        (await allPageHistory.json()).history.some(
+          (entry: { postId: string; locale: string }) =>
+            entry.postId === page.id && entry.locale === "en",
+        ),
+      );
+      const unchangedTranslation = await request(
+        `/api/posts/${page.id}/translations`,
+        editor.id,
+        "POST",
+        {
+          locale: "en",
+          title: "Updated English title",
+          subtitle: null,
+          excerpt: "Updated excerpt",
+          content: JSON.stringify({ section: "updated" }),
+        },
+      );
+      assert.equal(unchangedTranslation.status, 200);
+      const historyAfterNoop = await request(
+        `/api/posts/${page.id}/translation-history`,
+        reader.id,
+      );
+      assert.equal(historyAfterNoop.status, 200);
+      assert.equal(
+        (await historyAfterNoop.json()).total,
+        pageHistoryBody.total,
+      );
+      assert.equal(
+        (await request(`/api/posts/${page.id}/translation-history`, member.id)).status,
+        403,
+      );
+      assert.equal((await request("/api/posts/history", member.id)).status, 403);
       const publicPage = await request(`/api/posts/slug/${page.slug}?locale=en`, member.id);
       assert.equal(publicPage.status, 200);
       const publicTranslations = (await publicPage.json()).translations;
