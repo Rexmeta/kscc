@@ -10,6 +10,7 @@ import {
   insertInquiryReplySchema,
   insertInquirySchema,
   insertPartnerSchema,
+  memberProfileSchema,
   inquiries,
   members,
   organizationMembers,
@@ -1020,6 +1021,37 @@ test("partner contracts trim text, bound values, and allow only HTTP(S) URLs", (
   assert.equal(parsed.nameZh, null);
   assert.equal(parsed.logo, "https://cdn.example.test/logo.svg");
   assert.equal(parsed.description, "A partner description");
+
+  const bareUrlPartner = insertPartnerSchema.parse({
+    name: "Bare URL Partner",
+    logo: "cdn.example.test/logo.svg",
+    website: "partner.example.test",
+    category: "partner",
+  });
+  assert.equal(bareUrlPartner.logo, "https://cdn.example.test/logo.svg");
+  assert.equal(bareUrlPartner.website, "https://partner.example.test");
+  assert.equal(
+    insertPartnerSchema.parse({
+      name: "Port Partner",
+      logo: "cdn.example.test:8443/logo.svg",
+      category: "partner",
+    }).logo,
+    "https://cdn.example.test:8443/logo.svg",
+  );
+
+  const bareUrlMember = memberProfileSchema.parse({
+    companyName: "Bare URL Company",
+    industry: "Technology",
+    country: "Korea",
+    city: "Seoul",
+    address: "Address",
+    website: "company.example.test",
+    logo: "cdn.example.test/company.svg",
+    contactPerson: "Contact",
+    contactEmail: "contact@example.test",
+  });
+  assert.equal(bareUrlMember.website, "https://company.example.test");
+  assert.equal(bareUrlMember.logo, "https://cdn.example.test/company.svg");
 
   for (const unsafeUrl of ["javascript:alert(1)", "data:text/html,unsafe", "ftp://partner.example.test/logo"]) {
     assert.throws(() => insertPartnerSchema.parse({

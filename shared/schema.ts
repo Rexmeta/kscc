@@ -410,6 +410,44 @@ export const insertMemberSchema = createInsertSchema(members).omit({
   updatedAt: true,
 });
 
+const normalizeHttpUrlInput = (value: unknown) => {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  // Keep explicit schemes intact so the validator can reject unsafe ones.
+  // A bare host/path, including a host with a port, is treated as HTTPS.
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`;
+  }
+  const looksLikeHostWithPort = /^[^/\s:]+:\d+(?:[/?#]|$)/.test(trimmed);
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed) && !looksLikeHostWithPort) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+};
+
+export const httpUrlSchema = z.preprocess(
+  normalizeHttpUrlInput,
+  z.string()
+    .trim()
+    .url("유효한 URL을 입력해주세요.")
+    .refine((value) => {
+      try {
+        const protocol = new URL(value).protocol;
+        return protocol === "http:" || protocol === "https:";
+      } catch {
+        return false;
+      }
+    }, "URL은 HTTP 또는 HTTPS 주소여야 합니다."),
+);
+
+export const optionalHttpUrlSchema = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? null : value,
+  httpUrlSchema.nullable().optional(),
+);
+
 export const memberProfileSchema = z.object({
   companyName: z.string(),
   companyNameEn: z.string().optional().nullable(),
@@ -419,11 +457,11 @@ export const memberProfileSchema = z.object({
   city: z.string(),
   address: z.string(),
   phone: z.string().optional().nullable(),
-  website: z.string().optional().nullable(),
+  website: optionalHttpUrlSchema,
   description: z.string().optional().nullable(),
   descriptionEn: z.string().optional().nullable(),
   descriptionZh: z.string().optional().nullable(),
-  logo: z.string().optional().nullable(),
+  logo: optionalHttpUrlSchema,
   contactPerson: z.string(),
   contactEmail: z.string().email(),
   contactPhone: z.string().optional().nullable(),
@@ -472,15 +510,8 @@ const partnerText = (max: number) => z.preprocess(
 
 export const partnerUrlSchema = z.string()
   .trim()
-  .url("유효한 URL을 입력해주세요.")
-  .refine((value) => {
-    try {
-      const protocol = new URL(value).protocol;
-      return protocol === "http:" || protocol === "https:";
-    } catch {
-      return false;
-    }
-  }, "URL은 HTTP 또는 HTTPS 주소여야 합니다.");
+  .transform((value) => normalizeHttpUrlInput(value) as string)
+  .pipe(httpUrlSchema);
 
 export const partnerCategorySchema = z.enum(["sponsor", "partner", "government"]);
 

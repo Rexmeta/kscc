@@ -79,13 +79,13 @@ export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
         </div>
         <div>
           <label className="form-label">웹사이트</label>
-          <Input {...register('website')} />
+          <Input {...register('website')} placeholder="예: example.com 또는 https://example.com" />
         </div>
       </div>
 
       <div>
         <label className="form-label">로고 URL</label>
-        <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
+        <Input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="예: example.com/logo.png" />
         {logoUrl && <img src={logoUrl} alt="Logo" className="mt-2 h-12 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />}
       </div>
 

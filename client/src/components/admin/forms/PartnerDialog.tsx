@@ -164,12 +164,12 @@ export function PartnerDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="form-label">로고 URL *</label>
-              <Input {...form.register('logo')} placeholder="https://..." data-testid="input-partner-logo" />
+              <Input {...form.register('logo')} placeholder="예: example.com/logo.png" data-testid="input-partner-logo" />
               {form.formState.errors.logo && <p className="text-sm text-destructive mt-1">{form.formState.errors.logo.message}</p>}
             </div>
             <div>
               <label className="form-label">웹사이트</label>
-              <Input {...form.register('website')} placeholder="https://..." data-testid="input-partner-website" />
+              <Input {...form.register('website')} placeholder="예: example.com 또는 https://example.com" data-testid="input-partner-website" />
               {form.formState.errors.website && <p className="text-sm text-destructive mt-1">{form.formState.errors.website.message}</p>}
             </div>
           </div>

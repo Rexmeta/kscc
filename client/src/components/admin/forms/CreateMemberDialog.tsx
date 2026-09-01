@@ -113,7 +113,7 @@ export function CreateMemberDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div>
               <label className="form-label">웹사이트</label>
-              <Input {...form.register('website')} placeholder="https://" data-testid="input-create-member-website" />
+              <Input {...form.register('website')} placeholder="예: example.com 또는 https://example.com" data-testid="input-create-member-website" />
             </div>
           </div>
 
@@ -122,7 +122,7 @@ export function CreateMemberDialog({ onSuccess }: { onSuccess: () => void }) {
             <Input
               value={logoUrl}
               onChange={(event) => setLogoUrl(event.target.value)}
-              placeholder="https://..."
+              placeholder="예: example.com/logo.png"
               data-testid="input-create-member-logo"
             />
           </div>
