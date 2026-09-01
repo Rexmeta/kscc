@@ -2612,39 +2612,50 @@ export class DatabaseStorage implements IStorage {
   async getResourceCategoryCounts(
     access: PostAccessContext = publicPostAccess,
   ): Promise<Record<string, number>> {
-    const firstPage = await this.getPosts({
-      postType: "resource",
-      status: "published",
-      compact: true,
-      limit: MAX_POST_PAGE_SIZE,
-      offset: 0,
-      access,
-    });
+    const conditions = [
+      eq(posts.postType, "resource" as any),
+      eq(posts.status, "published" as any),
+    ];
+    if (!access.isAdmin) {
+      const readableVisibilities = ["public"];
+      if (access.canReadMembers) readableVisibilities.push("members");
+      if (access.canReadPremium) readableVisibilities.push("premium");
 
-    const pageCount = Math.ceil(firstPage.total / MAX_POST_PAGE_SIZE);
-    const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
-        this.getPosts({
-          postType: "resource",
-          status: "published",
-          compact: true,
-          limit: MAX_POST_PAGE_SIZE,
-          offset: (index + 1) * MAX_POST_PAGE_SIZE,
-          access,
-        }),
-      ),
-    );
+      conditions.push(inArray(posts.visibility, readableVisibilities as any));
+      const now = new Date();
+      conditions.push(or(
+        isNull(posts.publishedAt),
+        lte(posts.publishedAt, now),
+      )!);
+      conditions.push(or(
+        isNull(posts.expiresAt),
+        gt(posts.expiresAt, now),
+      )!);
+    }
+
+    // Category cards only need the category metadata and the legacy tag
+    // fallback. Reading these columns in one query avoids fetching every
+    // resource's translations and all metadata through paginated getPosts
+    // calls.
+    const rows = await db
+      .select({
+        category: postMeta.valueText,
+        tags: posts.tags,
+      })
+      .from(posts)
+      .leftJoin(
+        postMeta,
+        and(
+          eq(postMeta.postId, posts.id),
+          eq(postMeta.key, "resource.category"),
+        ),
+      )
+      .where(and(...conditions));
 
     const counts: Record<string, number> = {};
-    for (const resource of [
-      ...firstPage.posts,
-      ...remainingPages.flatMap((page) => page.posts),
-    ]) {
-      const categoryMeta = resource.meta.find(
-        (meta) => meta.key === "resource.category",
-      );
-      const category = categoryMeta?.valueText ||
-        (Array.isArray(resource.tags) ? resource.tags[0] : undefined) ||
+    for (const row of rows) {
+      const category = row.category ||
+        (Array.isArray(row.tags) ? row.tags[0] : undefined) ||
         "uncategorized";
       counts[category] = (counts[category] || 0) + 1;
     }

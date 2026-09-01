@@ -8,9 +8,9 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import Home from "@/pages/Home";
 import { RouteSeo } from "@/components/Seo";
 
+const Home = lazy(() => import("@/pages/Home"));
 const About = lazy(() => import("@/pages/About"));
 const News = lazy(() => import("@/pages/News"));
 const NewsDetail = lazy(() => import("@/pages/NewsDetail"));

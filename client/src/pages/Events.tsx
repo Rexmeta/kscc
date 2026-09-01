@@ -19,6 +19,8 @@ export default function EventsPage() {
   const { hasPermission } = useAuth();
   const { language } = useLanguage();
   const [page, setPage] = useState(1);
+  const [categoryInput, setCategoryInput] = useState('');
+  const [upcomingInput, setUpcomingInput] = useState('');
   const [category, setCategory] = useState('');
   const [upcoming, setUpcoming] = useState('');
   const limit = 9;
@@ -39,6 +41,7 @@ export default function EventsPage() {
       });
        return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   const events = data?.posts || [];
@@ -46,14 +49,16 @@ export default function EventsPage() {
 
   const handleFilter = () => {
     setPage(1);
-    refetch();
+    setCategory(categoryInput);
+    setUpcoming(upcomingInput);
   };
 
   const handleReset = () => {
+    setCategoryInput('');
+    setUpcomingInput('');
     setCategory('');
     setUpcoming('');
     setPage(1);
-    refetch();
   };
 
   return (
@@ -84,7 +89,7 @@ export default function EventsPage() {
           </div>
           <Card className="p-6">
             <div className="grid gap-4 md:grid-cols-4">
-              <Select value={upcoming || "all"} onValueChange={(value) => setUpcoming(value === "all" ? "" : value)}>
+              <Select value={upcomingInput || "all"} onValueChange={(value) => setUpcomingInput(value === "all" ? "" : value)}>
                 <SelectTrigger data-testid="select-time">
                   <SelectValue placeholder="시간 필터" />
                 </SelectTrigger>
@@ -94,7 +99,7 @@ export default function EventsPage() {
                 </SelectContent>
               </Select>
               
-              <Select value={category || "all"} onValueChange={(value) => setCategory(value === "all" ? "" : value)}>
+              <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
                 <SelectTrigger data-testid="select-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>

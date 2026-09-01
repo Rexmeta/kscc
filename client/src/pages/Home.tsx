@@ -46,15 +46,13 @@ export default function Home() {
     });
   };
 
-  const fallbackHeroImage =
-    'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080';
-
   // Fetch upcoming events
   const { data: eventsData, isLoading: eventsLoading, isError: eventsError, refetch: refetchEvents } = useQuery({
     queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, limit: 3, language }),
     queryFn: async ({ signal }) => {
       return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`, { signal });
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   // Fetch latest news
@@ -63,12 +61,14 @@ export default function Home() {
     queryFn: async ({ signal }) => {
       return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=news&status=published&limit=3&locale=${language}&compact=true`, { signal });
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   // Public partners are served active-only by the API.
   const { data: partnersData, isLoading: partnersLoading, isError: partnersError, refetch: refetchPartners } = useQuery<Partner[]>({
     queryKey: queryKeys.partners.list(),
     queryFn: ({ signal }) => fetchPublicPartners(signal),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: membersData } = useQuery({
@@ -76,6 +76,7 @@ export default function Home() {
     queryFn: async ({ signal }) => {
       return fetchJson<{ total: number }>('/api/members?limit=1', { signal });
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: surveysData } = useQuery<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>({
@@ -89,8 +90,10 @@ export default function Home() {
       }
     },
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? 30_000 : false,
-    refetchIntervalInBackground: true,
+    // Survey settings change infrequently and are not a live participation
+    // counter. Avoid a background request every 30 seconds for every member
+    // who leaves the homepage open.
+    staleTime: 5 * 60 * 1000,
   });
 
   const events = eventsData?.posts || [];
@@ -111,7 +114,6 @@ export default function Home() {
       (Array.isArray(latestNewsImages) && latestNewsImages.length > 0 ? latestNewsImages[0] : null)
     : null;
   const latestNewsSummary = latestNewsTranslation?.excerpt || latestNewsTranslation?.subtitle || '';
-  const heroBackgroundImage = latestNewsImage || fallbackHeroImage;
   const latestNewsDate = latestNews?.publishedAt || latestNews?.createdAt;
 
   return (
@@ -119,14 +121,6 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 hero-overlay"></div>
-        <div 
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: `url("${heroBackgroundImage}")`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          }}
-        ></div>
         
         <div className="container relative z-10 py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center text-white">

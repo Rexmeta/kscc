@@ -8,7 +8,7 @@ type PublicPartnersResponse = {
 };
 
 export async function fetchPublicPartners(signal?: AbortSignal): Promise<Partner[]> {
-  const response = await fetch('/api/partners', { signal });
+  const response = await fetch('/api/partners?limit=12', { signal });
   if (!response.ok) throw new Error('Failed to fetch partners');
   const data = await response.json() as PublicPartnersResponse;
   return data.partners;

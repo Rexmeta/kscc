@@ -22,6 +22,8 @@ export default function NewsPage() {
   const { language } = useLanguage();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
+  const [categoryInput, setCategoryInput] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
 
@@ -41,6 +43,7 @@ export default function NewsPage() {
       
        return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   const posts = data?.posts || [];
@@ -49,14 +52,16 @@ export default function NewsPage() {
 
   const handleFilter = () => {
     setPage(1);
-    refetch();
+    setCategory(categoryInput);
+    setSearch(searchInput.trim());
   };
 
   const handleReset = () => {
+    setCategoryInput('');
+    setSearchInput('');
     setCategory('');
     setSearch('');
     setPage(1);
-    refetch();
   };
 
   return (
@@ -91,15 +96,15 @@ export default function NewsPage() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="뉴스 제목 또는 내용 검색..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                     value={searchInput}
+                     onChange={(e) => setSearchInput(e.target.value)}
                     className="pl-10"
                     data-testid="input-search"
                   />
                 </div>
               </div>
               
-              <Select value={category || "all"} onValueChange={(value) => setCategory(value === "all" ? "" : value)}>
+               <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
                 <SelectTrigger data-testid="select-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>

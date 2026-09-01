@@ -61,6 +61,7 @@ const getTranslation = (post: PostWithTranslations, locale: string) => {
 
 export default function ResourcesPage() {
   const [page, setPage] = useState(1);
+  const [categoryInput, setCategoryInput] = useState('');
   const [category, setCategory] = useState('');
   const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
   const [, navigate] = useLocation();
@@ -74,6 +75,7 @@ export default function ResourcesPage() {
     queryFn: async ({ signal }) => {
        return fetchJson('/api/posts/resource/categories', { signal });
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -91,6 +93,7 @@ export default function ResourcesPage() {
       
        return fetchJson<{ posts: PostWithTranslations[]; total: number }>(`/api/posts?${params}`, { signal });
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: resourceDetail } = useQuery<PostWithTranslations>({
@@ -99,6 +102,7 @@ export default function ResourcesPage() {
       return fetchJson<PostWithTranslations>(`/api/posts/${selectedResource!.id}?locale=${language}`, { signal });
     },
     enabled: !!selectedResource?.id,
+    staleTime: 5 * 60 * 1000,
   });
   const resourceForDialog = resourceDetail || selectedResource;
 
@@ -192,13 +196,13 @@ export default function ResourcesPage() {
 
   const handleFilter = () => {
     setPage(1);
-    refetch();
+    setCategory(categoryInput);
   };
 
   const handleReset = () => {
+    setCategoryInput('');
     setCategory('');
     setPage(1);
-    refetch();
   };
 
   const handleEdit = (resourceId: string) => {
@@ -295,7 +299,7 @@ export default function ResourcesPage() {
             <div className="flex gap-4 items-end">
               <div>
                 <label className="form-label">카테고리</label>
-                <Select value={category || "all"} onValueChange={(value) => setCategory(value === "all" ? "" : value)}>
+                <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
                   <SelectTrigger className="w-48" data-testid="select-category">
                     <SelectValue placeholder="전체 카테고리" />
                   </SelectTrigger>
