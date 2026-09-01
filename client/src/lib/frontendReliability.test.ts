@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getPageNumbers } from '@/components/PagePagination';
 import { getEventRegistrationState } from './eventRegistrationState';
+import { shouldRenderUpcomingEvents } from './homeUpcomingEvents';
 import { ApiRequestError, fetchJson } from './queryClient';
 import { formatLocalizedNumber, getCurrentLanguage, getLocale, setLanguage } from './i18n';
 
@@ -39,6 +40,35 @@ test('event registration state blocks registered, closed, and full events', () =
     isRegistrationClosed: false,
     capacity: 0,
   }), 'available');
+});
+
+test('upcoming events section hides after a successful empty response', () => {
+  assert.equal(shouldRenderUpcomingEvents({
+    eventCount: 0,
+    isLoading: false,
+    isError: false,
+  }), false);
+});
+
+test('upcoming events section remains visible when events are available', () => {
+  assert.equal(shouldRenderUpcomingEvents({
+    eventCount: 1,
+    isLoading: false,
+    isError: false,
+  }), true);
+});
+
+test('upcoming events section remains visible for loading and error states', () => {
+  assert.equal(shouldRenderUpcomingEvents({
+    eventCount: 0,
+    isLoading: true,
+    isError: false,
+  }), true);
+  assert.equal(shouldRenderUpcomingEvents({
+    eventCount: 0,
+    isLoading: false,
+    isError: true,
+  }), true);
 });
 
 test('shared JSON fetch handling rejects HTTP failures instead of returning empty data', async () => {

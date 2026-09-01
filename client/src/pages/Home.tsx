@@ -16,6 +16,7 @@ import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 import { fetchPublicPartners } from '@/lib/publicPartners';
+import { shouldRenderUpcomingEvents } from '@/lib/homeUpcomingEvents';
 
 export default function Home() {
   const { language } = useLanguage();
@@ -93,6 +94,11 @@ export default function Home() {
   });
 
   const events = eventsData?.posts || [];
+  const showUpcomingEvents = shouldRenderUpcomingEvents({
+    eventCount: events.length,
+    isLoading: eventsLoading,
+    isError: eventsError,
+  });
   const news = newsData?.posts || [];
   const partners = partnersData || [];
   const memberCount = membersData?.total || 0;
@@ -243,34 +249,36 @@ export default function Home() {
       </section>
 
       {/* Upcoming Events */}
-      <section className="bg-background dark:bg-background py-16">
-        <div className="container">
-          <div className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="mb-2 text-3xl font-bold text-foreground">{t('events.upcoming')}</h2>
-              <p className="text-muted-foreground">{t('home.events.subtitle')}</p>
+      {showUpcomingEvents && (
+        <section className="bg-background dark:bg-background py-16">
+          <div className="container">
+            <div className="mb-8 flex items-center justify-between">
+              <div>
+                <h2 className="mb-2 text-3xl font-bold text-foreground">{t('events.upcoming')}</h2>
+                <p className="text-muted-foreground">{t('home.events.subtitle')}</p>
+              </div>
+              <Link href="/events">
+                <Button variant="outline" data-testid="link-all-events">
+                  {t('home.events.viewAll')}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
             </div>
-            <Link href="/events">
-              <Button variant="outline" data-testid="link-all-events">
-                {t('home.events.viewAll')}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+
+            <QueryState
+              isLoading={eventsLoading}
+              isError={eventsError}
+              onRetry={() => refetchEvents()}
+              empty={events.length === 0}
+              emptyMessage={t('home.events.empty')}
+            >
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {events.map((post: PostWithTranslations) => <EventCard key={post.id} post={post} />)}
+              </div>
+            </QueryState>
           </div>
-          
-          <QueryState
-            isLoading={eventsLoading}
-            isError={eventsError}
-            onRetry={() => refetchEvents()}
-            empty={events.length === 0}
-            emptyMessage={t('home.events.empty')}
-          >
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {events.map((post: PostWithTranslations) => <EventCard key={post.id} post={post} />)}
-            </div>
-          </QueryState>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Latest News */}
       <section className="bg-muted dark:bg-muted py-16">
