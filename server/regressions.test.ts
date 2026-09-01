@@ -251,7 +251,53 @@ test(
 
       const refreshedUser2 = await storage.getUser(user2.id);
       assert.ok(refreshedUser2);
-      const activeToken = issueAuthToken(refreshedUser2!, process.env.SESSION_SECRET!);
+      const tokenBeforePasswordReset = issueAuthToken(
+        refreshedUser2!,
+        process.env.SESSION_SECRET!,
+      );
+      const weakPasswordReset = await request(`/api/users/${user2.id}/password-reset`, {
+        token: adminToken,
+        method: "POST",
+        body: { password: "short" },
+      });
+      assert.equal(weakPasswordReset.status, 400);
+
+      const passwordReset = await request(`/api/users/${user2.id}/password-reset`, {
+        token: adminToken,
+        method: "POST",
+        body: { password: "admin-reset-password" },
+      });
+      assert.equal(passwordReset.status, 200);
+      assert.equal((await request("/api/auth/me", { token: tokenBeforePasswordReset })).status, 403);
+      assert.equal(
+        (await request("/api/auth/login", {
+          method: "POST",
+          body: { email: adminEmail, password: "initial-password" },
+        })).status,
+        401,
+      );
+      assert.equal(
+        (await request("/api/auth/login", {
+          method: "POST",
+          body: { email: adminEmail, password: "admin-reset-password" },
+        })).status,
+        200,
+      );
+
+      const filteredUsers = await request(
+        `/api/users?search=${encodeURIComponent(adminEmail)}&role=operator&isActive=true`,
+        { token: adminToken },
+      );
+      assert.equal(filteredUsers.status, 200);
+      assert.deepEqual(
+        (filteredUsers.body as { users: Array<{ id: string }> }).users.map(({ id }) => id),
+        [user2.id],
+      );
+
+      const activeToken = issueAuthToken(
+        (await storage.getUser(user2.id))!,
+        process.env.SESSION_SECRET!,
+      );
       const deactivation = await request(`/api/users/${user2.id}`, {
         token: adminToken,
         method: "PUT",

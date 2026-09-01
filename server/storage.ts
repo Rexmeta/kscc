@@ -16,7 +16,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
-import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
+import { eq, desc, asc, and, or, like, ilike, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
   canReadPost,
@@ -166,7 +166,9 @@ export interface IStorage {
   getUsers(filters?: {
     limit?: number;
     offset?: number;
-
+    search?: string;
+    role?: AccountRole;
+    isActive?: boolean;
   }): Promise<{ users: User[]; total: number }>;
 
   createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
@@ -178,6 +180,8 @@ export interface IStorage {
   createUserWithMemberForRegistration(userData: InsertUser & { userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
 
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+
+  resetUserPassword(id: string, password: string): Promise<User | undefined>;
 
   updateUserAuthorization(
     id: string,
@@ -826,6 +830,20 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async resetUserPassword(id: string, password: string): Promise<User | undefined> {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [user] = await db
+      .update(users)
+      .set({
+        password: hashedPassword,
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
   async validateUser(email: string, password: string): Promise<User | undefined> {
     const user = await this.getUserByEmail(normalizeEmail(email));
     if (!user || !user.isActive) return undefined;
@@ -1046,14 +1064,36 @@ export class DatabaseStorage implements IStorage {
   async getUsers(filters?: {
     limit?: number;
     offset?: number;
+    search?: string;
+    role?: AccountRole;
+    isActive?: boolean;
   }): Promise<{ users: User[]; total: number }> {
     const limit = boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
     const offset = boundedOffset(filters?.offset);
+    const conditions = [];
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(users.name, searchTerm),
+        ilike(users.email, searchTerm),
+      )!);
+    }
+    if (filters?.role) {
+      conditions.push(eq(users.role, filters.role));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(users.isActive, filters.isActive));
+    }
+    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+    const totalQuery = whereCondition
+      ? db.select({ count: count() }).from(users).where(whereCondition)
+      : db.select({ count: count() }).from(users);
+    const usersQuery = whereCondition
+      ? db.select().from(users).where(whereCondition)
+      : db.select().from(users);
     const [[totalResult], usersResult] = await Promise.all([
-      db.select({ count: count() }).from(users),
-      db
-        .select()
-        .from(users)
+      totalQuery,
+      usersQuery
         .orderBy(desc(users.createdAt), desc(users.id))
         .limit(limit)
         .offset(offset),

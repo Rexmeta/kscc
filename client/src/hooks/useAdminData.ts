@@ -53,11 +53,22 @@ export function useAdminMembers(activeTab: string) {
 
 type UsersResponse = { users: User[]; total: number; page: number; totalPages: number };
 
-export function useAdminUsers(activeTab: string, page: number) {
+export function useAdminUsers(
+  activeTab: string,
+  page: number,
+  filters: { search?: string; role?: string; isActive?: string } = {},
+) {
   const { isAdmin } = useAuth();
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: '50',
+  });
+  if (filters.search) params.set('search', filters.search);
+  if (filters.role) params.set('role', filters.role);
+  if (filters.isActive) params.set('isActive', filters.isActive);
   return useQuery<UsersResponse>({
-    queryKey: ['/api/users', { page, limit: 50 }],
-    queryFn: () => fetchJson<UsersResponse>(`/api/users?page=${page}&limit=50`),
+    queryKey: ['/api/users', { page, limit: 50, ...filters }],
+    queryFn: () => fetchJson<UsersResponse>(`/api/users?${params.toString()}`),
     enabled: isAdmin && activeTab === 'users',
   });
 }

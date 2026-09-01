@@ -93,6 +93,16 @@ const paginatedCollectionQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(50),
 }).strict();
 
+const userQuerySchema = paginatedCollectionQuerySchema.extend({
+  search: z.string().trim().max(100).optional(),
+  role: z.enum(["admin", "operator", "user"]).optional(),
+  isActive: z.enum(["true", "false"]).optional(),
+}).strict();
+
+const passwordResetSchema = z.object({
+  password: passwordSchema,
+}).strict();
+
 const partnerQuerySchema = paginatedCollectionQuerySchema.extend({
   admin: z.enum(["true", "false"]).optional(),
 }).strict();
@@ -743,10 +753,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User management routes (Admin only)
   app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const { page, limit } = paginatedCollectionQuerySchema.parse(req.query);
+      const { page, limit, search, role, isActive } = userQuerySchema.parse(req.query);
       const result = await storage.getUsers({
         limit,
         offset: (page - 1) * limit,
+        search,
+        role,
+        isActive: isActive === undefined ? undefined : isActive === "true",
       });
       const memberships = await getUserMembershipInfoBatch(
         result.users.map((user) => user.id),
@@ -766,6 +779,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user query", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/users/:id/password-reset", authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const userId = z.string().uuid().parse(req.params.id);
+      if (userId === req.user!.id) {
+        return res.status(400).json({ message: "Use your profile settings to change your own password" });
+      }
+      const { password } = passwordResetSchema.parse(req.body);
+      const updatedUser = await storage.resetUserPassword(userId, password);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ message: "User password reset successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
       }
       res.status(500).json({ message: "Internal server error" });
     }
