@@ -24,7 +24,7 @@ export default function NewsDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { language } = useLanguage();
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -166,8 +166,10 @@ export default function NewsDetail() {
     });
   };
 
+  const canUpdate = isAdmin || hasPermission('news.update');
+
   const handleEdit = () => {
-    navigate(`/admin?tab=news&edit=${id}`);
+    navigate(`/admin?tab=articles&edit=${encodeURIComponent(post.id)}`);
   };
 
   const handleDelete = () => {
@@ -219,27 +221,31 @@ export default function NewsDetail() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               뉴스 목록으로
             </Link>
-            {isAdmin && (
+            {(canUpdate || isAdmin) && (
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEdit}
-                  data-testid="button-edit-news"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  수정
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  data-testid="button-delete-news"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {deleteMutation.isPending ? '삭제 중...' : '삭제'}
-                </Button>
+                {canUpdate && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEdit}
+                    data-testid="button-edit-news"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    수정
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    data-testid="button-delete-news"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                  </Button>
+                )}
               </div>
             )}
           </div>

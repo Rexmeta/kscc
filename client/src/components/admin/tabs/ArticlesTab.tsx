@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useSearch } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,8 @@ export function ArticlesTab({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin, hasPermission } = useAuth();
+  const [, navigate] = useLocation();
+  const search = useSearch();
   const [selectedArticle, setSelectedArticle] = useState<PostWithTranslations | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -38,6 +41,21 @@ export function ArticlesTab({
   const canUpdate = isAdmin || hasPermission('news.update');
   const canPublish = isAdmin || hasPermission('news.publish');
   const canDelete = isAdmin;
+
+  useEffect(() => {
+    const editId = new URLSearchParams(search).get('edit');
+    if (!editId || !newsData?.posts?.length) return;
+
+    const article = newsData.posts.find(
+      (candidate) => candidate.id === editId || candidate.slug === editId,
+    );
+    if (!article) return;
+
+    setSelectedArticle(article);
+    setEditDialogOpen(true);
+    navigate('/admin?tab=articles', { replace: true });
+  }, [navigate, newsData?.posts, search]);
+
   const invalidate = () => {
     queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
     queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
