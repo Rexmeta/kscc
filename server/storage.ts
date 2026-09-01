@@ -27,6 +27,7 @@ import {
 import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
 import { hasPermission } from "./permissions";
 import { normalizeEmail } from "./auth";
+import { parseEventDateTime } from "@shared/eventDateTime";
 import {
   InvalidPostScheduleError,
   RESOURCE_ACL_SYNC_META_KEY,
@@ -2182,7 +2183,7 @@ export class DatabaseStorage implements IStorage {
             ${postMeta.valueTimestamp},
             CASE
               WHEN ${postMeta.valueText} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-              THEN ${postMeta.valueText}::timestamp
+              THEN (${postMeta.valueText}::timestamp AT TIME ZONE 'Asia/Seoul')::timestamp
               ELSE NULL
             END
           )
@@ -3093,12 +3094,7 @@ function isEventClosed(meta: PostMeta[]): boolean {
 }
 
 function parseEventDate(value: unknown): Date | undefined {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? undefined : value;
-  }
-  if (typeof value !== "string" && typeof value !== "number") return undefined;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  return parseEventDateTime(value) ?? undefined;
 }
 
 function parseEventCapacity(value: unknown): number | undefined {

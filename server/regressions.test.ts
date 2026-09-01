@@ -1061,8 +1061,10 @@ test(
       import("./routes"),
       import("./storage"),
     ]);
+    const { db } = await import("./db");
     const adminId = randomUUID();
     const memberId = randomUUID();
+    const operatorEmail = `partner-operator-${randomUUID()}@example.test`;
     const partnerId = randomUUID();
     const createdId = randomUUID();
     const now = new Date();
@@ -1095,6 +1097,30 @@ test(
       website: "data:text/html,unsafe",
     };
     let deleted = false;
+    const operator = await storage.createUser({
+      email: operatorEmail,
+      password: "test-password",
+      name: "Partner Operator",
+      role: "operator",
+      userType: "staff",
+    });
+    const [operatorTier] = await db
+      .select()
+      .from(tiers)
+      .where(eq(tiers.code, "MEMBER"))
+      .limit(1);
+    const [operatorRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.code, "operator"))
+      .limit(1);
+    assert.ok(operatorTier, "ACL seed must include the MEMBER tier");
+    assert.ok(operatorRole, "ACL seed must include the operator role");
+    await db.insert(userMemberships).values({
+      userId: operator.id,
+      tierId: operatorTier.id,
+      roleId: operatorRole.id,
+    });
     const originalMethods = {
       getUser: storage.getUser,
       getPartners: storage.getPartners,
@@ -1128,6 +1154,13 @@ test(
           isActive: true,
         } as any;
       }
+      if (id === operator.id) {
+        return {
+          ...operator,
+          password: "not-returned",
+          isActive: true,
+        } as any;
+      }
       return undefined;
     };
     storage.getPartners = async (filters) => {
@@ -1158,6 +1191,7 @@ test(
     const server = await registerRoutes(app);
     const adminToken = jwt.sign({ id: adminId }, process.env.SESSION_SECRET!);
     const memberToken = jwt.sign({ id: memberId }, process.env.SESSION_SECRET!);
+    const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -1218,6 +1252,22 @@ test(
         method: "POST",
         body: validPayload,
       })).status, 403);
+      const operatorList = await request("/api/partners?admin=true", { token: operatorToken });
+      assert.equal(operatorList.status, 200);
+      assert.equal((operatorList.body as any).partners[0].id, partner.id);
+      const operatorCreate = await request("/api/partners", {
+        token: operatorToken,
+        method: "POST",
+        body: validPayload,
+      });
+      assert.equal(operatorCreate.status, 201);
+      const operatorUpdate = await request(`/api/partners/${partnerId}`, {
+        token: operatorToken,
+        method: "PUT",
+        body: { name: "Updated by Operator" },
+      });
+      assert.equal(operatorUpdate.status, 200);
+      assert.equal((operatorUpdate.body as any).name, "Updated by Operator");
       assert.equal((await request("/api/partners", {
         token: adminToken,
         method: "POST",
@@ -1264,6 +1314,8 @@ test(
       storage.createPartner = originalMethods.createPartner;
       storage.updatePartner = originalMethods.updatePartner;
       storage.deletePartner = originalMethods.deletePartner;
+      await db.delete(userMemberships).where(eq(userMemberships.userId, operator.id));
+      await db.delete(users).where(eq(users.id, operator.id));
       if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
       else process.env.SESSION_SECRET = originalSessionSecret;
     }

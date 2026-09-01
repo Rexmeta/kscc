@@ -128,6 +128,7 @@ export const getMetaObject = <T = any>(meta: PostMeta[], key: string): T | null 
 // ============================================================================
 
 import { EVENT_META_KEYS } from '@shared/postMetaKeys';
+import { parseEventDateTime } from '@shared/eventDateTime';
 
 /**
  * Event-specific meta data extractor
@@ -156,9 +157,9 @@ export const getEventMeta = (post: PostWithTranslations): EventMetaData => {
   const meta = post.meta || [];
   
   return {
-    eventDate: getMetaTimestamp(meta, EVENT_META_KEYS.eventDate),
-    endDate: getMetaTimestamp(meta, EVENT_META_KEYS.endDate),
-    registrationDeadline: getMetaTimestamp(meta, EVENT_META_KEYS.registrationDeadline),
+    eventDate: parseEventDateTime(getMetaValue(meta, EVENT_META_KEYS.eventDate)),
+    endDate: parseEventDateTime(getMetaValue(meta, EVENT_META_KEYS.endDate)),
+    registrationDeadline: parseEventDateTime(getMetaValue(meta, EVENT_META_KEYS.registrationDeadline)),
     location: getMetaText(meta, EVENT_META_KEYS.location),
     category: getMetaText(meta, EVENT_META_KEYS.category),
     eventType: getMetaText(meta, EVENT_META_KEYS.eventType),

@@ -43,17 +43,18 @@ export default function AdminPage() {
   const canManageSurvey = isAdmin || hasPermission('survey.manage');
   const canReadPages = isAdmin || hasPermission('page.read');
   const canUpdatePages = isAdmin || hasPermission('page.update');
+  const canManagePartners = isAdmin || hasPermission('partner.manage');
   const canReadOrganization = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
     ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadPages ? ['pages'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadOrganization ? ['organization'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
+    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadPages ? ['pages'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadOrganization ? ['organization'] : []), ...(canManagePartners ? ['partners'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
   const defaultTab = isAdmin
     ? 'dashboard'
-    : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadOrganization ? 'organization' : canManageSurvey ? 'survey' : 'dashboard');
-  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadPages || canReadInquiries || canReadOrganization || canManageSurvey;
+    : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadOrganization ? 'organization' : canManagePartners ? 'partners' : canManageSurvey ? 'survey' : 'dashboard');
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadPages || canReadInquiries || canReadOrganization || canManagePartners || canManageSurvey;
 
   useEffect(() => {
     if (loading) return;
@@ -121,7 +122,7 @@ export default function AdminPage() {
                 {allowedTabs.includes('pages') && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
                  {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
                 {allowedTabs.includes('organization') && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
-                {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
+                 {allowedTabs.includes('partners') && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                  {allowedTabs.includes('survey') && <SelectItem value="survey" data-testid="option-tab-survey">설문</SelectItem>}
                 {hasManual && (
                   <SelectItem value="manual" data-testid="option-tab-manual">매뉴얼</SelectItem>
@@ -141,7 +142,7 @@ export default function AdminPage() {
                {allowedTabs.includes('pages') && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
                {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
                {allowedTabs.includes('organization') && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
+               {allowedTabs.includes('partners') && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
                {allowedTabs.includes('survey') && <TabsTrigger value="survey" data-testid="tab-survey" className="text-sm whitespace-nowrap">설문</TabsTrigger>}
               {hasManual && (
                 <TabsTrigger value="manual" data-testid="tab-manual" className="text-sm whitespace-nowrap">매뉴얼</TabsTrigger>
@@ -177,7 +178,7 @@ export default function AdminPage() {
              {allowedTabs.includes('pages') && activeTab === 'pages' && (
                <PagesTab activeTab={activeTab} canEdit={canUpdatePages} />
              )}
-            {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
+             {allowedTabs.includes('partners') && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
              {allowedTabs.includes('survey') && activeTab === 'survey' && <SurveyTab activeTab={activeTab} />}
             {allowedTabs.includes('organization') && activeTab === 'organization' && (
               <OrganizationTab activeTab={activeTab} />

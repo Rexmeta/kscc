@@ -21,6 +21,10 @@ test("event creation without publish permission always produces a draft", () => 
 
   assert.equal(mapped.post.status, "draft");
   assert.equal(mapped.post.publishedAt, null);
+  assert.equal(
+    mapped.meta.find((meta) => meta.key === "event.eventDate")?.valueTimestamp?.toISOString(),
+    "2026-09-01T01:00:00.000Z",
+  );
 });
 
 test("resource form accepts and maps every administrator visibility choice", () => {

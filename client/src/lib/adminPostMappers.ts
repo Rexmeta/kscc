@@ -1,5 +1,6 @@
 import type { PostWithTranslations, PostMeta, InsertPost, InsertPostTranslation, InsertPostMeta } from '@shared/schema';
 import { NEWS_META_KEYS, EVENT_META_KEYS, RESOURCE_META_KEYS } from '@shared/postMetaKeys';
+import { eventDateTimeLocalToDate, formatEventDateTimeLocal } from '@shared/eventDateTime';
 import { nanoid } from 'nanoid';
 
 // Utility to create slug from title
@@ -165,7 +166,7 @@ export function mapEventFormToPost(formData: EventFormData, _authorId: string): 
         valueText: null,
         valueNumber: null,
         valueBoolean: null,
-        valueTimestamp: new Date(formData.eventDate),
+        valueTimestamp: eventDateTimeLocalToDate(formData.eventDate),
         value: null,
       },
       ...(formData.endDate ? [{
@@ -173,7 +174,7 @@ export function mapEventFormToPost(formData: EventFormData, _authorId: string): 
         valueText: null,
         valueNumber: null,
         valueBoolean: null,
-        valueTimestamp: new Date(formData.endDate),
+        valueTimestamp: eventDateTimeLocalToDate(formData.endDate),
         value: null,
       }] : []),
       {
@@ -221,7 +222,7 @@ export function mapEventFormToPost(formData: EventFormData, _authorId: string): 
         valueText: null,
         valueNumber: null,
         valueBoolean: null,
-        valueTimestamp: new Date(formData.registrationDeadline),
+        valueTimestamp: eventDateTimeLocalToDate(formData.registrationDeadline),
         value: null,
       }] : []),
       ...(formData.images && formData.images.length > 0 ? [{
@@ -246,26 +247,18 @@ export function mapPostToEventForm(post: PostWithTranslations): EventFormData {
     return item.valueText || item.valueNumber || item.valueBoolean || item.valueTimestamp || item.value || null;
   };
   
-  // Helper to convert Date to datetime-local string format
-  const toDateTimeLocalString = (date: any): string | undefined => {
-    if (!date) return undefined;
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return undefined;
-    return d.toISOString().slice(0, 16);
-  };
-  
   return {
     title: translation?.title || post.slug,
     description: translation?.excerpt || '',
     content: translation?.content || '',
-    eventDate: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.eventDate)) || '',
-    endDate: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.endDate)),
+    eventDate: formatEventDateTimeLocal(getMetaValue(EVENT_META_KEYS.eventDate)),
+    endDate: formatEventDateTimeLocal(getMetaValue(EVENT_META_KEYS.endDate)) || undefined,
     location: getMetaValue(EVENT_META_KEYS.location) || '',
     category: getMetaValue(EVENT_META_KEYS.category) || (Array.isArray(post.tags) ? post.tags[0] : null) || '',
     eventType: getMetaValue(EVENT_META_KEYS.eventType) || 'offline',
     capacity: getMetaValue(EVENT_META_KEYS.capacity) || undefined,
     fee: parseInt(getMetaValue(EVENT_META_KEYS.fee) || '0'),
-    registrationDeadline: toDateTimeLocalString(getMetaValue(EVENT_META_KEYS.registrationDeadline)),
+    registrationDeadline: formatEventDateTimeLocal(getMetaValue(EVENT_META_KEYS.registrationDeadline)) || undefined,
     images: getMetaValue(EVENT_META_KEYS.images) || [],
     isPublic: post.visibility === 'public',
     isPublished: post.status === 'published',

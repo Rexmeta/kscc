@@ -13,6 +13,7 @@ import { eventSchema, type EventFormValues } from '../adminSchemas';
 import { getMetaValue } from '@/lib/postHelpers';
 import type { PostWithTranslations } from '@shared/schema';
 import { useUpdateEventPost } from '@/hooks/useAdminMutations';
+import { formatEventDateTimeLocal, parseEventDateTime } from '@shared/eventDateTime';
 
 export function EditEventForm({ event, onSuccess }: { event: PostWithTranslations; onSuccess: () => void }) {
   const { user, isAdmin, hasPermission } = useAuth();
@@ -26,8 +27,8 @@ export function EditEventForm({ event, onSuccess }: { event: PostWithTranslation
     return val !== null ? String(val) : '';
   };
 
-  const eventDateStr = getMetaVal('event.eventDate');
-  const isPastEvent = eventDateStr ? new Date(eventDateStr) < new Date() : false;
+  const eventDate = parseEventDateTime(getMetaValue(eventMeta, 'event.eventDate'));
+  const isPastEvent = eventDate ? eventDate < new Date() : false;
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
@@ -35,14 +36,14 @@ export function EditEventForm({ event, onSuccess }: { event: PostWithTranslation
       title: translation?.title || '',
       description: translation?.excerpt || '',
       content: translation?.content || '',
-      eventDate: getMetaVal('event.eventDate'),
-      endDate: getMetaVal('event.endDate'),
+      eventDate: formatEventDateTimeLocal(getMetaValue(eventMeta, 'event.eventDate')),
+      endDate: formatEventDateTimeLocal(getMetaValue(eventMeta, 'event.endDate')),
       location: getMetaVal('event.location'),
       category: getMetaVal('event.category') || 'networking',
       eventType: getMetaVal('event.eventType') || 'offline',
       capacity: parseInt(getMetaVal('event.capacity')) || undefined,
       fee: parseInt(getMetaVal('event.fee')) || 0,
-      registrationDeadline: getMetaVal('event.registrationDeadline'),
+      registrationDeadline: formatEventDateTimeLocal(getMetaValue(eventMeta, 'event.registrationDeadline')),
       isPublic: true,
       isPublished: event.status === 'published',
     }

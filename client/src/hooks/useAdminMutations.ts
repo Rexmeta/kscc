@@ -6,6 +6,7 @@ import { createPost, updatePost, deletePost } from '@/lib/adminPostApi';
 import { mapNewsFormToPost, mapEventFormToPost, mapResourceFormToPost, type NewsFormData, type EventFormData, type ResourceFormData } from '@/lib/adminPostMappers';
 import type { MemberFormValues, NewsFormValues, EventFormValues, ResourceFormValues } from '@/components/admin/adminSchemas';
 import { NEWS_META_KEYS, EVENT_META_KEYS, RESOURCE_META_KEYS } from '@shared/postMetaKeys';
+import { eventDateTimeLocalToDate } from '@shared/eventDateTime';
 
 const invalidatePosts = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
@@ -152,8 +153,8 @@ export function useUpdateEventPost(options: {
           content: formData.content || '',
         },
         meta: [
-          { key: EVENT_META_KEYS.eventDate, valueTimestamp: new Date(formData.eventDate) },
-          ...(formData.endDate ? [{ key: EVENT_META_KEYS.endDate, valueTimestamp: new Date(formData.endDate) }] : []),
+          { key: EVENT_META_KEYS.eventDate, valueTimestamp: eventDateTimeLocalToDate(formData.eventDate) },
+          ...(formData.endDate ? [{ key: EVENT_META_KEYS.endDate, valueTimestamp: eventDateTimeLocalToDate(formData.endDate) }] : []),
           { key: EVENT_META_KEYS.location, valueText: formData.location },
           { key: EVENT_META_KEYS.category, valueText: formData.category },
           { key: EVENT_META_KEYS.eventType, valueText: formData.eventType },
@@ -161,7 +162,7 @@ export function useUpdateEventPost(options: {
           { key: EVENT_META_KEYS.fee, valueNumber: formData.fee ?? 0 },
           ...(formData.registrationDeadline ? [{
             key: EVENT_META_KEYS.registrationDeadline,
-            valueTimestamp: new Date(formData.registrationDeadline),
+            valueTimestamp: eventDateTimeLocalToDate(formData.registrationDeadline),
           }] : []),
           ...(formData.images && formData.images.length > 0 ? [{
             key: EVENT_META_KEYS.images,

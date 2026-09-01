@@ -20,6 +20,7 @@ import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
 import { fetchJson } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
 import { getEventRegistrationState } from '@/lib/eventRegistrationState';
+import { EVENT_TIME_ZONE } from '@shared/eventDateTime';
 
 const registrationsQueryKey = ['/api/auth/registrations'];
 
@@ -346,12 +347,14 @@ export default function EventDetailPage() {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
+                          timeZone: EVENT_TIME_ZONE,
                         })}
                       </p>
                       <p className="text-muted-foreground">
                          {eventMeta.eventDate.toLocaleTimeString(language === 'ko' ? 'ko-KR' : language === 'zh' ? 'zh-CN' : 'en-US', {
                           hour: '2-digit',
                           minute: '2-digit',
+                          timeZone: EVENT_TIME_ZONE,
                         })}
                       </p>
                     </div>
@@ -416,6 +419,7 @@ export default function EventDetailPage() {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric',
+                          timeZone: EVENT_TIME_ZONE,
                         })}
                       </p>
                     </div>

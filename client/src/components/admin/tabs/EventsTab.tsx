@@ -18,6 +18,7 @@ import { PostPublicationToggle } from '../PostPublicationToggle';
 import { QueryState } from '@/components/QueryState';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { formatLocalizedDate } from '@/lib/i18n';
+import { EVENT_TIME_ZONE } from '@shared/eventDateTime';
 
 interface EventsTabProps {
   activeTab: string;
@@ -50,7 +51,8 @@ export function EventsTab({ activeTab, createEventDialogOpen, setCreateEventDial
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+         minute: '2-digit',
+         timeZone: EVENT_TIME_ZONE,
       });
     } catch {
       return dateStr;

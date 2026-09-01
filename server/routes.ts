@@ -1254,7 +1254,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsedQuery = partnerQuerySchema.parse(req.query);
       const isAdminRequested = parsedQuery.admin === "true";
-      if (isAdminRequested && req.user?.role !== "admin") {
+      const canManagePartners = req.user?.role === "admin"
+        || (req.user?.id ? await hasPermission(req.user.id, "partner.manage") : false);
+      if (isAdminRequested && !canManagePartners) {
         return res.status(403).json({ message: "Admin access required" });
       }
 
@@ -1291,7 +1293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/partners", authenticateToken, requireAdmin, async (req, res) => {
+  app.post("/api/partners", authenticateToken, requireAdminOrPermission("partner.manage"), async (req, res) => {
     try {
       const partnerData = insertPartnerSchema.parse(req.body);
       const partner = await storage.createPartner(partnerData);
@@ -1309,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.put("/api/partners/:id", authenticateToken, requireAdminOrPermission("partner.manage"), async (req, res) => {
     try {
       const id = partnerIdSchema.parse(req.params.id);
       const partner = await storage.getPartner(id);
@@ -1333,7 +1335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/partners/:id", authenticateToken, requireAdmin, async (req, res) => {
+  app.delete("/api/partners/:id", authenticateToken, requireAdminOrPermission("partner.manage"), async (req, res) => {
     try {
       const id = partnerIdSchema.parse(req.params.id);
       const partner = await storage.getPartner(id);

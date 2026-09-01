@@ -7,6 +7,7 @@ import { useLocation } from 'wouter';
 import { t } from '@/lib/i18n';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
+import { EVENT_TIME_ZONE } from '@shared/eventDateTime';
 
 interface EventCardProps {
   post: PostWithTranslations;
@@ -51,6 +52,7 @@ export default function EventCard({ post }: EventCardProps) {
       month: 'long',
       day: 'numeric',
       weekday: 'short',
+      timeZone: EVENT_TIME_ZONE,
     });
   };
 
@@ -58,6 +60,7 @@ export default function EventCard({ post }: EventCardProps) {
     return date.toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: EVENT_TIME_ZONE,
     });
   };
 

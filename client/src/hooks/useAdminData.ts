@@ -65,11 +65,12 @@ export function useAdminUsers(activeTab: string, page: number) {
 type PartnersResponse = { partners: Partner[]; total: number; page: number; totalPages: number };
 
 export function useAdminPartners(activeTab: string, page: number) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
+  const canManagePartners = isAdmin || hasPermission('partner.manage');
   return useQuery<PartnersResponse>({
     queryKey: ['/api/partners', { admin: true, page, limit: 50 }],
     queryFn: () => fetchJson<PartnersResponse>(`/api/partners?admin=true&page=${page}&limit=50`),
-    enabled: isAdmin && activeTab === 'partners',
+    enabled: canManagePartners && activeTab === 'partners',
   });
 }
 
