@@ -133,8 +133,8 @@ export function useAdminOrganizationMembers(
 export function useAdminDashboard(activeTab: string) {
   const { isAdmin } = useAuth();
   return useQuery<AdminDashboardSnapshot>({
-    queryKey: ['/api/admin/dashboard'],
-    queryFn: () => fetchJson<AdminDashboardSnapshot>('/api/admin/dashboard'),
+    queryKey: ['/api/admin/dashboard', 'snapshot-v1'],
+    queryFn: () => fetchJson<AdminDashboardSnapshot>('/api/admin/dashboard', { cache: 'no-store' }),
     enabled: isAdmin && activeTab === 'dashboard',
     refetchOnMount: 'always',
   });

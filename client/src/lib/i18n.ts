@@ -1101,6 +1101,10 @@ export function formatLocalizedDate(
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(getLocale(language), options);
 }
 
-export function formatLocalizedNumber(value: number, language: Language = currentLanguage): string {
+export function formatLocalizedNumber(
+  value: number | null | undefined,
+  language: Language = currentLanguage,
+): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
   return value.toLocaleString(getLocale(language));
 }

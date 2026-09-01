@@ -3,7 +3,7 @@ import test from 'node:test';
 import { getPageNumbers } from '@/components/PagePagination';
 import { getEventRegistrationState } from './eventRegistrationState';
 import { ApiRequestError, fetchJson } from './queryClient';
-import { getCurrentLanguage, getLocale, setLanguage } from './i18n';
+import { formatLocalizedNumber, getCurrentLanguage, getLocale, setLanguage } from './i18n';
 
 test('pagination keeps the current page visible when navigating past page five', () => {
   assert.deepEqual(getPageNumbers(1, 10), [1, 2, 3, 4, 5]);
@@ -72,4 +72,11 @@ test('language switching updates the active locale used by presentation helpers'
   setLanguage('ko', false);
   (globalThis as any).localStorage = previousStorage;
   (globalThis as any).document = previousDocument;
+});
+
+test('number formatting does not crash when an API count is temporarily unavailable', () => {
+  assert.equal(formatLocalizedNumber(undefined, 'ko'), '—');
+  assert.equal(formatLocalizedNumber(null, 'en'), '—');
+  assert.equal(formatLocalizedNumber(Number.NaN, 'zh'), '—');
+  assert.equal(formatLocalizedNumber(1234, 'ko'), '1,234');
 });

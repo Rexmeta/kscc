@@ -75,7 +75,7 @@ export function DashboardTab({ activeTab }: { activeTab: string }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <KpiCard
                 label="회원사"
-                value={stats.totalMembers}
+                value={formatLocalizedNumber(stats.totalMembers, language)}
                 detail={`활성 ${formatLocalizedNumber(stats.activeMembers, language)} · 승인 대기 ${formatLocalizedNumber(stats.pendingMembers, language)}`}
                 icon={<Users className="h-8 w-8 text-blue-500" />}
                 onClick={() => openTab('members')}
@@ -83,7 +83,7 @@ export function DashboardTab({ activeTab }: { activeTab: string }) {
               />
               <KpiCard
                 label="콘텐츠"
-                value={stats.totalContent}
+                value={formatLocalizedNumber(stats.totalContent, language)}
                 detail={`미게시 ${formatLocalizedNumber(stats.unpublishedContent, language)} · 뉴스 ${formatLocalizedNumber(stats.totalNews, language)}`}
                 icon={<FileText className="h-8 w-8 text-green-500" />}
                 onClick={() => openTab('articles')}
@@ -91,7 +91,7 @@ export function DashboardTab({ activeTab }: { activeTab: string }) {
               />
               <KpiCard
                 label="행사"
-                value={stats.totalEvents}
+                value={formatLocalizedNumber(stats.totalEvents, language)}
                 detail={`예정 ${formatLocalizedNumber(stats.upcomingEvents, language)} · 미게시 ${formatLocalizedNumber(stats.unpublishedEvents, language)}`}
                 icon={<Calendar className="h-8 w-8 text-purple-500" />}
                 onClick={() => openTab('events')}
@@ -99,7 +99,7 @@ export function DashboardTab({ activeTab }: { activeTab: string }) {
               />
               <KpiCard
                 label="문의"
-                value={stats.totalInquiries}
+                value={formatLocalizedNumber(stats.totalInquiries, language)}
                 detail={`미해결 ${formatLocalizedNumber(stats.unresolvedInquiries, language)}`}
                 icon={<MessageSquare className="h-8 w-8 text-orange-500" />}
                 onClick={() => openTab('inquiries')}
@@ -189,7 +189,7 @@ function KpiCard({
   testId,
 }: {
   label: string;
-  value: number;
+  value: string;
   detail: string;
   icon: React.ReactNode;
   onClick: () => void;
