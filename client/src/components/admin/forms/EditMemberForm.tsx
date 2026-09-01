@@ -17,7 +17,7 @@ interface EditMemberFormProps {
 
 export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
   const [logoUrl, setLogoUrl] = useState(member.logo || '');
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<MemberFormValues>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<MemberFormValues>({
     resolver: zodResolver(memberSchema) as any,
     defaultValues: {
       companyName: member.companyName,
@@ -38,6 +38,7 @@ export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
       contactEmail: member.contactEmail,
     }
   });
+  const isPublic = watch('isPublic');
 
   const updateMutation = useUpdateMember({ memberId: member.id, logoUrl, onSuccess });
 
@@ -140,8 +141,8 @@ export function EditMemberForm({ member, onSuccess }: EditMemberFormProps) {
           <p className="text-xs text-muted-foreground">활성 상태인 회원만 공개됩니다.</p>
         </div>
         <Switch
-          checked={member.isPublic}
-          onCheckedChange={(checked) => setValue('isPublic', checked)}
+          checked={isPublic}
+          onCheckedChange={(checked) => setValue('isPublic', checked, { shouldDirty: true, shouldValidate: true })}
           data-testid="switch-member-public"
         />
       </div>

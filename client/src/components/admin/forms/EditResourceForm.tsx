@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import RichTextEditor from '@/components/RichTextEditor';
 import type { UploadResult } from '@uppy/core';
-import { resourceSchema, type ResourceFormValues } from '../adminSchemas';
+import { RESOURCE_CATEGORY_OPTIONS, resourceSchema, type ResourceFormValues } from '../adminSchemas';
 import { getResourceObjectAclVisibility, getUploadParameters, setObjectAcl } from '../uploadHelpers';
 import type { PostWithTranslations } from '@shared/schema';
 import { useUpdateResourcePost } from '@/hooks/useAdminMutations';
@@ -25,6 +25,7 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
   const [fileUrl, setFileUrl] = useState('');
 
   const translation = resource.translations?.[0];
+  const categoryMeta = resource.meta?.find((m) => m.key === 'resource.category');
   const fileUrlMeta = resource.meta?.find((m) => m.key === 'resource.fileUrl');
   const existingFileUrl: string = fileUrlMeta?.valueText ||
     (typeof fileUrlMeta?.value === 'string' ? fileUrlMeta.value : '') || '';
@@ -35,6 +36,9 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
       title: translation?.title || '',
       excerpt: translation?.excerpt || '',
       content: translation?.content || '',
+      category: categoryMeta?.valueText ||
+        (typeof categoryMeta?.value === 'string' ? categoryMeta.value : '') ||
+        (Array.isArray(resource.tags) ? resource.tags[0] : '') || '',
       tags: (resource.tags as string[]) || [],
       fileUrl: existingFileUrl,
       visibility: resource.visibility === 'members' || resource.visibility === 'premium' ? resource.visibility : 'public',
@@ -44,6 +48,7 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
 
   const isPublished = watch('isPublished');
   const visibility = watch('visibility');
+  const category = watch('category');
 
   const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
@@ -78,6 +83,25 @@ export function EditResourceForm({ resource, onSuccess }: { resource: PostWithTr
           onChange={(value) => setValue('content', value)}
           data-testid="editor-resource-content-edit"
         />
+      </div>
+      <div>
+        <label className="form-label">카테고리</label>
+        <Select
+          value={category}
+          onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}
+        >
+          <SelectTrigger data-testid="select-resource-category-edit">
+            <SelectValue placeholder="카테고리 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {RESOURCE_CATEGORY_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.category && <p className="text-sm text-destructive mt-1">{errors.category.message}</p>}
       </div>
       <div>
         <label className="form-label">첨부파일</label>

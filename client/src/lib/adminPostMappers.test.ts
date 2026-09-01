@@ -27,6 +27,7 @@ test("resource form accepts and maps every administrator visibility choice", () 
   for (const visibility of ["public", "members", "premium"] as const) {
     const formData = resourceSchema.parse({
       title: "Resource",
+      category: "reports",
       visibility,
       isPublished: true,
     });
@@ -34,6 +35,9 @@ test("resource form accepts and maps every administrator visibility choice", () 
 
     assert.equal(mapped.post.postType, "resource");
     assert.equal(mapped.post.visibility, visibility);
+    assert.deepEqual(mapped.post.tags, ["reports"]);
+    assert.equal(mapped.meta[0]?.key, "resource.category");
+    assert.equal(mapped.meta[0]?.valueText, "reports");
   }
 });
 
@@ -80,6 +84,17 @@ function mapResourceToResourcePostForm(input: { visibility: "public" | "members"
     }],
     meta: [{
       id: "meta-id",
+      postId: "post-id",
+      key: "resource.category",
+      valueText: "reports",
+      valueNumber: null,
+      valueBoolean: null,
+      valueTimestamp: null,
+      value: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }, {
+      id: "file-meta-id",
       postId: "post-id",
       key: "resource.fileUrl",
       valueText: input.fileUrl,

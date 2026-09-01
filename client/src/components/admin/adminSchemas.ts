@@ -38,12 +38,20 @@ export const resourceSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요'),
   excerpt: z.string().optional(),
   content: z.string().optional(),
+  category: z.string().min(1, '카테고리를 선택해주세요'),
   tags: z.array(z.string()).optional(),
   fileUrl: z.string().optional(),
   visibility: z.enum(['public', 'members', 'premium']).default('public'),
   isPublished: z.boolean().default(false),
 });
 export type ResourceFormValues = z.infer<typeof resourceSchema>;
+
+export const RESOURCE_CATEGORY_OPTIONS = [
+  { value: 'reports', label: '보고서' },
+  { value: 'forms', label: '양식' },
+  { value: 'presentations', label: '발표자료' },
+  { value: 'guides', label: '가이드북' },
+] as const;
 
 export const memberSchema = z.object({
   companyName: z.string(),

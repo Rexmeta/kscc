@@ -240,7 +240,7 @@ export function useUpdateResourcePost(options: {
           status: formData.isPublished ? 'published' : 'draft',
           publishedAt: formData.isPublished ? new Date() : null,
           visibility: formData.visibility,
-          tags: formData.tags || [],
+          tags: [formData.category],
         },
         translation: {
           locale: 'ko',
@@ -249,7 +249,10 @@ export function useUpdateResourcePost(options: {
           subtitle: formData.excerpt || '',
           content: formData.content || '',
         },
-        meta: finalFileUrl ? [{ key: RESOURCE_META_KEYS.fileUrl, value: finalFileUrl }] : [],
+        meta: [
+          { key: RESOURCE_META_KEYS.category, value: formData.category },
+          ...(finalFileUrl ? [{ key: RESOURCE_META_KEYS.fileUrl, value: finalFileUrl }] : []),
+        ],
       });
     },
     onSuccess: () => {

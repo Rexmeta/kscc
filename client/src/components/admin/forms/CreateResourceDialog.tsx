@@ -15,7 +15,7 @@ import { ObjectUploader } from '@/components/ObjectUploader';
 import RichTextEditor from '@/components/RichTextEditor';
 import type { UploadResult } from '@uppy/core';
 import { type ResourceFormData } from '@/lib/adminPostMappers';
-import { resourceSchema } from '../adminSchemas';
+import { RESOURCE_CATEGORY_OPTIONS, resourceSchema } from '../adminSchemas';
 import { getResourceObjectAclVisibility, getUploadParameters, setObjectAcl } from '../uploadHelpers';
 import { useCreateResourcePost } from '@/hooks/useAdminMutations';
 import { enforceCreatePublishPermission } from '@/lib/adminPermissions';
@@ -38,6 +38,7 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
       title: '',
       excerpt: '',
       content: '',
+      category: '',
       tags: [],
       fileUrl: '',
       visibility: 'public',
@@ -47,6 +48,7 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
 
   const isPublished = watch('isPublished');
   const visibility = watch('visibility');
+  const category = watch('category');
 
   const handleFileUpload = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
@@ -105,6 +107,26 @@ export function CreateResourceDialog({ onSuccess, open, onOpenChange }: CreateRe
               onChange={(value) => setValue('content', value)}
               data-testid="editor-resource-content"
             />
+          </div>
+
+          <div>
+            <label className="form-label">카테고리</label>
+            <Select
+              value={category}
+              onValueChange={(value) => setValue('category', value, { shouldValidate: true, shouldDirty: true })}
+            >
+              <SelectTrigger data-testid="select-resource-category">
+                <SelectValue placeholder="카테고리 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {RESOURCE_CATEGORY_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.category && <p className="text-sm text-destructive mt-1">{errors.category.message}</p>}
           </div>
 
           <div>

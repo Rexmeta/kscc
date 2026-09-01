@@ -281,6 +281,7 @@ export interface ResourceFormData {
   title: string;
   excerpt: string;
   content?: string;
+  category: string;
   tags?: string[];
   fileUrl?: string;
   visibility: 'public' | 'members' | 'premium';
@@ -303,7 +304,7 @@ export function mapResourceFormToPost(formData: ResourceFormData, _authorId: str
       status: formData.isPublished ? 'published' : 'draft',
       visibility: formData.visibility,
       isFeatured: false,
-      tags: formData.tags || [],
+      tags: [formData.category],
       publishedAt: formData.isPublished ? new Date() : null,
     },
     translation: {
@@ -312,25 +313,39 @@ export function mapResourceFormToPost(formData: ResourceFormData, _authorId: str
       excerpt: formData.excerpt,
       content: formData.content || '',
     },
-    meta: finalFileUrl ? [{
-      key: 'resource.fileUrl',
-      valueText: finalFileUrl,
-      valueNumber: null,
-      valueBoolean: null,
-      valueTimestamp: null,
-      value: null,
-    }] : [],
+    meta: [
+      {
+        key: RESOURCE_META_KEYS.category,
+        valueText: formData.category,
+        valueNumber: null,
+        valueBoolean: null,
+        valueTimestamp: null,
+        value: null,
+      },
+      ...(finalFileUrl ? [{
+        key: RESOURCE_META_KEYS.fileUrl,
+        valueText: finalFileUrl,
+        valueNumber: null,
+        valueBoolean: null,
+        valueTimestamp: null,
+        value: null,
+      }] : []),
+    ],
   };
 }
 
 export function mapPostToResourceForm(post: PostWithTranslations): ResourceFormData {
   const translation = post.translations?.find(t => t.locale === 'ko') || post.translations?.[0];
+  const categoryMeta = post.meta?.find(meta => meta.key === RESOURCE_META_KEYS.category);
   const fileUrlMeta = post.meta?.find(meta => meta.key === 'resource.fileUrl');
   
   return {
     title: translation?.title || post.slug,
     excerpt: translation?.excerpt || '',
     content: translation?.content || '',
+    category: categoryMeta?.valueText ||
+      (typeof categoryMeta?.value === 'string' ? categoryMeta.value : '') ||
+      (Array.isArray(post.tags) ? post.tags[0] : '') || '',
     tags: (Array.isArray(post.tags) ? post.tags : []) || [],
     fileUrl: fileUrlMeta?.valueText || (typeof fileUrlMeta?.value === 'string' ? fileUrlMeta.value : ''),
     visibility: post.visibility === 'members' || post.visibility === 'premium' ? post.visibility : 'public',
