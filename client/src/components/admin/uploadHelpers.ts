@@ -46,7 +46,15 @@ export const getUploadParameters = async (_file?: { type?: string }) => {
     },
     body: JSON.stringify({}),
   });
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof data?.message === 'string'
+      ? data.message
+      : typeof data?.error === 'string'
+        ? data.error
+        : `파일 업로드 권한을 확인하지 못했습니다. (${response.status})`;
+    throw new Error(message);
+  }
   window.__lastUploadObjectPath = data.objectPath;
   window.__lastUploadIntent = data.uploadIntent;
   return {

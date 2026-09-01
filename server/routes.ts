@@ -277,6 +277,15 @@ function requireAdminOrPermission(permission: string) {
   };
 }
 
+export function requireAdminOrAnyPermission(...permissionKeys: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === 'admin') {
+      return next();
+    }
+    return requireAnyPermission(...permissionKeys)(req, res, next);
+  };
+}
+
 function requireAdminOrOperatorPermission(permission: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.user?.role === 'admin') {
@@ -1561,7 +1570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/objects/upload",
     authenticateToken,
-    requireAnyPermission("news.create", "event.create", "resource.upload"),
+    requireAdminOrAnyPermission("news.create", "event.create", "resource.upload"),
     async (req, res) => {
     try {
       const contentType = z.object({
@@ -1592,7 +1601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put(
     "/api/images",
     authenticateToken,
-    requireAnyPermission("news.create", "event.create", "resource.upload"),
+    requireAdminOrAnyPermission("news.create", "event.create", "resource.upload"),
     async (req, res) => {
     const aclPayloadSchema = z.object({
       imageURL: z.string().min(1),
