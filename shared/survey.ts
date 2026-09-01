@@ -20,6 +20,7 @@ export const surveySettingsSchema = z.object({
   title: z.string().trim().max(200, "설문 제목은 200자 이내로 입력해주세요."),
   description: z.string().trim().max(1_000, "설문 소개는 1,000자 이내로 입력해주세요."),
   externalUrl: z.union([httpsUrlSchema, z.literal("")]),
+  displayOrder: z.number().int().min(0, "노출 순서는 0 이상이어야 합니다.").max(10_000, "노출 순서는 10,000 이하로 입력해주세요.").default(0),
   isActive: z.boolean(),
   startsAt: optionalSurveyDate,
   endsAt: optionalSurveyDate,

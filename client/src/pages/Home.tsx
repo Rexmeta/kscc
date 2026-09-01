@@ -78,13 +78,13 @@ export default function Home() {
     },
   });
 
-  const { data: survey } = useQuery<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'> | null>({
-    queryKey: ['/api/survey'],
+  const { data: surveysData } = useQuery<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>({
+    queryKey: ['/api/surveys'],
     queryFn: async ({ signal }) => {
       try {
-        return await fetchJson<Pick<SurveySettings, 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>('/api/survey', { signal });
+        return await fetchJson<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>('/api/surveys', { signal });
       } catch (error: any) {
-        if (error?.status === 401 || error?.status === 403) return null;
+        if (error?.status === 401 || error?.status === 403) return [];
         throw error;
       }
     },
@@ -101,6 +101,7 @@ export default function Home() {
   });
   const news = newsData?.posts || [];
   const partners = partnersData || [];
+  const surveys = surveysData || [];
   const memberCount = membersData?.total || 0;
   const latestNews = news[0];
   const latestNewsTranslation = latestNews ? getTranslationSafe(latestNews, language) : null;
@@ -160,39 +161,6 @@ export default function Home() {
                 </Button>
               </Link>
             </div>
-
-            {survey?.isActive && survey.externalUrl && (
-              <Card className="mx-auto mt-8 max-w-3xl border-white/20 bg-white/10 text-left text-white shadow-2xl backdrop-blur-lg">
-                <CardContent className="flex flex-col items-start gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 rounded-full bg-white/15 p-3">
-                      <ClipboardList className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold">{survey.title}</h2>
-                      <p className="mt-2 text-sm leading-6 text-white/80">{survey.description}</p>
-                      {(survey.startsAt || survey.endsAt) && (
-                        <p className="mt-2 text-xs text-white/70">
-                          설문 기간: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <Button asChild size="lg" className="btn-accent shrink-0">
-                    <a
-                      href={survey.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-testid="button-home-survey"
-                      onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_card' })}
-                    >
-                      설문하기
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
 
             {latestNews && (
               <div className="mt-12 rounded-2xl border border-white/15 bg-white/5 p-6 text-left shadow-2xl backdrop-blur-lg">
@@ -309,6 +277,50 @@ export default function Home() {
           </QueryState>
         </div>
       </section>
+
+      {/* Active Member Surveys */}
+      {isAuthenticated && surveys.length > 0 && (
+        <section className="bg-background dark:bg-background py-16" data-testid="home-surveys-section">
+          <div className="container">
+            <div className="mb-8 text-center">
+              <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.surveys.title')}</h2>
+              <p className="text-muted-foreground">{t('home.surveys.subtitle')}</p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {surveys.map((survey) => (
+                <Card key={survey.id} className="card-hover h-full">
+                  <CardContent className="flex h-full flex-col p-6">
+                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <ClipboardList className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground">{survey.title}</h3>
+                    <p className="mt-3 flex-1 text-muted-foreground">{survey.description}</p>
+                    {(survey.startsAt || survey.endsAt) && (
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        {t('home.surveys.period')}: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
+                      </p>
+                    )}
+                    {survey.externalUrl && (
+                      <Button asChild className="btn-accent mt-6 w-full">
+                        <a
+                          href={survey.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid={`button-home-survey-${survey.id}`}
+                          onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_section' })}
+                        >
+                          {t('home.surveys.participate')}
+                          <ArrowRight className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Partners Grid */}
       <section className="bg-background dark:bg-background py-16">

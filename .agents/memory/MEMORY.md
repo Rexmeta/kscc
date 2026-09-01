@@ -13,3 +13,4 @@
 - [Frontend query state](frontend-query-state.md) — failed client requests must remain distinguishable from valid empty collections and offer localized retry.
 - [Survey test isolation](survey-test-isolation.md) — destructive survey fixtures must not reuse shared rows, and ACL setup must succeed before admin-route assertions.
 - [Redacted operational telemetry](telemetry-contract.md) — correlate structured events through an allow-list; never serialize request, auth, message, or provider data.
+- [Shared database test fixtures](shared-db-test-fixtures.md) — integration tests that mutate shared rows must own uniquely identifiable fixtures and clean them up in finally blocks.

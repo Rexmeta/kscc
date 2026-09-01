@@ -638,6 +638,7 @@ test("survey settings validate external links and enforce member visibility", as
     .delete(surveySettingsHistory)
     .where(eq(surveySettingsHistory.surveySettingsId, "default"));
   await db.delete(surveySettings).where(eq(surveySettings.id, "default"));
+  let createdSurveyId: string | undefined;
   const admin = await storage.createUser({
     email: `survey-admin-${suffix}@example.test`,
     password: "test-password",
@@ -701,6 +702,7 @@ test("survey settings validate external links and enforce member visibility", as
       title: "회원 의견 조사",
       description: "협회 서비스 개선을 위한 설문입니다.",
       externalUrl: "https://forms.example.com/survey",
+      displayOrder: 10,
       isActive: true,
     };
 
@@ -724,12 +726,39 @@ test("survey settings validate external links and enforce member visibility", as
 
     const memberSurvey = await request("/api/survey", { token: memberToken });
     assert.equal(memberSurvey.status, 200);
-    assert.deepEqual(memberSurvey.body, activeSettings);
-    assert.equal("updatedBy" in (memberSurvey.body as Record<string, unknown>), false);
+    assert.equal(Array.isArray(memberSurvey.body), true);
+    assert.deepEqual(memberSurvey.body, [{
+      id: "default",
+      title: activeSettings.title,
+      description: activeSettings.description,
+      externalUrl: activeSettings.externalUrl,
+      isActive: true,
+    }]);
+    assert.equal("updatedBy" in (memberSurvey.body[0] as Record<string, unknown>), false);
 
     const adminSurvey = await request("/api/admin/survey", { token: adminToken });
     assert.equal(adminSurvey.status, 200);
-    assert.equal(adminSurvey.body.updatedBy, operator.id);
+    assert.equal(adminSurvey.body.surveys.length, 1);
+    assert.equal(adminSurvey.body.surveys[0].updatedBy, operator.id);
+    assert.equal(adminSurvey.body.surveys[0].displayOrder, activeSettings.displayOrder);
+
+    const secondSurvey = await request("/api/admin/survey", {
+      token: adminToken,
+      method: "POST",
+      body: {
+        title: "두 번째 설문",
+        description: "추가 의견을 받습니다.",
+        externalUrl: "https://forms.example.com/second",
+        displayOrder: 1,
+        isActive: true,
+      },
+    });
+    assert.equal(secondSurvey.status, 201);
+    const secondSurveyId = secondSurvey.body.id;
+    createdSurveyId = secondSurveyId;
+    assert.notEqual(secondSurveyId, "default");
+    const orderedSurveys = await request("/api/survey", { token: memberToken });
+    assert.deepEqual(orderedSurveys.body.map((survey: { id: string }) => survey.id), [secondSurveyId, "default"]);
 
     const futureStart = new Date(Date.now() + 60_000);
     const futureEnd = new Date(Date.now() + 120_000);
@@ -743,7 +772,7 @@ test("survey settings validate external links and enforce member visibility", as
       },
     });
     assert.equal(futureUpdate.status, 200);
-    assert.equal((await request("/api/survey", { token: memberToken })).body, null);
+    assert.deepEqual((await request("/api/survey", { token: memberToken })).body, [orderedSurveys.body[0]]);
 
     const activeStart = new Date(Date.now() - 60_000);
     const activeEnd = new Date(Date.now() + 60_000);
@@ -759,9 +788,10 @@ test("survey settings validate external links and enforce member visibility", as
     assert.equal(scheduledUpdate.status, 200);
     const scheduledSurvey = await request("/api/survey", { token: memberToken });
     assert.equal(scheduledSurvey.status, 200);
-    assert.equal(scheduledSurvey.body.startsAt, activeStart.toISOString());
-    assert.equal(scheduledSurvey.body.endsAt, activeEnd.toISOString());
-    assert.equal("updatedBy" in (scheduledSurvey.body as Record<string, unknown>), false);
+    const scheduledDefault = scheduledSurvey.body.find((survey: { id: string }) => survey.id === "default");
+    assert.equal(scheduledDefault.startsAt, activeStart.toISOString());
+    assert.equal(scheduledDefault.endsAt, activeEnd.toISOString());
+    assert.equal("updatedBy" in (scheduledDefault as Record<string, unknown>), false);
 
     const endedUpdate = await request("/api/admin/survey", {
       token: adminToken,
@@ -773,7 +803,7 @@ test("survey settings validate external links and enforce member visibility", as
       },
     });
     assert.equal(endedUpdate.status, 200);
-    assert.equal((await request("/api/survey", { token: memberToken })).body, null);
+    assert.deepEqual((await request("/api/survey", { token: memberToken })).body, [orderedSurveys.body[0]]);
 
     const periodlessUpdate = await request("/api/admin/survey", {
       token: operatorToken,
@@ -781,9 +811,17 @@ test("survey settings validate external links and enforce member visibility", as
       body: { ...activeSettings, startsAt: null, endsAt: null },
     });
     assert.equal(periodlessUpdate.status, 200);
+    const periodlessSurveys = (await request("/api/survey", { token: memberToken })).body;
+    assert.equal(periodlessSurveys.length, 2);
     assert.deepEqual(
-      (await request("/api/survey", { token: memberToken })).body,
-      activeSettings,
+      periodlessSurveys.find((survey: { id: string }) => survey.id === "default"),
+      {
+        id: "default",
+        title: activeSettings.title,
+        description: activeSettings.description,
+        externalUrl: activeSettings.externalUrl,
+        isActive: true,
+      },
     );
 
     const historyBeforeNoop = await request("/api/admin/survey/history?limit=2&page=1", {
@@ -818,6 +856,25 @@ test("survey settings validate external links and enforce member visibility", as
       historyAfterNoop.body.history.at(-1).title,
       activeSettings.title,
     );
+
+    const secondHistory = await request(
+      `/api/admin/survey/history?surveyId=${secondSurveyId}&limit=50&page=1`,
+      { token: adminToken },
+    );
+    assert.equal(secondHistory.status, 200);
+    assert.equal(secondHistory.body.total, 1);
+    assert.equal(secondHistory.body.history[0].title, "두 번째 설문");
+
+    const deactivatedSecond = await request(`/api/admin/survey/${secondSurveyId}`, {
+      token: operatorToken,
+      method: "DELETE",
+    });
+    assert.equal(deactivatedSecond.status, 200);
+    const remainingSurvey = await request("/api/survey", { token: memberToken });
+    assert.equal(remainingSurvey.body.length, 1);
+    assert.equal(remainingSurvey.body[0].id, "default");
+    const adminAfterDeactivate = await request("/api/admin/survey?page=1&limit=50", { token: adminToken });
+    assert.equal(adminAfterDeactivate.body.surveys.find((survey: { id: string }) => survey.id === secondSurveyId).isActive, false);
 
     const snapshotVersion = historyBeforeNoop.body.snapshotVersion;
     const newVersion = await request("/api/admin/survey", {
@@ -856,6 +913,11 @@ test("survey settings validate external links and enforce member visibility", as
     await new Promise<void>((resolve, reject) =>
       server.close((error) => error ? reject(error) : resolve()),
     );
+    if (createdSurveyId) {
+      await db.delete(surveySettingsHistory)
+        .where(eq(surveySettingsHistory.surveySettingsId, createdSurveyId));
+      await db.delete(surveySettings).where(eq(surveySettings.id, createdSurveyId));
+    }
     await db
       .delete(surveySettingsHistory)
       .where(eq(surveySettingsHistory.surveySettingsId, "default"));

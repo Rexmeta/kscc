@@ -14,6 +14,7 @@ import {
   type OrganizationMember, type InsertOrganizationMember,
    type SurveySettings, type SurveySettingsInput, type SurveySettingsHistory,
 } from "@shared/schema";
+import { randomUUID } from "node:crypto";
 import { db } from "./db";
 import { eq, desc, asc, and, or, like, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -279,9 +280,18 @@ export interface IStorage {
   // Survey settings
 
   getSurveySettings(): Promise<SurveySettings | undefined>;
-
+  getSurveySettingsById(id: string): Promise<SurveySettings | undefined>;
+  getSurveySettingsList(filters?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ surveys: SurveySettings[]; total: number }>;
+  getActiveSurveySettings(now?: Date, limit?: number): Promise<SurveySettings[]>;
+  createSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
+  updateSurveySettings(id: string, settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings | undefined>;
+  deactivateSurveySettings(id: string, updatedBy: string): Promise<SurveySettings | undefined>;
   upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
   getSurveySettingsHistory(filters?: {
+    surveySettingsId?: string;
     limit?: number;
     offset?: number;
     snapshotVersion?: number;
@@ -1622,26 +1632,101 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSurveySettings(): Promise<SurveySettings | undefined> {
+    return this.getSurveySettingsById("default");
+  }
+
+  async getSurveySettingsById(id: string): Promise<SurveySettings | undefined> {
     const [settings] = await db
       .select()
       .from(surveySettings)
-      .where(eq(surveySettings.id, "default"))
+      .where(eq(surveySettings.id, id))
       .limit(1);
     return settings || undefined;
   }
 
+  async getSurveySettingsList(filters: {
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ surveys: SurveySettings[]; total: number }> {
+    const limit = boundedPageSize(filters.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters.offset);
+    const [totalResult, surveys] = await Promise.all([
+      db.select({ count: count() }).from(surveySettings),
+      db
+        .select()
+        .from(surveySettings)
+        .orderBy(asc(surveySettings.displayOrder), asc(surveySettings.createdAt), asc(surveySettings.id))
+        .limit(limit)
+        .offset(offset),
+    ]);
+    return {
+      surveys,
+      total: Number(totalResult[0]?.count ?? 0),
+    };
+  }
+
+  async getActiveSurveySettings(now = new Date(), limit = MAX_ADMIN_COLLECTION_PAGE_SIZE): Promise<SurveySettings[]> {
+    return db
+      .select()
+      .from(surveySettings)
+      .where(and(
+        eq(surveySettings.isActive, true),
+        isNotNull(surveySettings.externalUrl),
+        or(isNull(surveySettings.startsAt), lte(surveySettings.startsAt, now)),
+        or(isNull(surveySettings.endsAt), gt(surveySettings.endsAt, now)),
+      ))
+      .orderBy(asc(surveySettings.displayOrder), asc(surveySettings.createdAt), asc(surveySettings.id))
+      .limit(boundedPageSize(limit, MAX_ADMIN_COLLECTION_PAGE_SIZE));
+  }
+
+  async createSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings> {
+    return this.saveSurveySettings(randomUUID(), settings, updatedBy, true) as Promise<SurveySettings>;
+  }
+
+  async updateSurveySettings(
+    id: string,
+    settings: SurveySettingsInput,
+    updatedBy: string,
+  ): Promise<SurveySettings | undefined> {
+    return this.saveSurveySettings(id, settings, updatedBy, false);
+  }
+
+  async deactivateSurveySettings(id: string, updatedBy: string): Promise<SurveySettings | undefined> {
+    const current = await this.getSurveySettingsById(id);
+    if (!current) return undefined;
+    return this.updateSurveySettings(id, {
+      title: current.title,
+      description: current.description,
+      externalUrl: current.externalUrl || "",
+      displayOrder: current.displayOrder,
+      isActive: false,
+      startsAt: current.startsAt,
+      endsAt: current.endsAt,
+    }, updatedBy);
+  }
+
   async upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings> {
+    return this.saveSurveySettings("default", settings, updatedBy, true) as Promise<SurveySettings>;
+  }
+
+  private async saveSurveySettings(
+    id: string,
+    settings: SurveySettingsInput,
+    updatedBy: string,
+    createIfMissing: boolean,
+  ): Promise<SurveySettings | undefined> {
     return await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('survey-settings:default'))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`survey-settings:${id}`}))`);
       const [current] = await tx
         .select()
         .from(surveySettings)
-        .where(eq(surveySettings.id, "default"))
+        .where(eq(surveySettings.id, id))
         .limit(1);
       const nextValues = {
         title: settings.title,
         description: settings.description,
         externalUrl: settings.externalUrl || null,
+        displayOrder: settings.displayOrder,
         isActive: settings.isActive,
         startsAt: settings.startsAt,
         endsAt: settings.endsAt,
@@ -1656,10 +1741,11 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (!current) {
+        if (!createIfMissing) return undefined;
         const [created] = await tx
           .insert(surveySettings)
           .values({
-            id: "default",
+            id,
             ...nextValues,
             updatedBy,
           })
@@ -1694,6 +1780,7 @@ export class DatabaseStorage implements IStorage {
           title: current.title,
           description: current.description,
           externalUrl: current.externalUrl,
+          displayOrder: current.displayOrder,
           isActive: current.isActive,
           startsAt: current.startsAt,
           endsAt: current.endsAt,
@@ -1709,6 +1796,7 @@ export class DatabaseStorage implements IStorage {
         current.title !== nextValues.title ||
         current.description !== nextValues.description ||
         current.externalUrl !== nextValues.externalUrl ||
+        current.displayOrder !== nextValues.displayOrder ||
         current.isActive !== nextValues.isActive ||
         !datesEqual(current.startsAt, nextValues.startsAt) ||
         !datesEqual(current.endsAt, nextValues.endsAt);
@@ -1741,16 +1829,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSurveySettingsHistory(filters: {
+    surveySettingsId?: string;
     limit?: number;
     offset?: number;
     snapshotVersion?: number;
   } = {}): Promise<{ history: SurveySettingsHistoryEntry[]; total: number; snapshotVersion: number }> {
     const limit = boundedPageSize(filters.limit, 50);
     const offset = boundedOffset(filters.offset);
+    const surveySettingsId = filters.surveySettingsId || "default";
     const [latest] = await db
       .select({ version: surveySettingsHistory.version })
       .from(surveySettingsHistory)
-      .where(eq(surveySettingsHistory.surveySettingsId, "default"))
+      .where(eq(surveySettingsHistory.surveySettingsId, surveySettingsId))
       .orderBy(desc(surveySettingsHistory.version))
       .limit(1);
     const snapshotVersion = Math.min(
@@ -1758,7 +1848,7 @@ export class DatabaseStorage implements IStorage {
       latest?.version ?? 0,
     );
     const snapshotCondition = and(
-      eq(surveySettingsHistory.surveySettingsId, "default"),
+      eq(surveySettingsHistory.surveySettingsId, surveySettingsId),
       lte(surveySettingsHistory.version, snapshotVersion),
     );
     const [totalResult, history] = await Promise.all([
@@ -1774,6 +1864,7 @@ export class DatabaseStorage implements IStorage {
           title: surveySettingsHistory.title,
           description: surveySettingsHistory.description,
           externalUrl: surveySettingsHistory.externalUrl,
+          displayOrder: surveySettingsHistory.displayOrder,
           isActive: surveySettingsHistory.isActive,
           startsAt: surveySettingsHistory.startsAt,
           endsAt: surveySettingsHistory.endsAt,

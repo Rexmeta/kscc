@@ -113,8 +113,10 @@ const inquiryReplyRequestSchema = z.object({
 const surveyHistoryQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+  surveyId: z.string().trim().min(1).max(100).optional(),
   snapshotVersion: z.coerce.number().int().min(1).optional(),
 }).strict();
+const surveyIdSchema = z.string().trim().min(1).max(100);
 const inquiryCreateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -427,20 +429,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const toPublicSurvey = (settings: import("@shared/schema").SurveySettings) => ({
+    id: settings.id,
+    title: settings.title,
+    description: settings.description,
+    externalUrl: settings.externalUrl,
+    isActive: true,
+    ...(settings.startsAt ? { startsAt: settings.startsAt } : {}),
+    ...(settings.endsAt ? { endsAt: settings.endsAt } : {}),
+  });
+
   app.get("/api/survey", authenticateToken, async (_req, res) => {
     try {
-      const settings = await storage.getSurveySettings();
-      if (!settings || !settings.externalUrl || !isSurveyVisible(settings, new Date())) {
-        return res.json(null);
-      }
-      res.json({
-        title: settings.title,
-        description: settings.description,
-        externalUrl: settings.externalUrl,
-        isActive: true,
-        ...(settings.startsAt ? { startsAt: settings.startsAt } : {}),
-        ...(settings.endsAt ? { endsAt: settings.endsAt } : {}),
-      });
+      const now = new Date();
+      const surveys = await storage.getActiveSurveySettings(now);
+      res.json(surveys
+        .filter((settings) => settings.externalUrl && isSurveyVisible(settings, now))
+        .map(toPublicSurvey));
     } catch (error) {
       emitOperationalEvent("survey.operation", "error", {
         correlationId: getCorrelationId(_req),
@@ -451,18 +456,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/survey", authenticateToken, requireAdminOrPermission("survey.manage"), async (_req, res) => {
+  // Plural alias makes the collection contract explicit while retaining the
+  // original endpoint path for existing authenticated clients.
+  app.get("/api/surveys", authenticateToken, async (req, res) => {
     try {
-      const settings = await storage.getSurveySettings();
-      res.json(settings || {
-        title: "",
-        description: "",
-        externalUrl: "",
-        isActive: false,
-        startsAt: null,
-        endsAt: null,
+      const now = new Date();
+      const surveys = await storage.getActiveSurveySettings(now);
+      res.json(surveys
+        .filter((settings) => settings.externalUrl && isSurveyVisible(settings, now))
+        .map(toPublicSurvey));
+    } catch (error) {
+      emitOperationalEvent("survey.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "read",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get(["/api/admin/survey", "/api/admin/surveys"], authenticateToken, requireAdminOrPermission("survey.manage"), async (_req, res) => {
+    try {
+      const { page, limit } = paginatedCollectionQuerySchema.parse(_req.query);
+      const result = await storage.getSurveySettingsList({
+        limit,
+        offset: (page - 1) * limit,
+      });
+      res.json({
+        surveys: result.surveys,
+        total: result.total,
+        page,
+        totalPages: Math.ceil(result.total / limit),
       });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
       emitOperationalEvent("survey.operation", "error", {
         correlationId: getCorrelationId(_req),
         operation: "admin_read",
@@ -474,9 +503,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/admin/survey", authenticateToken, requireAdminOrPermission("survey.manage"), async (req, res) => {
     try {
-      const settings = surveySettingsSchema.parse(req.body);
+      const settings = surveySettingsSchema.parse({ displayOrder: 0, ...req.body });
       const savedSettings = await storage.upsertSurveySettings(settings, req.user!.id);
-      const history = await storage.getSurveySettingsHistory({ limit: 1 });
+      const history = await storage.getSurveySettingsHistory({ surveySettingsId: savedSettings.id, limit: 1 });
       res.json({
         ...savedSettings,
         historySnapshotVersion: history.snapshotVersion,
@@ -494,14 +523,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get(
-    "/api/admin/survey/history",
+  app.post(["/api/admin/survey", "/api/admin/surveys"], authenticateToken, requireAdminOrPermission("survey.manage"), async (req, res) => {
+    try {
+      const settings = surveySettingsSchema.parse({ displayOrder: 0, ...req.body });
+      const created = await storage.createSurveySettings(settings, req.user!.id);
+      const history = await storage.getSurveySettingsHistory({
+        surveySettingsId: created.id,
+        limit: 1,
+      });
+      res.status(201).json({ ...created, historySnapshotVersion: history.snapshotVersion });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      emitOperationalEvent("survey.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "create",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put(
+    ["/api/admin/survey/:surveyId", "/api/admin/surveys/:surveyId"],
     authenticateToken,
     requireAdminOrPermission("survey.manage"),
     async (req, res) => {
       try {
-        const { page, limit, snapshotVersion } = surveyHistoryQuerySchema.parse(req.query);
+        const surveyId = surveyIdSchema.parse(req.params.surveyId);
+        const settings = surveySettingsSchema.parse({ displayOrder: 0, ...req.body });
+        const updated = await storage.updateSurveySettings(surveyId, settings, req.user!.id);
+        if (!updated) return res.status(404).json({ message: "Survey not found" });
+        const history = await storage.getSurveySettingsHistory({
+          surveySettingsId: updated.id,
+          limit: 1,
+        });
+        res.json({ ...updated, historySnapshotVersion: history.snapshotVersion });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        emitOperationalEvent("survey.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "update",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Internal server error" });
+      }
+    },
+  );
+
+  app.delete(
+    ["/api/admin/survey/:surveyId", "/api/admin/surveys/:surveyId"],
+    authenticateToken,
+    requireAdminOrPermission("survey.manage"),
+    async (req, res) => {
+      try {
+        const surveyId = surveyIdSchema.parse(req.params.surveyId);
+        const deactivated = await storage.deactivateSurveySettings(surveyId, req.user!.id);
+        if (!deactivated) return res.status(404).json({ message: "Survey not found" });
+        res.json(deactivated);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0].message });
+        }
+        emitOperationalEvent("survey.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "deactivate",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Internal server error" });
+      }
+    },
+  );
+
+  app.get(
+    ["/api/admin/survey/history", "/api/admin/surveys/history"],
+    authenticateToken,
+    requireAdminOrPermission("survey.manage"),
+    async (req, res) => {
+      try {
+        const { page, limit, surveyId, snapshotVersion } = surveyHistoryQuerySchema.parse(req.query);
+        const surveySettingsId = surveyIdSchema.parse(surveyId || "default");
         const result = await storage.getSurveySettingsHistory({
+          surveySettingsId,
           limit,
           offset: (page - 1) * limit,
           snapshotVersion,

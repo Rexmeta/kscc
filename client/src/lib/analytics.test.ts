@@ -11,7 +11,7 @@ afterEach(() => {
 test("tracking is a no-op when analytics is unavailable", () => {
   globalThis.window = {} as Window & typeof globalThis;
 
-  assert.doesNotThrow(() => trackEvent("survey_link_clicked", { location: "home_survey_card" }));
+  assert.doesNotThrow(() => trackEvent("survey_link_clicked", { location: "home_survey_section" }));
 });
 
 test("tracking forwards only the provided event data", () => {
@@ -22,12 +22,12 @@ test("tracking forwards only the provided event data", () => {
     },
   } as Window & typeof globalThis;
 
-  trackEvent("survey_link_clicked", { location: "home_survey_card" });
+  trackEvent("survey_link_clicked", { location: "home_survey_section" });
 
   assert.deepEqual(calls, [
     {
       name: "survey_link_clicked",
-      data: { location: "home_survey_card" },
+      data: { location: "home_survey_section" },
     },
   ]);
 });
@@ -41,5 +41,5 @@ test("tracking errors do not interrupt the user interaction", () => {
     },
   } as Window & typeof globalThis;
 
-  assert.doesNotThrow(() => trackEvent("survey_link_clicked", { location: "home_survey_card" }));
+  assert.doesNotThrow(() => trackEvent("survey_link_clicked", { location: "home_survey_section" }));
 });

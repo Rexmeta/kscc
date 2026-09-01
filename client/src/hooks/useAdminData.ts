@@ -85,12 +85,14 @@ export function useAdminInquiries(activeTab: string) {
   });
 }
 
-export function useAdminSurvey(activeTab: string) {
+export function useAdminSurvey(activeTab: string, page = 1) {
   const { isAdmin, hasPermission } = useAuth();
   const canManage = isAdmin || hasPermission('survey.manage');
-  return useQuery<SurveySettings>({
-    queryKey: ['/api/admin/survey'],
-    queryFn: () => fetchJson<SurveySettings>('/api/admin/survey'),
+  return useQuery<{ surveys: SurveySettings[]; total: number; page: number; totalPages: number }>({
+    queryKey: ['/api/admin/survey', { page, limit: 50 }],
+    queryFn: () => fetchJson<{ surveys: SurveySettings[]; total: number; page: number; totalPages: number }>(
+      `/api/admin/survey?page=${page}&limit=50`,
+    ),
     enabled: canManage && activeTab === 'survey',
   });
 }
@@ -169,6 +171,7 @@ export function useAdminDashboard(activeTab: string) {
 
 export function useAdminSurveyHistory(
   activeTab: string,
+  surveyId: string | undefined,
   page: number,
   limit = 10,
   snapshotVersion?: number,
@@ -176,12 +179,12 @@ export function useAdminSurveyHistory(
   const { isAdmin, hasPermission } = useAuth();
   const canManage = isAdmin || hasPermission('survey.manage');
   return useQuery<SurveyHistoryResponse>({
-    queryKey: ['/api/admin/survey/history', { page, limit, snapshotVersion }],
+    queryKey: ['/api/admin/survey/history', { surveyId, page, limit, snapshotVersion }],
     queryFn: () => fetchJson<SurveyHistoryResponse>(
       `/api/admin/survey/history?page=${page}&limit=${limit}${
         snapshotVersion ? `&snapshotVersion=${snapshotVersion}` : ''
-      }`,
+      }${surveyId ? `&surveyId=${encodeURIComponent(surveyId)}` : ''}`,
     ),
-    enabled: canManage && activeTab === 'survey',
+    enabled: canManage && activeTab === 'survey' && Boolean(surveyId),
   });
 }

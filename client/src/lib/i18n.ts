@@ -234,6 +234,10 @@ export interface TranslationKeys {
   'home.events.empty': string;
   'home.news.subtitle': string;
   'home.news.empty': string;
+  'home.surveys.title': string;
+  'home.surveys.subtitle': string;
+  'home.surveys.period': string;
+  'home.surveys.participate': string;
   'home.partners.title': string;
   'home.partners.subtitle': string;
   'home.partners.empty': string;
@@ -499,6 +503,10 @@ const translations: Record<Language, TranslationKeys> = {
     'home.events.empty': '현재 예정된 행사가 없습니다.',
     'home.news.subtitle': '총상회의 주요 소식과 활동을 확인하세요',
     'home.news.empty': '최근 뉴스가 없습니다.',
+    'home.surveys.title': '회원 설문',
+    'home.surveys.subtitle': '회원 여러분의 소중한 의견을 들려주세요',
+    'home.surveys.period': '설문 기간',
+    'home.surveys.participate': '설문 참여하기',
     'home.partners.title': '협력 파트너',
     'home.partners.subtitle': '함께 성장하는 회원사 및 협력 파트너',
     'home.partners.empty': '협력 파트너를 준비 중입니다.',
@@ -762,6 +770,10 @@ const translations: Record<Language, TranslationKeys> = {
     'home.events.empty': 'No upcoming events at this time.',
     'home.news.subtitle': 'Stay updated with the Chamber\'s latest news and activities',
     'home.news.empty': 'No recent news available.',
+    'home.surveys.title': 'Member Surveys',
+    'home.surveys.subtitle': 'Share your valuable feedback with us',
+    'home.surveys.period': 'Survey period',
+    'home.surveys.participate': 'Take the survey',
     'home.partners.title': 'Partner Members',
     'home.partners.subtitle': 'Member companies and partners growing together',
     'home.partners.empty': 'Partner information coming soon.',
@@ -1025,6 +1037,10 @@ const translations: Record<Language, TranslationKeys> = {
     'home.events.empty': '目前没有预定的活动。',
     'home.news.subtitle': '了解商会的最新消息和活动',
     'home.news.empty': '暂无最新新闻。',
+    'home.surveys.title': '会员调查',
+    'home.surveys.subtitle': '请分享您宝贵的意见',
+    'home.surveys.period': '调查时间',
+    'home.surveys.participate': '参加调查',
     'home.partners.title': '合作伙伴',
     'home.partners.subtitle': '共同成长的会员企业和合作伙伴',
     'home.partners.empty': '合作伙伴信息即将上线。',
