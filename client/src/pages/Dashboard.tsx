@@ -95,6 +95,7 @@ export default function Dashboard() {
     'event.read',
     'resource.read',
     'inquiry.read',
+    'organization.executives.read',
   ]);
 
   const { data: registrations, isLoading: registrationsLoading, isError: registrationsError, refetch: refetchRegistrations } = useQuery<UserRegistrationWithEvent[]>({

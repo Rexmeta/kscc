@@ -104,14 +104,12 @@ export type SurveyHistoryResponse = {
 export function useAdminOrganizationMembers(
   categoryFilter: string,
   activeTab: string,
-  executivesOnly = false,
   page = 1,
 ) {
   const { user, isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
-  const category = executivesOnly ? 'all' : categoryFilter;
-  const tabName = executivesOnly ? 'executives' : 'organization';
+  const category = isAdmin ? categoryFilter : 'all';
   return useQuery<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>({
     queryKey: ['/api/organization-members', { category, admin: true, page, limit: 50 }],
     queryFn: () => {
@@ -119,14 +117,14 @@ export function useAdminOrganizationMembers(
       params.append('isActive', 'false');
       params.append('page', page.toString());
       params.append('limit', '50');
-      if (!executivesOnly && category && category !== 'all') {
+      if (isAdmin && category && category !== 'all') {
         params.append('category', category);
       }
       return fetchJson<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>(
         `/api/organization-members?${params.toString()}`
       );
     },
-    enabled: canRead && activeTab === tabName,
+    enabled: canRead && activeTab === 'organization',
   });
 }
 

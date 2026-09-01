@@ -27,7 +27,8 @@ export default function AdminPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = new URLSearchParams(search);
-  const urlTab = params.get('tab') || 'dashboard';
+  const requestedUrlTab = params.get('tab') || 'dashboard';
+  const urlTab = requestedUrlTab === 'executives' ? 'organization' : requestedUrlTab;
 
   const [activeTab, setActiveTab] = useState(urlTab);
   const [createNewsDialogOpen, setCreateNewsDialogOpen] = useState(false);
@@ -40,29 +41,30 @@ export default function AdminPage() {
   const canReadMembers = isAdmin || hasPermission('member.read');
   const canReadInquiries = isAdmin || hasPermission('inquiry.read');
   const canManageSurvey = isAdmin || hasPermission('survey.manage');
-  const canReadExecutives = isAdmin
+  const canReadOrganization = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
-    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'executives', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
-    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadExecutives ? ['executives'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
+    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'organization', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
+    : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadOrganization ? ['organization'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
   const defaultTab = isAdmin
     ? 'dashboard'
-    : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadExecutives ? 'executives' : canManageSurvey ? 'survey' : 'dashboard');
-  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadInquiries || canReadExecutives || canManageSurvey;
+    : boardTabs[0] || (canReadInquiries ? 'inquiries' : canReadOrganization ? 'organization' : canManageSurvey ? 'survey' : 'dashboard');
+  const canAccessAdmin = isAdmin || boardTabs.length > 0 || canReadMembers || canReadInquiries || canReadOrganization || canManageSurvey;
 
   useEffect(() => {
     if (loading) return;
 
     const newParams = new URLSearchParams(search);
     const requestedTab = newParams.get('tab') || defaultTab;
+    const normalizedRequestedTab = requestedTab === 'executives' ? 'organization' : requestedTab;
     const action = newParams.get('action');
-    const tab = allowedTabs.includes(requestedTab) ? requestedTab : defaultTab;
+    const tab = allowedTabs.includes(normalizedRequestedTab) ? normalizedRequestedTab : defaultTab;
 
     setActiveTab(tab);
 
-    if (action === 'create' && tab === requestedTab) {
+    if (action === 'create' && tab === normalizedRequestedTab) {
       if (tab === 'articles' || tab === 'news') {
         setCreateNewsDialogOpen(true);
       } else if (tab === 'events') {
@@ -116,8 +118,7 @@ export default function AdminPage() {
                 {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
                 {isAdmin && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
                  {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
-                {isAdmin && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
-                {allowedTabs.includes('executives') && <SelectItem value="executives" data-testid="option-tab-executives">임원진</SelectItem>}
+                {allowedTabs.includes('organization') && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
                 {isAdmin && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                  {allowedTabs.includes('survey') && <SelectItem value="survey" data-testid="option-tab-survey">설문</SelectItem>}
                 {hasManual && (
@@ -137,8 +138,7 @@ export default function AdminPage() {
               {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
               {isAdmin && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
                {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
-               {allowedTabs.includes('executives') && <TabsTrigger value="executives" data-testid="tab-executives" className="text-sm whitespace-nowrap">임원진</TabsTrigger>}
+               {allowedTabs.includes('organization') && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
               {isAdmin && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
                {allowedTabs.includes('survey') && <TabsTrigger value="survey" data-testid="tab-survey" className="text-sm whitespace-nowrap">설문</TabsTrigger>}
               {hasManual && (
@@ -175,9 +175,8 @@ export default function AdminPage() {
             {isAdmin && activeTab === 'pages' && <PagesTab activeTab={activeTab} />}
             {isAdmin && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
              {allowedTabs.includes('survey') && activeTab === 'survey' && <SurveyTab activeTab={activeTab} />}
-            {isAdmin && activeTab === 'organization' && <OrganizationTab activeTab={activeTab} />}
-            {allowedTabs.includes('executives') && activeTab === 'executives' && (
-              <OrganizationTab activeTab={activeTab} executivesOnly />
+            {allowedTabs.includes('organization') && activeTab === 'organization' && (
+              <OrganizationTab activeTab={activeTab} />
             )}
              {allowedTabs.includes('inquiries') && activeTab === 'inquiries' && <InquiriesTab activeTab={activeTab} />}
             {activeTab === 'manual' && hasManual && <ManualTab />}

@@ -10,7 +10,10 @@ import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { OrganizationMember } from '@shared/schema';
-import { isExecutiveManagementCategory, sortOrganizationMembers } from '@shared/organization';
+import {
+  isExecutiveManagementCategory,
+  sortOrganizationMembers,
+} from '@shared/organization';
 import { CreateOrganizationMemberDialog } from '../forms/CreateOrganizationMemberDialog';
 import { EditOrganizationMemberDialog } from '../forms/EditOrganizationMemberDialog';
 import { ORGANIZATION_CATEGORIES } from '../adminSchemas';
@@ -30,11 +33,11 @@ type MembersByCategory = Record<string, OrganizationMember[]>;
 function groupMembers(
   members: OrganizationMember[],
   categoryFilter: string,
-  executivesOnly: boolean,
+  executiveScope: boolean,
 ): MembersByCategory {
   return members.reduce<MembersByCategory>((groups, member) => {
-    if (executivesOnly && !isExecutiveManagementCategory(member.category)) return groups;
-    if (!executivesOnly && categoryFilter !== 'all' && member.category !== categoryFilter) return groups;
+    if (executiveScope && !isExecutiveManagementCategory(member.category)) return groups;
+    if (!executiveScope && categoryFilter !== 'all' && member.category !== categoryFilter) return groups;
     const categoryMembers = groups[member.category] || [];
     groups[member.category] = [...categoryMembers, member];
     return groups;
@@ -43,17 +46,16 @@ function groupMembers(
 
 export function OrganizationTab({
   activeTab,
-  executivesOnly = false,
 }: {
   activeTab: string;
-  executivesOnly?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAdmin, hasPermission } = useAuth();
   const { language } = useLanguage();
+  const executiveScope = !isAdmin;
   const [orgCategoryFilter, setOrgCategoryFilter] = useState<string>(
-    executivesOnly ? 'executives' : 'all',
+    executiveScope ? 'executives' : 'all',
   );
   const [selectedOrgMember, setSelectedOrgMember] = useState<OrganizationMember | null>(null);
   const [orderedMembers, setOrderedMembers] = useState<MembersByCategory>({});
@@ -66,7 +68,6 @@ export function OrganizationTab({
   const organizationQuery = useAdminOrganizationMembers(
     orgCategoryFilter,
     activeTab,
-    executivesOnly,
     page,
   );
   const { data: orgMembersData } = organizationQuery;
@@ -82,10 +83,10 @@ export function OrganizationTab({
       groupMembers(
         sortOrganizationMembers(orgMembersData?.members || []),
         orgCategoryFilter,
-        executivesOnly,
+        executiveScope,
       ),
     );
-  }, [orgMembersData, orgCategoryFilter, executivesOnly]);
+  }, [orgMembersData, orgCategoryFilter, executiveScope]);
 
   const invalidateOrganizationMembers = () => {
     queryClient.invalidateQueries({
@@ -94,14 +95,14 @@ export function OrganizationTab({
   };
 
   const displayCategories = useMemo(
-    () => executivesOnly
+    () => executiveScope
       ? ORGANIZATION_CATEGORY_DISPLAY.filter((category) =>
         isExecutiveManagementCategory(category.value),
       )
       : ORGANIZATION_CATEGORY_DISPLAY.filter((category) =>
         orgCategoryFilter === 'all' || category.value === orgCategoryFilter,
       ),
-    [executivesOnly, orgCategoryFilter],
+    [executiveScope, orgCategoryFilter],
   );
 
   const moveMember = async (category: string, index: number, direction: -1 | 1) => {
@@ -136,27 +137,27 @@ export function OrganizationTab({
   };
 
   return (
-    <TabsContent value={executivesOnly ? 'executives' : 'organization'} className="space-y-6">
+    <TabsContent value="organization" className="space-y-6">
       <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h2 className="text-2xl font-bold">
-            {executivesOnly ? '임원진 관리' : '조직 구조 관리'}
+            조직 관리
           </h2>
-          {executivesOnly && (
+          {executiveScope && (
             <p className="text-sm text-muted-foreground mt-1">
-              공개 조직 페이지와 같은 순서로 표시됩니다. 위·아래 버튼으로 순서를 바꿀 수 있습니다.
+              임원진 관리 권한 범위가 적용됩니다. 공개 조직 페이지와 같은 순서로 표시됩니다.
             </p>
           )}
         </div>
         {canCreate && (
           <CreateOrganizationMemberDialog
-            executivesOnly={executivesOnly}
+            executivesOnly={executiveScope}
             onSuccess={invalidateOrganizationMembers}
           />
         )}
       </div>
 
-      {!executivesOnly && (
+      {!executiveScope && (
         <div className="flex items-center space-x-4 mb-4">
           <span className="text-sm font-medium">카테고리:</span>
           <Select value={orgCategoryFilter} onValueChange={setOrgCategoryFilter}>
@@ -343,7 +344,7 @@ export function OrganizationTab({
       {selectedOrgMember && (
         <EditOrganizationMemberDialog
           member={selectedOrgMember}
-          executivesOnly={executivesOnly}
+          executivesOnly={executiveScope}
           onSuccess={invalidateOrganizationMembers}
           onClose={() => setSelectedOrgMember(null)}
         />

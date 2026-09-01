@@ -51,7 +51,10 @@ import {
 import { db } from "./db";
 import postsRouter from "./routes/posts";
 import { emailService } from "./email";
-import { isExecutiveManagementCategory } from "@shared/organization";
+import {
+  isExecutiveManagementCategory,
+  ORGANIZATION_CATEGORY_ORDER,
+} from "@shared/organization";
 import { getPostPermissionKey } from "./postPermissions";
 import { isSurveyVisible } from "@shared/survey";
 import {
@@ -128,16 +131,6 @@ const inquiryReplyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const organizationMemberCategories = [
-  'executives',
-  'honorary',
-  'vicepresidents',
-  'directors',
-  'advisors',
-  'secretariat',
-  'committees',
-  'organizations',
-] as const;
 const executiveCategory = 'executives';
 const executivePermissions = {
   read: 'organization.executives.read',
@@ -146,7 +139,7 @@ const executivePermissions = {
 } as const;
 
 const organizationMemberQuerySchema = z.object({
-  category: z.enum(organizationMemberCategories).optional(),
+  category: z.enum(ORGANIZATION_CATEGORY_ORDER).optional(),
   isActive: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(50),
@@ -155,7 +148,7 @@ const organizationMemberQuerySchema = z.object({
 const organizationMemberIdSchema = z.string().uuid();
 const partnerIdSchema = z.string().uuid();
 const organizationMemberReorderSchema = z.object({
-  category: z.enum(organizationMemberCategories),
+  category: z.enum(ORGANIZATION_CATEGORY_ORDER),
   memberIds: z.array(z.string().uuid()).min(1).max(200),
 }).strict().refine(
   (data) => new Set(data.memberIds).size === data.memberIds.length,
@@ -1280,7 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // list. Public and non-management requests always remain active-only.
       const result = await storage.getOrganizationMembers({
         category,
-        categories: isExecutiveOperator && !category ? organizationMemberCategories.filter(
+        categories: isExecutiveOperator && !category ? ORGANIZATION_CATEGORY_ORDER.filter(
           (memberCategory) => isExecutiveManagementCategory(memberCategory),
         ) : undefined,
         isActive: (isAdmin || isExecutiveOperator) && isActive === 'false' ? undefined : true,

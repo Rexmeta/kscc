@@ -22,6 +22,7 @@ export default function Header() {
     'event.read',
     'resource.read',
     'inquiry.read',
+    'organization.executives.read',
   ]);
   const adminMenuLabel = isAdmin ? t('nav.admin') : '운영자 페이지';
 

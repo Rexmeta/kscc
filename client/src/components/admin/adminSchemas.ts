@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  ORGANIZATION_CATEGORY_LABELS,
+  ORGANIZATION_CATEGORY_ORDER,
+} from '@shared/organization';
 
 export const newsSchema = z.object({
   title: z.string().min(1, '제목을 입력해주세요'),
@@ -77,12 +81,8 @@ export const organizationMemberSchema = z.object({
 export type OrganizationMemberFormValues = z.infer<typeof organizationMemberSchema>;
 
 export const ORGANIZATION_CATEGORIES = [
-  { value: 'executives', label: '임원진' },
-  { value: 'honorary', label: '명예직' },
-  { value: 'vicepresidents', label: '부회장' },
-  { value: 'directors', label: '이사' },
-  { value: 'advisors', label: '고문' },
-  { value: 'secretariat', label: '사무국' },
-  { value: 'committees', label: '위원회' },
-  { value: 'organizations', label: '단체회원' },
+  ...ORGANIZATION_CATEGORY_ORDER.map((value) => ({
+    value,
+    label: ORGANIZATION_CATEGORY_LABELS[value].ko,
+  })),
 ];
