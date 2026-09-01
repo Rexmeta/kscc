@@ -17,11 +17,20 @@ import type { AdminDashboardSnapshot } from '@shared/adminDashboard';
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('token')}`,
 });
-type PostsResponse = { posts: PostWithTranslations[]; total: number };
+export type AdminPostFilters = {
+  search?: string;
+  status?: string;
+  category?: string;
+  visibility?: string;
+  upcoming?: string;
+};
+type PostsResponse = { posts: PostWithTranslations[]; total: number; page: number; totalPages: number };
 
 export function useAdminPosts(
   postType: 'news' | 'event' | 'resource' | 'page',
-  activeTab: string
+  activeTab: string,
+  page = 1,
+  filters: AdminPostFilters = {},
 ) {
   const { isAdmin, hasPermission } = useAuth();
   const tabNames: Record<typeof postType, string> = {
@@ -32,21 +41,47 @@ export function useAdminPosts(
   };
   const canRead = isAdmin || hasPermission(`${postType}.read`);
   return useQuery<PostsResponse>({
-    queryKey: queryKeys.posts.list({ postType, admin: true }),
-    queryFn: () => fetchJson<PostsResponse>(`/api/posts?postType=${postType}&admin=true`),
+    queryKey: queryKeys.posts.list({ postType, admin: true, page, limit: 50, ...filters }),
+    queryFn: () => {
+      const params = new URLSearchParams({
+        postType,
+        admin: 'true',
+        page: page.toString(),
+        limit: '50',
+      });
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      return fetchJson<PostsResponse>(`/api/posts?${params.toString()}`);
+    },
     enabled: canRead && activeTab === tabNames[postType],
   });
 }
 
+export type AdminMemberFilters = {
+  search?: string;
+  country?: string;
+  industry?: string;
+  membershipLevel?: string;
+  membershipStatus?: string;
+};
 type MembersResponse = { members: Member[]; total: number; page: number; totalPages: number };
 
-export function useAdminMembers(activeTab: string) {
+export function useAdminMembers(activeTab: string, page = 1, filters: AdminMemberFilters = {}) {
   const { isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin || hasPermission('member.read');
   return useQuery<MembersResponse>({
-    queryKey: ['/api/admin/members'],
+    queryKey: ['/api/admin/members', { page, limit: 50, ...filters }],
     queryFn: () =>
-      fetchJson<MembersResponse>('/api/admin/members'),
+      fetchJson<MembersResponse>(`/api/admin/members?${new URLSearchParams({
+        page: page.toString(),
+        limit: '50',
+        ...(filters.search ? { search: filters.search } : {}),
+        ...(filters.country ? { country: filters.country } : {}),
+        ...(filters.industry ? { industry: filters.industry } : {}),
+        ...(filters.membershipLevel ? { membershipLevel: filters.membershipLevel } : {}),
+        ...(filters.membershipStatus ? { membershipStatus: filters.membershipStatus } : {}),
+      }).toString()}`),
     enabled: canRead && activeTab === 'members',
   });
 }
@@ -75,35 +110,70 @@ export function useAdminUsers(
 
 type PartnersResponse = { partners: Partner[]; total: number; page: number; totalPages: number };
 
-export function useAdminPartners(activeTab: string, page: number) {
+export type AdminPartnerFilters = {
+  search?: string;
+  category?: string;
+  isActive?: string;
+};
+
+export function useAdminPartners(activeTab: string, page: number, filters: AdminPartnerFilters = {}) {
   const { isAdmin, hasPermission } = useAuth();
   const canManagePartners = isAdmin || hasPermission('partner.manage');
   return useQuery<PartnersResponse>({
-    queryKey: ['/api/partners', { admin: true, page, limit: 50 }],
-    queryFn: () => fetchJson<PartnersResponse>(`/api/partners?admin=true&page=${page}&limit=50`),
+    queryKey: ['/api/partners', { admin: true, page, limit: 50, ...filters }],
+    queryFn: () => fetchJson<PartnersResponse>(`/api/partners?${new URLSearchParams({
+      admin: 'true',
+      page: page.toString(),
+      limit: '50',
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.category ? { category: filters.category } : {}),
+      ...(filters.isActive ? { isActive: filters.isActive } : {}),
+    }).toString()}`),
     enabled: canManagePartners && activeTab === 'partners',
   });
 }
 
 type InquiriesResponse = { inquiries: InquiryWithReplies[]; total: number; page: number; totalPages: number };
 
-export function useAdminInquiries(activeTab: string) {
+export type AdminInquiryFilters = {
+  search?: string;
+  category?: string;
+  status?: string;
+};
+
+export function useAdminInquiries(activeTab: string, page = 1, filters: AdminInquiryFilters = {}) {
   const { isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin || hasPermission('inquiry.read');
   return useQuery<InquiriesResponse>({
-    queryKey: ['/api/inquiries'],
-    queryFn: () => fetchJson<InquiriesResponse>('/api/inquiries'),
+    queryKey: ['/api/inquiries', { page, limit: 50, ...filters }],
+    queryFn: () => fetchJson<InquiriesResponse>(`/api/inquiries?${new URLSearchParams({
+      page: page.toString(),
+      limit: '50',
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.category ? { category: filters.category } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+    }).toString()}`),
     enabled: canRead && activeTab === 'inquiries',
   });
 }
 
-export function useAdminSurvey(activeTab: string, page = 1) {
+export type AdminSurveyFilters = {
+  search?: string;
+  status?: string;
+};
+
+export function useAdminSurvey(activeTab: string, page = 1, filters: AdminSurveyFilters = {}) {
   const { isAdmin, hasPermission } = useAuth();
   const canManage = isAdmin || hasPermission('survey.manage');
   return useQuery<{ surveys: SurveySettings[]; total: number; page: number; totalPages: number }>({
-    queryKey: ['/api/admin/survey', { page, limit: 50 }],
+    queryKey: ['/api/admin/survey', { page, limit: 50, ...filters }],
     queryFn: () => fetchJson<{ surveys: SurveySettings[]; total: number; page: number; totalPages: number }>(
-      `/api/admin/survey?page=${page}&limit=50`,
+      `/api/admin/survey?${new URLSearchParams({
+        page: page.toString(),
+        limit: '50',
+        ...(filters.search ? { search: filters.search } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+      }).toString()}`,
     ),
     enabled: canManage && activeTab === 'survey',
   });
@@ -148,13 +218,14 @@ export function useAdminOrganizationMembers(
   categoryFilter: string,
   activeTab: string,
   page = 1,
+  filters: { search?: string } = {},
 ) {
   const { user, isAdmin, hasPermission } = useAuth();
   const canRead = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const category = isAdmin ? categoryFilter : 'all';
   return useQuery<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>({
-    queryKey: ['/api/organization-members', { category, admin: true, page, limit: 50 }],
+    queryKey: ['/api/organization-members', { category, admin: true, page, limit: 50, ...filters }],
     queryFn: () => {
       const params = new URLSearchParams();
       params.append('isActive', 'false');
@@ -163,6 +234,7 @@ export function useAdminOrganizationMembers(
       if (isAdmin && category && category !== 'all') {
         params.append('category', category);
       }
+      if (filters.search) params.append('search', filters.search);
       return fetchJson<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>(
         `/api/organization-members?${params.toString()}`
       );

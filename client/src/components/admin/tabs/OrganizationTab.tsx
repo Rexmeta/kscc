@@ -27,6 +27,7 @@ import {
   getMemberPosition,
 } from '@/lib/organizationDisplay';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
 
 type MembersByCategory = Record<string, OrganizationMember[]>;
 
@@ -61,6 +62,8 @@ export function OrganizationTab({
   const [orderedMembers, setOrderedMembers] = useState<MembersByCategory>({});
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const canManageExecutives = user?.role === 'operator';
   const canCreate = isAdmin || (canManageExecutives && hasPermission('organization.executives.create'));
   const canUpdate = isAdmin || (canManageExecutives && hasPermission('organization.executives.update'));
@@ -69,8 +72,18 @@ export function OrganizationTab({
     orgCategoryFilter,
     activeTab,
     page,
+    { search },
   );
   const { data: orgMembersData } = organizationQuery;
+  const applySearch = () => {
+    setPage(1);
+    setSearch(searchInput.trim());
+  };
+  const resetSearch = () => {
+    setSearchInput('');
+    setSearch('');
+    setPage(1);
+  };
 
   useEffect(() => {
     if (orgMembersData && orgMembersData.totalPages > 0 && page > orgMembersData.totalPages) {
@@ -160,7 +173,7 @@ export function OrganizationTab({
       {!executiveScope && (
         <div className="flex items-center space-x-4 mb-4">
           <span className="text-sm font-medium">카테고리:</span>
-          <Select value={orgCategoryFilter} onValueChange={setOrgCategoryFilter}>
+          <Select value={orgCategoryFilter} onValueChange={(value) => { setOrgCategoryFilter(value); setPage(1); }}>
             <SelectTrigger className="w-48" data-testid="select-org-category-filter">
               <SelectValue placeholder="전체" />
             </SelectTrigger>
@@ -175,6 +188,16 @@ export function OrganizationTab({
           </Select>
         </div>
       )}
+      <AdminFilterBar
+        scope="organization"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applySearch}
+        onReset={resetSearch}
+        searchLabel="조직 구성원 검색"
+        searchPlaceholder="이름, 직책 또는 설명 검색"
+        searchTestId="input-organization-search"
+      />
 
       <QueryState
         isLoading={organizationQuery.isLoading}
@@ -329,11 +352,6 @@ export function OrganizationTab({
       })}
       </QueryState>
 
-      {(!orgMembersData || orgMembersData.members.length === 0) && (
-        <div className="p-8 text-center text-muted-foreground">
-          등록된 조직 구성원이 없습니다
-        </div>
-      )}
       <AdminListPagination
         page={orgMembersData?.page || page}
         totalPages={orgMembersData?.totalPages || 0}

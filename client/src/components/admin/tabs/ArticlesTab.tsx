@@ -16,6 +16,8 @@ import { EditNewsForm } from '../forms/EditNewsForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { PostPublicationToggle } from '../PostPublicationToggle';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
+import { AdminListPagination } from '../AdminListPagination';
 
 export function ArticlesTab({
   activeTab,
@@ -34,13 +36,32 @@ export function ArticlesTab({
   const [selectedArticle, setSelectedArticle] = useState<PostWithTranslations | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [filters, setFilters] = useState({ search: '', status: '', category: '', upcoming: '' });
+  const [filterInput, setFilterInput] = useState({ status: '', category: '' });
 
-  const newsQuery = useAdminPosts('news', activeTab);
+  const newsQuery = useAdminPosts('news', activeTab, page, filters);
   const { data: newsData } = newsQuery;
   const canCreate = isAdmin || hasPermission('news.create');
   const canUpdate = isAdmin || hasPermission('news.update');
   const canPublish = isAdmin || hasPermission('news.publish');
   const canDelete = isAdmin;
+
+  useEffect(() => {
+    if (newsData && newsData.totalPages > 0 && page > newsData.totalPages) setPage(newsData.totalPages);
+  }, [newsData, page]);
+
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ ...filterInput, search: searchInput.trim(), upcoming: '' });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilters({ search: '', status: '', category: '', upcoming: '' });
+    setFilterInput({ status: '', category: '' });
+    setPage(1);
+  };
 
   useEffect(() => {
     const editId = new URLSearchParams(search).get('edit');
@@ -79,6 +100,20 @@ export function ArticlesTab({
           </>
         )}
       </div>
+      <AdminFilterBar
+        scope="news"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="뉴스 검색"
+        searchPlaceholder="제목 또는 설명 검색"
+        total={newsData?.total}
+        filters={[
+          { name: 'status', label: '게시 상태', value: filterInput.status || 'all', onChange: (value) => setFilterInput((f) => ({ ...f, status: value === 'all' ? '' : value })), testId: 'select-news-status-filter', options: [{ value: 'all', label: '전체 상태' }, { value: 'draft', label: '임시저장' }, { value: 'published', label: '게시됨' }, { value: 'archived', label: '보관' }] },
+          { name: 'category', label: '분류', value: filterInput.category || 'all', onChange: (value) => setFilterInput((f) => ({ ...f, category: value === 'all' ? '' : value })), testId: 'select-news-category-filter', options: [{ value: 'all', label: '전체 분류' }, { value: 'notice', label: '공지사항' }, { value: 'news', label: '뉴스' }, { value: 'column', label: '칼럼' }] },
+        ]}
+      />
 
       <QueryState
         isLoading={newsQuery.isLoading}
@@ -157,6 +192,7 @@ export function ArticlesTab({
         ))}
       </div>
       </QueryState>
+      <AdminListPagination page={newsData?.page || page} totalPages={newsData?.totalPages || 0} onPageChange={setPage} testId="pagination-news" />
 
       {selectedArticle && editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>

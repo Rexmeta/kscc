@@ -21,6 +21,7 @@ import {
 } from '@shared/survey';
 import type { SurveySettings } from '@shared/schema';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
 
 const defaultValues: SurveySettingsInput = {
   title: '',
@@ -89,12 +90,30 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [listPage, setListPage] = useState(1);
-  const surveyQuery = useAdminSurvey(activeTab, listPage);
+  const [searchInput, setSearchInput] = useState('');
+  const [statusInput, setStatusInput] = useState('');
+  const [filters, setFilters] = useState({ search: '', status: '' });
+  const surveyQuery = useAdminSurvey(activeTab, listPage, filters);
   const surveys = surveyQuery.data?.surveys || [];
   const [selectedId, setSelectedId] = useState<string>();
   const [historyPage, setHistoryPage] = useState(1);
   const [historySnapshotVersion, setHistorySnapshotVersion] = useState<number>();
   const selectedSurvey = surveys.find((survey) => survey.id === selectedId) || surveys[0];
+  useEffect(() => {
+    if (surveyQuery.data && surveyQuery.data.totalPages > 0 && listPage > surveyQuery.data.totalPages) {
+      setListPage(surveyQuery.data.totalPages);
+    }
+  }, [surveyQuery.data, listPage]);
+  const applyFilters = () => {
+    setListPage(1);
+    setFilters({ search: searchInput.trim(), status: statusInput });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setStatusInput('');
+    setFilters({ search: '', status: '' });
+    setListPage(1);
+  };
   const {
     data: historyData,
     isLoading: isHistoryLoading,
@@ -200,6 +219,30 @@ export function SurveyTab({ activeTab }: { activeTab: string }) {
           </div>
         </CardHeader>
         <CardContent>
+          <AdminFilterBar
+            scope="survey"
+            search={searchInput}
+            onSearchChange={setSearchInput}
+            onApply={applyFilters}
+            onReset={resetFilters}
+            searchLabel="설문 검색"
+            searchPlaceholder="제목 또는 소개 검색"
+            total={surveyQuery.data?.total}
+            filters={[{
+              name: 'status',
+              label: '상태',
+              value: statusInput || 'all',
+              onChange: (value) => setStatusInput(value === 'all' ? '' : value),
+              testId: 'select-survey-status-filter',
+              options: [
+                { value: 'all', label: '전체 상태' },
+                { value: 'inactive', label: '비활성' },
+                { value: 'upcoming', label: '예정' },
+                { value: 'active', label: '진행 중' },
+                { value: 'ended', label: '종료' },
+              ],
+            }]}
+          />
           <QueryState
             isLoading={surveyQuery.isLoading}
             isError={surveyQuery.isError}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { useAdminMembers } from '@/hooks/useAdminData';
 import { useAuth } from '@/hooks/useAuth';
 import { CreateMemberDialog } from '../forms/CreateMemberDialog';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
+import { AdminListPagination } from '../AdminListPagination';
 
 export function MembersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -21,14 +23,33 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [filterInput, setFilterInput] = useState({ country: '', industry: '', membershipLevel: '', membershipStatus: '' });
+  const [filters, setFilters] = useState({ search: '', ...filterInput });
 
-  const membersQuery = useAdminMembers(activeTab);
+  const membersQuery = useAdminMembers(activeTab, page, filters);
   const { data: membersData } = membersQuery;
   const canCreate = isAdmin || hasPermission('member.create');
   const canUpdate = isAdmin || hasPermission('member.update');
   const canDelete = isAdmin || hasPermission('member.delete');
+  useEffect(() => {
+    if (membersData && membersData.totalPages > 0 && page > membersData.totalPages) setPage(membersData.totalPages);
+  }, [membersData, page]);
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ ...filterInput, search: searchInput.trim() });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    const empty = { country: '', industry: '', membershipLevel: '', membershipStatus: '' };
+    setFilterInput(empty);
+    setFilters({ search: '', ...empty });
+    setPage(1);
+  };
   const invalidate = () => {
-    queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/members' });
+    queryClient.invalidateQueries({ predicate: (query) =>
+      query.queryKey[0] === '/api/members' || query.queryKey[0] === '/api/admin/members' });
     queryClient.invalidateQueries({ queryKey: ['/api/admin/dashboard'] });
   };
 
@@ -38,6 +59,22 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
         <h2 className="text-2xl font-bold">회원사 관리</h2>
         {canCreate && <CreateMemberDialog onSuccess={invalidate} />}
       </div>
+      <AdminFilterBar
+        scope="members"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="회원사 검색"
+        searchPlaceholder="회사명 또는 설명 검색"
+        total={membersData?.total}
+        filters={[
+          { name: 'country', label: '국가', value: filterInput.country || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, country: v === 'all' ? '' : v })), testId: 'select-member-country-filter', options: [{ value: 'all', label: '전체 국가' }, { value: 'Korea', label: '한국' }, { value: 'China', label: '중국' }] },
+          { name: 'industry', label: '업종', value: filterInput.industry || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, industry: v === 'all' ? '' : v })), testId: 'select-member-industry-filter', options: [{ value: 'all', label: '전체 업종' }, { value: '제조업', label: '제조업' }, { value: '무역', label: '무역' }, { value: 'IT/소프트웨어', label: 'IT/소프트웨어' }, { value: '물류', label: '물류' }, { value: '금융', label: '금융' }, { value: '기타', label: '기타' }] },
+          { name: 'membershipLevel', label: '회원 등급', value: filterInput.membershipLevel || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, membershipLevel: v === 'all' ? '' : v })), testId: 'select-member-level-filter', options: [{ value: 'all', label: '전체 등급' }, { value: 'regular', label: '정회원' }, { value: 'premium', label: '프리미엄' }, { value: 'sponsor', label: '후원회원' }] },
+          { name: 'membershipStatus', label: '회원 상태', value: filterInput.membershipStatus || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, membershipStatus: v === 'all' ? '' : v })), testId: 'select-member-status-filter', options: [{ value: 'all', label: '전체 상태' }, { value: 'pending', label: '승인 대기' }, { value: 'active', label: '활성' }, { value: 'inactive', label: '비활성' }] },
+        ]}
+      />
 
       <QueryState
         isLoading={membersQuery.isLoading}
@@ -111,6 +148,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
         ))}
       </div>
       </QueryState>
+      <AdminListPagination page={membersData?.page || page} totalPages={membersData?.totalPages || 0} onPageChange={setPage} testId="pagination-members" />
 
       {selectedMember && (
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

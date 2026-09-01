@@ -11,15 +11,30 @@ import { useAdminPartners } from '@/hooks/useAdminData';
 import { PartnerDialog } from '../forms/PartnerDialog';
 import { AdminListPagination } from '../AdminListPagination';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
 
 export function PartnersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const { data: partnersData, isLoading, isError, refetch } = useAdminPartners(activeTab, page);
+  const [searchInput, setSearchInput] = useState('');
+  const [filterInput, setFilterInput] = useState({ category: '', isActive: '' });
+  const [filters, setFilters] = useState({ search: '', category: '', isActive: '' });
+  const { data: partnersData, isLoading, isError, refetch } = useAdminPartners(activeTab, page, filters);
   const [selectedPartner, setSelectedPartner] = useState<Partner>();
   const [createOpen, setCreateOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string>();
+
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ ...filterInput, search: searchInput.trim() });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilterInput({ category: '', isActive: '' });
+    setFilters({ search: '', category: '', isActive: '' });
+    setPage(1);
+  };
 
   useEffect(() => {
     if (partnersData && partnersData.totalPages > 0 && page > partnersData.totalPages) {
@@ -60,6 +75,20 @@ export function PartnersTab({ activeTab }: { activeTab: string }) {
           파트너 추가
         </Button>
       </div>
+      <AdminFilterBar
+        scope="partners"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="파트너 검색"
+        searchPlaceholder="이름 또는 설명 검색"
+        total={partnersData?.total}
+        filters={[
+          { name: 'category', label: '분류', value: filterInput.category || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, category: v === 'all' ? '' : v })), testId: 'select-partner-category-filter', options: [{ value: 'all', label: '전체 분류' }, { value: 'sponsor', label: '후원사' }, { value: 'partner', label: '파트너' }, { value: 'government', label: '정부기관' }] },
+          { name: 'isActive', label: '활성 상태', value: filterInput.isActive || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, isActive: v === 'all' ? '' : v })), testId: 'select-partner-status-filter', options: [{ value: 'all', label: '전체 상태' }, { value: 'true', label: '활성' }, { value: 'false', label: '비활성' }] },
+        ]}
+      />
 
       <PartnerDialog
         open={createOpen}

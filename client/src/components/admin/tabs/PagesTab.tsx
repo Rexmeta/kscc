@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,16 +9,35 @@ import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
 import { useAdminPageTranslationHistory, useAdminPosts } from '@/hooks/useAdminData';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
+import { AdminListPagination } from '../AdminListPagination';
 
 export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: boolean }) {
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [filterInput, setFilterInput] = useState('');
+  const [filters, setFilters] = useState({ search: '', status: '' });
 
-  const pagesQuery = useAdminPosts('page', activeTab);
+  const pagesQuery = useAdminPosts('page', activeTab, page, filters);
   const historyQuery = useAdminPageTranslationHistory(activeTab, historyPage);
   const { data: pagesData } = pagesQuery;
   const { data: historyData } = historyQuery;
+  useEffect(() => {
+    if (pagesData && pagesData.totalPages > 0 && page > pagesData.totalPages) setPage(pagesData.totalPages);
+  }, [pagesData, page]);
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ search: searchInput.trim(), status: filterInput });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilterInput('');
+    setFilters({ search: '', status: '' });
+    setPage(1);
+  };
   const localeLabels = { ko: '한국어', en: '영어', zh: '중국어' } as const;
   const formatDateTime = (value: Date | string) => {
     const date = value instanceof Date ? value : new Date(value);
@@ -32,6 +51,24 @@ export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: b
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">페이지 관리</h2>
       </div>
+      <AdminFilterBar
+        scope="pages"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="페이지 검색"
+        searchPlaceholder="페이지 제목 또는 설명 검색"
+        total={pagesData?.total}
+        filters={[{
+          name: 'status',
+          label: '게시 상태',
+          value: filterInput || 'all',
+          onChange: (value) => setFilterInput(value === 'all' ? '' : value),
+          testId: 'select-page-status-filter',
+          options: [{ value: 'all', label: '전체 상태' }, { value: 'draft', label: '임시저장' }, { value: 'published', label: '게시됨' }, { value: 'archived', label: '보관' }],
+        }]}
+      />
 
       <QueryState
         isLoading={pagesQuery.isLoading}
@@ -81,6 +118,7 @@ export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: b
         </div>
       </div>
       </QueryState>
+      <AdminListPagination page={pagesData?.page || page} totalPages={pagesData?.totalPages || 0} onPageChange={setPage} testId="pagination-pages" />
 
       <Card>
         <CardHeader>

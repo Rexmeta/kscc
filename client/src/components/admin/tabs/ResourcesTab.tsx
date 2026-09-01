@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { EditResourceForm } from '../forms/EditResourceForm';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { PostPublicationToggle } from '../PostPublicationToggle';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
+import { AdminListPagination } from '../AdminListPagination';
 
 interface ResourcesTabProps {
   activeTab: string;
@@ -27,13 +29,31 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
   const { isAdmin, hasPermission } = useAuth();
   const [selectedResource, setSelectedResource] = useState<PostWithTranslations | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [filterInput, setFilterInput] = useState({ status: '', category: '', visibility: '' });
+  const [filters, setFilters] = useState({ search: '', status: '', category: '', visibility: '' });
 
-  const resourcesQuery = useAdminPosts('resource', activeTab);
+  const resourcesQuery = useAdminPosts('resource', activeTab, page, filters);
   const { data: resourcesData } = resourcesQuery;
   const canCreate = isAdmin || hasPermission('resource.upload');
   const canUpdate = isAdmin || hasPermission('resource.update');
   const canPublish = isAdmin || hasPermission('resource.publish');
   const canDelete = isAdmin;
+
+  useEffect(() => {
+    if (resourcesData && resourcesData.totalPages > 0 && page > resourcesData.totalPages) setPage(resourcesData.totalPages);
+  }, [resourcesData, page]);
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ ...filterInput, search: searchInput.trim() });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilterInput({ status: '', category: '', visibility: '' });
+    setFilters({ search: '', status: '', category: '', visibility: '' });
+    setPage(1);
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === '/api/posts' });
@@ -59,6 +79,21 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
           </>
         )}
       </div>
+      <AdminFilterBar
+        scope="resources"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="자료 검색"
+        searchPlaceholder="제목 또는 설명 검색"
+        total={resourcesData?.total}
+        filters={[
+          { name: 'status', label: '게시 상태', value: filterInput.status || 'all', onChange: (value) => setFilterInput((f) => ({ ...f, status: value === 'all' ? '' : value })), testId: 'select-resource-status-filter', options: [{ value: 'all', label: '전체 상태' }, { value: 'draft', label: '임시저장' }, { value: 'published', label: '게시됨' }, { value: 'archived', label: '보관' }] },
+          { name: 'category', label: '분류', value: filterInput.category || 'all', onChange: (value) => setFilterInput((f) => ({ ...f, category: value === 'all' ? '' : value })), testId: 'select-resource-category-filter', options: [{ value: 'all', label: '전체 분류' }, { value: 'reports', label: '보고서' }, { value: 'forms', label: '양식' }, { value: 'presentations', label: '발표자료' }, { value: 'guides', label: '가이드북' }] },
+          { name: 'visibility', label: '공개 범위', value: filterInput.visibility || 'all', onChange: (value) => setFilterInput((f) => ({ ...f, visibility: value === 'all' ? '' : value })), testId: 'select-resource-visibility-filter', options: [{ value: 'all', label: '전체 범위' }, { value: 'public', label: '공개' }, { value: 'members', label: '회원' }, { value: 'premium', label: '프리미엄' }, { value: 'internal', label: '내부' }] },
+        ]}
+      />
 
       <QueryState
         isLoading={resourcesQuery.isLoading}
@@ -117,6 +152,7 @@ export function ResourcesTab({ activeTab, createResourceDialogOpen, setCreateRes
         ))}
       </div>
       </QueryState>
+      <AdminListPagination page={resourcesData?.page || page} totalPages={resourcesData?.totalPages || 0} onPageChange={setPage} testId="pagination-resources" />
 
       {selectedResource && editDialogOpen && (
         <Dialog open={editDialogOpen} onOpenChange={(open) => !open && setEditDialogOpen(false)}>

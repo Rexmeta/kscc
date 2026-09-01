@@ -17,3 +17,4 @@
 - [Production schema verification](production-schema-verification.md) — a successful publish can still leave a pending schema diff; verify production columns and endpoint health after database changes.
 - [npm override lock regeneration](npm-override-lock-regeneration.md) — a new transitive override may require rebuilding the lockfile, not only reinstalling modules.
 - [Event timezone handling](event-timezone.md) — treat event wall-clock inputs as Asia/Seoul explicitly; never rely on browser, Node, or database timezone defaults.
+- [Database ACL seed readiness](database-acl-seeds.md) — operator permission route tests require the matching ACL seed to exist in the development database.

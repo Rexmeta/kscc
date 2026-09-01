@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AdminListPagination } from '../AdminListPagination';
 import { QueryState } from '@/components/QueryState';
 import AdminPasswordResetDialog from '@/components/AdminPasswordResetDialog';
+import { AdminResultCount } from '../AdminResultCount';
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (
@@ -177,6 +178,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
           </Button>
         </div>
       </div>
+      <AdminResultCount total={usersData?.total} testId="result-count-users" />
       <QueryState
         isLoading={usersQuery.isLoading}
         isError={usersQuery.isError}
@@ -259,6 +261,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
       <AdminListPagination
         page={usersData?.page || page}
         totalPages={usersData?.totalPages || 0}
+        total={usersData?.total}
         onPageChange={setPage}
         testId="pagination-users"
       />

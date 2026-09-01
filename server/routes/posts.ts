@@ -71,10 +71,12 @@ const postQuerySchema = z.object({
   tags: z.string().optional(), // Comma-separated tags
   authorId: z.string().uuid().optional(),
   locale: z.enum(['ko', 'en', 'zh']).optional(),
-  search: z.string().optional(), // Search term for title/content/excerpt/slug
+  search: z.string().trim().max(100).optional(), // Search term for title/content/excerpt/slug
+  category: z.string().trim().max(100).optional(),
   upcoming: z.enum(['true', 'false']).optional(), // Filter for current and upcoming events
   compact: z.enum(['true', 'false']).optional(),
   admin: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().min(1).max(10000).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
@@ -164,6 +166,10 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
     // Parse upcoming filter for events
     const upcoming = query.upcoming === 'true' ? true : undefined;
     
+    const page = adminMode ? (query.page || 1) : 1;
+    const offset = adminMode
+      ? (page - 1) * query.limit
+      : query.offset;
     const posts = await storage.getPosts({
       postType: query.postType,
       status: query.status,
@@ -172,13 +178,22 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
       authorId: query.authorId,
       locale: query.locale,
       search: query.search,
+      category: query.category,
       upcoming,
       compact: query.compact === 'true',
       limit: query.limit,
-      offset: query.offset,
+      offset,
       access,
     });
     
+    if (adminMode) {
+      res.json({
+        ...posts,
+        page,
+        totalPages: Math.ceil(posts.total / query.limit),
+      });
+      return;
+    }
     res.json(posts);
   } catch (error) {
     if (error instanceof z.ZodError) {

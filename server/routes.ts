@@ -75,6 +75,7 @@ const memberQuerySchema = z.object({
   country: z.string().trim().max(100).optional(),
   industry: z.string().trim().max(100).optional(),
   membershipLevel: z.string().trim().max(50).optional(),
+  membershipStatus: z.enum(["pending", "active", "inactive"]).optional(),
   search: z.string().trim().max(100).optional(),
   admin: z.enum(["true", "false"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -84,6 +85,7 @@ const memberQuerySchema = z.object({
 const inquiryQuerySchema = z.object({
   status: inquiryStatusSchema.optional(),
   category: inquiryCategorySchema.optional(),
+  search: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 }).strict();
@@ -91,6 +93,11 @@ const inquiryQuerySchema = z.object({
 const paginatedCollectionQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(50),
+}).strict();
+
+const surveyQuerySchema = paginatedCollectionQuerySchema.extend({
+  search: z.string().trim().max(100).optional(),
+  status: z.enum(["inactive", "upcoming", "active", "ended"]).optional(),
 }).strict();
 
 const userQuerySchema = paginatedCollectionQuerySchema.extend({
@@ -105,6 +112,9 @@ const passwordResetSchema = z.object({
 
 const partnerQuerySchema = paginatedCollectionQuerySchema.extend({
   admin: z.enum(["true", "false"]).optional(),
+  search: z.string().trim().max(100).optional(),
+  category: z.enum(["sponsor", "partner", "government"]).optional(),
+  isActive: z.enum(["true", "false"]).optional(),
 }).strict();
 
 const inquiryIdSchema = z.string().uuid();
@@ -152,6 +162,7 @@ const executivePermissions = {
 
 const organizationMemberQuerySchema = z.object({
   category: z.enum(ORGANIZATION_CATEGORY_ORDER).optional(),
+  search: z.string().trim().max(100).optional(),
   isActive: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(50),
@@ -496,10 +507,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get(["/api/admin/survey", "/api/admin/surveys"], authenticateToken, requireAdminOrPermission("survey.manage"), async (_req, res) => {
     try {
-      const { page, limit } = paginatedCollectionQuerySchema.parse(_req.query);
+      const { page, limit, search, status } = surveyQuerySchema.parse(_req.query);
       const result = await storage.getSurveySettingsList({
         limit,
         offset: (page - 1) * limit,
+        search,
+        status,
       });
       res.json({
         surveys: result.surveys,
@@ -929,7 +942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Members routes
   app.get("/api/members", optionalAuthenticateToken, async (req, res) => {
     try {
-      const { country, industry, membershipLevel, search, admin, page, limit } = memberQuerySchema.parse(req.query);
+      const { country, industry, membershipLevel, membershipStatus, search, admin, page, limit } = memberQuerySchema.parse(req.query);
       const adminRequested = admin === "true";
       if (adminRequested && req.user?.role !== "admin") {
         return res.status(403).json({ message: "Admin access required" });
@@ -940,6 +953,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         country,
         industry,
         membershipLevel,
+        membershipStatus,
         search,
         admin: adminRequested,
         limit,
@@ -1043,12 +1057,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/members", authenticateToken, requireAdminOrPermission("member.read"), async (req, res) => {
     try {
-      const { country, industry, membershipLevel, search, page, limit } = memberQuerySchema
+      const { country, industry, membershipLevel, membershipStatus, search, page, limit } = memberQuerySchema
         .parse(req.query);
       const result = await storage.getMembers({
         country,
         industry,
         membershipLevel,
+        membershipStatus,
         search,
         admin: true,
         limit,
@@ -1158,12 +1173,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/inquiries", authenticateToken, requireAdminOrPermission("inquiry.read"), async (req, res) => {
     try {
-      const { status, category, page, limit } = inquiryQuerySchema.parse(req.query);
+      const { status, category, search, page, limit } = inquiryQuerySchema.parse(req.query);
       const offset = (page - 1) * limit;
       
       const result = await storage.getInquiries({
         status,
         category,
+        search,
         limit,
         offset,
       });
@@ -1303,7 +1319,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const result = await storage.getPartners({
-        active: isAdminRequested ? undefined : true,
+        active: isAdminRequested
+          ? parsedQuery.isActive === undefined ? undefined : parsedQuery.isActive === "true"
+          : true,
+        search: parsedQuery.search,
+        category: isAdminRequested ? parsedQuery.category : undefined,
         limit: parsedQuery.limit,
         offset: (parsedQuery.page - 1) * parsedQuery.limit,
       });
@@ -1408,7 +1428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid organization member query" });
       }
 
-      const { category, isActive, page, limit } = parsedQuery.data;
+      const { category, isActive, search, page, limit } = parsedQuery.data;
       const isAdmin = req.user?.role === 'admin';
       const isExecutiveOperator = req.user?.role === 'operator'
         && await hasPermission(req.user.id, executivePermissions.read);
@@ -1423,6 +1443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // list. Public and non-management requests always remain active-only.
       const result = await storage.getOrganizationMembers({
         category,
+        search,
         categories: isExecutiveOperator && !category ? ORGANIZATION_CATEGORY_ORDER.filter(
           (memberCategory) => isExecutiveManagementCategory(memberCategory),
         ) : undefined,

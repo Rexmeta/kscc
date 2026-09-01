@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { InquiryDetailView } from '@/components/InquiryDetailView';
 import type { InquiryWithReplies } from '@shared/schema';
 import { useAdminInquiries } from '@/hooks/useAdminData';
 import { QueryState } from '@/components/QueryState';
+import { AdminFilterBar } from '../AdminFilterBar';
+import { AdminListPagination } from '../AdminListPagination';
 
 export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
@@ -18,13 +20,44 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const { isAdmin } = useAuth();
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryWithReplies | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
+  const [filterInput, setFilterInput] = useState({ category: '', status: '' });
+  const [filters, setFilters] = useState({ search: '', category: '', status: '' });
 
-  const inquiriesQuery = useAdminInquiries(activeTab);
+  const inquiriesQuery = useAdminInquiries(activeTab, page, filters);
   const { data: inquiriesData } = inquiriesQuery;
+  useEffect(() => {
+    if (inquiriesData && inquiriesData.totalPages > 0 && page > inquiriesData.totalPages) setPage(inquiriesData.totalPages);
+  }, [inquiriesData, page]);
+  const applyFilters = () => {
+    setPage(1);
+    setFilters({ ...filterInput, search: searchInput.trim() });
+  };
+  const resetFilters = () => {
+    setSearchInput('');
+    setFilterInput({ category: '', status: '' });
+    setFilters({ search: '', category: '', status: '' });
+    setPage(1);
+  };
 
   return (
     <TabsContent value="inquiries" className="space-y-6">
       <h2 className="text-2xl font-bold">문의 관리</h2>
+      <AdminFilterBar
+        scope="inquiries"
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        onApply={applyFilters}
+        onReset={resetFilters}
+        searchLabel="문의 검색"
+        searchPlaceholder="제목, 문의자, 회사명, 이메일 또는 내용 검색"
+        total={inquiriesData?.total}
+        filters={[
+          { name: 'category', label: '분류', value: filterInput.category || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, category: v === 'all' ? '' : v })), testId: 'select-inquiry-category-filter', options: [{ value: 'all', label: '전체 분류' }, { value: 'membership', label: '회원' }, { value: 'event', label: '행사' }, { value: 'partnership', label: '파트너십' }, { value: 'other', label: '기타' }] },
+          { name: 'status', label: '처리 상태', value: filterInput.status || 'all', onChange: (v) => setFilterInput((f) => ({ ...f, status: v === 'all' ? '' : v })), testId: 'select-inquiry-status-filter', options: [{ value: 'all', label: '전체 상태' }, { value: 'new', label: '신규' }, { value: 'pending', label: '대기' }, { value: 'in_progress', label: '처리 중' }, { value: 'resolved', label: '해결' }, { value: 'closed', label: '종료' }] },
+        ]}
+      />
       <QueryState
         isLoading={inquiriesQuery.isLoading}
         isError={inquiriesQuery.isError}
@@ -80,6 +113,7 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
         ))}
       </div>
       </QueryState>
+      <AdminListPagination page={inquiriesData?.page || page} totalPages={inquiriesData?.totalPages || 0} onPageChange={setPage} testId="pagination-inquiries" />
 
       {selectedInquiry && (
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>

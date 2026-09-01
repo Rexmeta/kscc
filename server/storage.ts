@@ -210,6 +210,7 @@ export interface IStorage {
     country?: string;
     industry?: string;
     membershipLevel?: string;
+    membershipStatus?: string;
     search?: string;
     admin?: boolean;
     limit?: number;
@@ -248,6 +249,7 @@ export interface IStorage {
   getInquiries(filters?: {
     status?: string;
     category?: string;
+    search?: string;
     limit?: number;
     offset?: number;
 
@@ -271,6 +273,8 @@ export interface IStorage {
 
   getPartners(filters?: {
     active?: boolean;
+    search?: string;
+    category?: string;
     limit?: number;
     offset?: number;
 
@@ -289,6 +293,8 @@ export interface IStorage {
   getSurveySettingsList(filters?: {
     limit?: number;
     offset?: number;
+    search?: string;
+    status?: "inactive" | "upcoming" | "active" | "ended";
   }): Promise<{ surveys: SurveySettings[]; total: number }>;
   getActiveSurveySettings(now?: Date, limit?: number): Promise<SurveySettings[]>;
   createSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
@@ -334,6 +340,7 @@ export interface IStorage {
     isFeatured?: boolean;
     tags?: string[];
     search?: string;
+    category?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
@@ -403,6 +410,7 @@ export interface IStorage {
   getOrganizationMembers(filters?: {
     category?: string;
     categories?: readonly string[];
+    search?: string;
     isActive?: boolean;
     limit?: number;
     offset?: number;
@@ -1120,6 +1128,7 @@ export class DatabaseStorage implements IStorage {
     country?: string;
     industry?: string;
     membershipLevel?: string;
+    membershipStatus?: string;
     search?: string;
     admin?: boolean;
     limit?: number;
@@ -1145,10 +1154,13 @@ export class DatabaseStorage implements IStorage {
     if (filters?.membershipLevel) {
       conditions.push(eq(members.membershipLevel, filters.membershipLevel));
     }
+    if (filters?.membershipStatus) {
+      conditions.push(eq(members.membershipStatus, filters.membershipStatus));
+    }
     if (filters?.search) {
       const searchCondition = or(
-        like(members.companyName, `%${filters.search}%`),
-        like(members.description, `%${filters.search}%`)
+        ilike(members.companyName, `%${filters.search}%`),
+        ilike(members.description, `%${filters.search}%`)
       );
       if (searchCondition) {
         conditions.push(searchCondition);
@@ -1472,6 +1484,7 @@ export class DatabaseStorage implements IStorage {
   async getInquiries(filters?: {
     status?: string;
     category?: string;
+    search?: string;
     limit?: number;
     offset?: number;
   }): Promise<{ inquiries: Inquiry[]; total: number }> {
@@ -1485,6 +1498,16 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.category) {
       conditions.push(eq(inquiries.category, filters.category));
+    }
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(inquiries.subject, searchTerm),
+        ilike(inquiries.name, searchTerm),
+        ilike(inquiries.companyName, searchTerm),
+        ilike(inquiries.email, searchTerm),
+        ilike(inquiries.message, searchTerm),
+      )!);
     }
 
     if (conditions.length > 0) {
@@ -1501,8 +1524,8 @@ export class DatabaseStorage implements IStorage {
       countQuery,
       query
         .orderBy(desc(inquiries.createdAt))
-        .limit(filters?.limit || 50)
-        .offset(filters?.offset || 0),
+        .limit(boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE))
+        .offset(boundedOffset(filters?.offset)),
     ]);
     const [totalResult] = totalResults;
 
@@ -1620,6 +1643,8 @@ export class DatabaseStorage implements IStorage {
 
   async getPartners(filters?: {
     active?: boolean;
+    search?: string;
+    category?: string;
     limit?: number;
     offset?: number;
   }): Promise<{ partners: Partner[]; total: number }> {
@@ -1628,11 +1653,26 @@ export class DatabaseStorage implements IStorage {
     const limit = boundedPageSize(filters?.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
     const offset = boundedOffset(filters?.offset);
 
+    const conditions = [];
     if (filters?.active !== undefined) {
+      conditions.push(eq(partners.isActive, filters.active));
+    }
+    if (filters?.category) {
+      conditions.push(eq(partners.category, filters.category));
+    }
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(partners.name, searchTerm),
+        ilike(partners.description, searchTerm),
+      )!);
+    }
+    if (conditions.length > 0) {
+      const whereCondition = and(...conditions);
       // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
-      query = query.where(eq(partners.isActive, filters.active));
+      query = query.where(whereCondition);
       // @ts-expect-error - Drizzle ORM type inference issue, works at runtime
-      countQuery = countQuery.where(eq(partners.isActive, filters.active));
+      countQuery = countQuery.where(whereCondition);
     }
 
     const [[totalResult], partnersResult] = await Promise.all([
@@ -1691,14 +1731,44 @@ export class DatabaseStorage implements IStorage {
   async getSurveySettingsList(filters: {
     limit?: number;
     offset?: number;
+    search?: string;
+    status?: "inactive" | "upcoming" | "active" | "ended";
   } = {}): Promise<{ surveys: SurveySettings[]; total: number }> {
     const limit = boundedPageSize(filters.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
     const offset = boundedOffset(filters.offset);
+    const conditions = [];
+    if (filters.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(surveySettings.title, searchTerm),
+        ilike(surveySettings.description, searchTerm),
+      )!);
+    }
+    if (filters.status) {
+      const now = new Date();
+      if (filters.status === "inactive") {
+        conditions.push(eq(surveySettings.isActive, false));
+      } else {
+        conditions.push(eq(surveySettings.isActive, true));
+        if (filters.status === "upcoming") {
+          conditions.push(and(isNotNull(surveySettings.startsAt), gt(surveySettings.startsAt, now))!);
+        } else if (filters.status === "active") {
+          conditions.push(or(isNull(surveySettings.startsAt), lte(surveySettings.startsAt, now))!);
+          conditions.push(or(isNull(surveySettings.endsAt), gt(surveySettings.endsAt, now))!);
+        } else if (filters.status === "ended") {
+          conditions.push(and(isNotNull(surveySettings.endsAt), lte(surveySettings.endsAt, now))!);
+        }
+      }
+    }
+    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
     const [totalResult, surveys] = await Promise.all([
-      db.select({ count: count() }).from(surveySettings),
+      whereCondition
+        ? db.select({ count: count() }).from(surveySettings).where(whereCondition)
+        : db.select({ count: count() }).from(surveySettings),
       db
         .select()
         .from(surveySettings)
+        .where(whereCondition)
         .orderBy(asc(surveySettings.displayOrder), asc(surveySettings.createdAt), asc(surveySettings.id))
         .limit(limit)
         .offset(offset),
@@ -2207,6 +2277,7 @@ export class DatabaseStorage implements IStorage {
     isFeatured?: boolean;
     tags?: string[];
     search?: string;
+    category?: string;
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
@@ -2352,6 +2423,22 @@ export class DatabaseStorage implements IStorage {
       if (tagConditions.length > 0) {
         conditions.push(or(...tagConditions)!);
       }
+    }
+
+    if (filters?.category) {
+      const categoryKey = filters.postType === "event"
+        ? "event.category"
+        : filters.postType === "resource"
+          ? "resource.category"
+          : undefined;
+      conditions.push(categoryKey
+        ? sql`EXISTS (
+            SELECT 1 FROM ${postMeta}
+            WHERE ${postMeta.postId} = ${posts.id}
+              AND ${postMeta.key} = ${categoryKey}
+              AND COALESCE(${postMeta.valueText}, ${postMeta.value}::text) ILIKE ${filters.category}
+          )`
+        : sql`${posts.tags}::jsonb ? ${filters.category}`);
     }
 
     // Search filtering (slug + translations)
@@ -2984,6 +3071,7 @@ export class DatabaseStorage implements IStorage {
   async getOrganizationMembers(filters?: {
     category?: string;
     categories?: readonly string[];
+    search?: string;
     isActive?: boolean;
     limit?: number;
     offset?: number;
@@ -3002,6 +3090,14 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.isActive !== undefined) {
       conditions.push(eq(organizationMembers.isActive, filters.isActive));
+    }
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(organizationMembers.name, searchTerm),
+        ilike(organizationMembers.position, searchTerm),
+        ilike(organizationMembers.description, searchTerm),
+      )!);
     }
 
     if (conditions.length > 0) {

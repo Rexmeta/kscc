@@ -2349,6 +2349,141 @@ async function createPost(
 }
 
 test(
+  "admin collection filters apply to rows, counts, and page boundaries together",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const suffix = randomUUID();
+    const memberIds: string[] = [];
+    const inquiryIds: string[] = [];
+    const partnerIds: string[] = [];
+    const organizationMemberIds: string[] = [];
+    const surveyIds: string[] = [];
+
+    try {
+      for (const [index, status] of (["active", "active", "inactive"] as const).entries()) {
+        const [member] = await db.insert(members).values({
+          companyName: `Admin Filter Company ${suffix} ${index}`,
+          industry: "Testing",
+          country: index === 1 ? "China" : "Korea",
+          city: "Seoul",
+          address: "Test address",
+          contactPerson: "Test contact",
+          contactEmail: `admin-filter-member-${suffix}-${index}@example.test`,
+          membershipLevel: index === 1 ? "premium" : "regular",
+          membershipStatus: status,
+          isPublic: true,
+        }).returning();
+        memberIds.push(member.id);
+      }
+
+      for (const [index, status] of (["new", "resolved", "new"] as const).entries()) {
+        const [inquiry] = await db.insert(inquiries).values({
+          category: "membership",
+          name: `Filter Contact ${suffix} ${index}`,
+          email: `admin-filter-inquiry-${suffix}-${index}@example.test`,
+          companyName: `Admin Filter Company ${suffix}`,
+          subject: `Filter inquiry ${suffix} ${index}`,
+          message: index === 1 ? "different message" : `Matching message ${suffix}`,
+          status,
+        }).returning();
+        inquiryIds.push(inquiry.id);
+      }
+
+      for (const [index, category] of (["partner", "sponsor", "partner"] as const).entries()) {
+        const [partner] = await db.insert(partners).values({
+          name: `Filter Partner ${suffix} ${index}`,
+          logo: "https://example.com/logo.png",
+          description: index === 1 ? "Other description" : `Matching description ${suffix}`,
+          category,
+          isActive: index !== 1,
+        }).returning();
+        partnerIds.push(partner.id);
+      }
+
+      for (const [index, category] of (["executives", "directors", "executives"] as const).entries()) {
+        const [member] = await db.insert(organizationMembers).values({
+          name: `Filter Person ${suffix} ${index}`,
+          position: index === 1 ? "Director" : "Officer",
+          category,
+          description: `Matching description ${suffix}`,
+          isActive: true,
+        }).returning();
+        organizationMemberIds.push(member.id);
+      }
+
+      for (const [index, isActive] of ([false, true, true] as const).entries()) {
+        const id = `admin-filter-${suffix}-${index}`;
+        const [survey] = await db.insert(surveySettings).values({
+          id,
+          title: `Filter Survey ${suffix} ${index}`,
+          description: index === 1 ? "Other introduction" : `Matching introduction ${suffix}`,
+          isActive,
+          startsAt: null,
+          endsAt: null,
+        }).returning();
+        surveyIds.push(survey.id);
+      }
+
+      const memberPage = await storage.getMembers({
+        admin: true,
+        search: `ADMIN FILTER COMPANY ${suffix}`,
+        membershipStatus: "active",
+        limit: 1,
+        offset: 0,
+      });
+      assert.equal(memberPage.total, 2);
+      assert.equal(memberPage.members.length, 1);
+
+      const inquiryPage = await storage.getInquiries({
+        search: suffix,
+        status: "new",
+        category: "membership",
+        limit: 1,
+        offset: 1,
+      });
+      assert.equal(inquiryPage.total, 2);
+      assert.equal(inquiryPage.inquiries.length, 1);
+
+      const partnerPage = await storage.getPartners({
+        search: suffix,
+        category: "partner",
+        active: true,
+        limit: 1,
+        offset: 0,
+      });
+      assert.equal(partnerPage.total, 2);
+      assert.equal(partnerPage.partners.length, 1);
+
+      const organizationPage = await storage.getOrganizationMembers({
+        search: suffix,
+        categories: ["executives"],
+        isActive: true,
+        limit: 1,
+        offset: 0,
+      });
+      assert.equal(organizationPage.total, 2);
+      assert.equal(organizationPage.members.length, 1);
+
+      const surveyPage = await storage.getSurveySettingsList({
+        search: suffix,
+        status: "active",
+        limit: 1,
+        offset: 0,
+      });
+      assert.equal(surveyPage.total, 2);
+      assert.equal(surveyPage.surveys.length, 1);
+    } finally {
+      await db.delete(surveySettings).where(inArray(surveySettings.id, surveyIds));
+      await db.delete(organizationMembers).where(inArray(organizationMembers.id, organizationMemberIds));
+      await db.delete(partners).where(inArray(partners.id, partnerIds));
+      await db.delete(inquiries).where(inArray(inquiries.id, inquiryIds));
+      await db.delete(members).where(inArray(members.id, memberIds));
+    }
+  },
+);
+
+test(
   "event lists include past events while current/upcoming filters keep active events",
   { skip: !databaseAvailable },
   async () => {
