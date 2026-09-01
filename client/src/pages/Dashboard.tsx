@@ -94,6 +94,7 @@ export default function Dashboard() {
     'news.read',
     'event.read',
     'resource.read',
+    'page.read',
     'inquiry.read',
     'organization.executives.read',
   ]);

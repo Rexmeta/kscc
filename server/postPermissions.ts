@@ -21,9 +21,9 @@ export const postPermissionKeys = {
     publish: "resource.publish",
   },
   page: {
-    read: undefined,
+    read: "page.read",
     create: undefined,
-    update: undefined,
+    update: "page.update",
     delete: undefined,
     publish: undefined,
   },

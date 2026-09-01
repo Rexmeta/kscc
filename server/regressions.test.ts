@@ -297,7 +297,11 @@ test("managed post actions map to their scoped ACL permissions", () => {
   assert.equal(getPostPermissionKey("event", "attendeeManage"), "event.attendee.manage");
   assert.equal(getPostPermissionKey("resource", "create"), "resource.upload");
   assert.equal(getPostPermissionKey("resource", "delete"), "resource.delete");
-  assert.equal(getPostPermissionKey("page", "read"), undefined);
+  assert.equal(getPostPermissionKey("page", "read"), "page.read");
+  assert.equal(getPostPermissionKey("page", "update"), "page.update");
+  assert.equal(getPostPermissionKey("page", "create"), undefined);
+  assert.equal(getPostPermissionKey("page", "delete"), undefined);
+  assert.equal(getPostPermissionKey("page", "publish"), undefined);
   assert.equal(getPostPermissionKey("news", "attendeeManage"), undefined);
 });
 

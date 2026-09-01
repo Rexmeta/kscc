@@ -23,7 +23,8 @@ interface AboutContent {
 }
 
 export default function AboutPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
+  const canEditPage = isAdmin || hasPermission('page.update');
   const { language } = useLanguage();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -70,7 +71,7 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen relative">
-      {isAdmin && page && (
+      {canEditPage && page && (
         <>
           <Button
             variant="outline"

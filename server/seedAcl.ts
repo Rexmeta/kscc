@@ -100,6 +100,10 @@ const PERMS = [
   ['inquiry.read', 'inquiry', 'read', '문의 열람'],
   ['inquiry.respond', 'inquiry', 'update', '문의 응답'],
 
+  // Static pages
+  ['page.read', 'page', 'read', '정적 페이지 열람'],
+  ['page.update', 'page', 'update', '정적 페이지 수정'],
+
   // Executive organization management
   ['organization.executives.read', 'organization.executives', 'read', '임원진 정보 열람'],
   ['organization.executives.create', 'organization.executives', 'create', '임원진 정보 추가'],
@@ -160,6 +164,8 @@ const ROLE_PERMS: Record<string, string[]> = {
     'member.*',
     'partner.*',
     'inquiry.*',
+    'page.read',
+    'page.update',
     'system.dashboard',
     'survey.manage',
     'organization.executives.read',

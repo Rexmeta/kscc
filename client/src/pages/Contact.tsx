@@ -57,7 +57,8 @@ interface ContactContent {
 
 export default function ContactPage() {
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
+  const canEditPage = isAdmin || hasPermission('page.update');
   const { language } = useLanguage();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
@@ -121,7 +122,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen relative bg-background dark:bg-background">
-      {isAdmin && page && (
+      {canEditPage && page && (
         <>
           <Button
             variant="outline"

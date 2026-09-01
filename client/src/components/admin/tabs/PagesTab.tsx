@@ -7,7 +7,7 @@ import type { PostWithTranslations } from '@shared/schema';
 import { useAdminPosts } from '@/hooks/useAdminData';
 import { QueryState } from '@/components/QueryState';
 
-export function PagesTab({ activeTab }: { activeTab: string }) {
+export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: boolean }) {
   const [selectedPage, setSelectedPage] = useState<PostWithTranslations | null>(null);
   const [pageEditModalOpen, setPageEditModalOpen] = useState(false);
 
@@ -42,19 +42,21 @@ export function PagesTab({ activeTab }: { activeTab: string }) {
                     {translation?.excerpt || '페이지 설명 없음'}
                   </p>
                 </div>
-                <div className="flex space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedPage(page);
-                      setPageEditModalOpen(true);
-                    }}
-                    data-testid={`button-edit-page-${page.id}`}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                </div>
+                 {canEdit && (
+                   <div className="flex space-x-2">
+                     <Button
+                       size="sm"
+                       variant="outline"
+                       onClick={() => {
+                         setSelectedPage(page);
+                         setPageEditModalOpen(true);
+                       }}
+                       data-testid={`button-edit-page-${page.id}`}
+                     >
+                       <Edit className="h-4 w-4" />
+                     </Button>
+                   </div>
+                 )}
               </div>
             );
           })}

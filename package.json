@@ -22,6 +22,7 @@
     "scheduled-publications:run": "tsx server/runScheduledPublications.ts",
     "acl:ensure-executive": "tsx server/ensureExecutiveAcl.ts",
     "acl:ensure-survey": "tsx server/ensureSurveyAcl.ts",
+    "acl:ensure-page": "tsx server/ensurePageAcl.ts",
     "admin:bootstrap": "tsx server/bootstrapAdmin.ts",
     "test": "tsx --test server/health.test.ts server/telemetry.test.ts server/seo.test.ts server/regressions.test.ts server/postStatusRoutes.test.ts client/src/lib/registerFlow.test.ts client/src/lib/adminPostMappers.test.ts client/src/lib/analytics.test.ts client/src/lib/publicPartners.test.ts client/src/lib/frontendReliability.test.ts"
   },
