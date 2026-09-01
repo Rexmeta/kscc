@@ -15,3 +15,4 @@
 - [Redacted operational telemetry](telemetry-contract.md) — correlate structured events through an allow-list; never serialize request, auth, message, or provider data.
 - [Shared database test fixtures](shared-db-test-fixtures.md) — integration tests that mutate shared rows must own uniquely identifiable fixtures and clean them up in finally blocks.
 - [Production schema verification](production-schema-verification.md) — a successful publish can still leave a pending schema diff; verify production columns and endpoint health after database changes.
+- [npm override lock regeneration](npm-override-lock-regeneration.md) — a new transitive override may require rebuilding the lockfile, not only reinstalling modules.
