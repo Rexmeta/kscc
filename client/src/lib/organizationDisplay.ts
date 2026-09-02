@@ -4,7 +4,7 @@ import {
   ORGANIZATION_CATEGORY_ORDER,
   type OrganizationCategory,
 } from '@shared/organization';
-import { Award, Building, Briefcase, GraduationCap, Users, UserCheck, type LucideIcon } from 'lucide-react';
+import { Award, Building, Briefcase, ClipboardList, GraduationCap, Users, UserCheck, type LucideIcon } from 'lucide-react';
 
 const ORGANIZATION_CATEGORY_PRESENTATION: Record<
   OrganizationCategory,
@@ -21,6 +21,10 @@ const ORGANIZATION_CATEGORY_PRESENTATION: Record<
   vicepresidents: {
     icon: Users,
     color: 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800',
+  },
+  secretary_office: {
+    icon: ClipboardList,
+    color: 'bg-indigo-100 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800',
   },
   directors: {
     icon: Briefcase,

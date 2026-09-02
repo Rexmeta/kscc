@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   ORGANIZATION_CATEGORY_LABELS,
-  ORGANIZATION_CATEGORY_ORDER,
+  organizationCategorySchema,
 } from '@shared/organization';
 
 export const newsSchema = z.object({
@@ -89,7 +89,7 @@ export const organizationMemberSchema = z.object({
 export type OrganizationMemberFormValues = z.infer<typeof organizationMemberSchema>;
 
 export const ORGANIZATION_CATEGORIES = [
-  ...ORGANIZATION_CATEGORY_ORDER.map((value) => ({
+  ...organizationCategorySchema.options.map((value) => ({
     value,
     label: ORGANIZATION_CATEGORY_LABELS[value].ko,
   })),

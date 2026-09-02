@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const EXECUTIVE_MANAGEMENT_CATEGORIES = [
   'executives',
   'honorary',
@@ -10,12 +12,15 @@ export const ORGANIZATION_CATEGORY_ORDER = [
   'executives',
   'honorary',
   'vicepresidents',
+  'secretary_office',
   'directors',
   'advisors',
   'secretariat',
   'committees',
   'organizations',
 ] as const;
+
+export const organizationCategorySchema = z.enum(ORGANIZATION_CATEGORY_ORDER);
 
 export type OrganizationCategory = (typeof ORGANIZATION_CATEGORY_ORDER)[number];
 
@@ -26,6 +31,7 @@ export const ORGANIZATION_CATEGORY_LABELS: Record<
   executives: { ko: '임원진', en: 'Executives', zh: '管理层' },
   honorary: { ko: '명예직', en: 'Honorary', zh: '荣誉职位' },
   vicepresidents: { ko: '부회장', en: 'Vice Presidents', zh: '副会长' },
+  secretary_office: { ko: '비서실', en: 'Secretary Office', zh: '秘书室' },
   directors: { ko: '이사', en: 'Directors', zh: '理事' },
   advisors: { ko: '고문', en: 'Advisors', zh: '顾问' },
   secretariat: { ko: '사무국', en: 'Secretariat', zh: '秘书处' },

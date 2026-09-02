@@ -3,6 +3,7 @@ import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uuid, pgEnu
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { organizationCategorySchema } from "./organization";
 
 // Enums for unified post system
 export const postTypeEnum = pgEnum("post_type", ["news", "event", "resource", "page"]);
@@ -673,7 +674,7 @@ export const organizationMembers = pgTable("organization_members", {
   position: text("position").notNull(), // 회장, 부회장, 이사 등
   positionEn: text("position_en"),
   positionZh: text("position_zh"),
-  category: text("category").notNull(), // executives, honorary, vicepresidents, directors, advisors, secretariat, committees, organizations
+  category: text("category").notNull(), // executives, honorary, vicepresidents, secretary_office, directors, advisors, secretariat, committees, organizations
   photo: text("photo"), // photo URL
   description: text("description"), // additional info like committee role
   descriptionEn: text("description_en"),
@@ -684,11 +685,15 @@ export const organizationMembers = pgTable("organization_members", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    category: organizationCategorySchema,
+  });
 
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;

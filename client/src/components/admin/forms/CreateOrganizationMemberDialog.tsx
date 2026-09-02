@@ -13,7 +13,11 @@ import { Upload, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
-import { organizationMemberSchema, ORGANIZATION_CATEGORIES } from '../adminSchemas';
+import {
+  organizationMemberSchema,
+  ORGANIZATION_CATEGORIES,
+  type OrganizationMemberFormValues,
+} from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
 
 export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = false }: { onSuccess: () => void; executivesOnly?: boolean }) {
@@ -23,7 +27,7 @@ export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = fal
   const [isActive, setIsActive] = useState(true);
   const [photo, setPhoto] = useState('');
 
-  const form = useForm({
+  const form = useForm<OrganizationMemberFormValues>({
     resolver: zodResolver(organizationMemberSchema),
     defaultValues: {
       name: '',

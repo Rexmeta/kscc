@@ -54,6 +54,7 @@ import { emailService } from "./email";
 import {
   isExecutiveManagementCategory,
   ORGANIZATION_CATEGORY_ORDER,
+  organizationCategorySchema,
 } from "@shared/organization";
 import { getPostPermissionKey } from "./postPermissions";
 import { isSurveyVisible } from "@shared/survey";
@@ -161,7 +162,7 @@ const executivePermissions = {
 } as const;
 
 const organizationMemberQuerySchema = z.object({
-  category: z.enum(ORGANIZATION_CATEGORY_ORDER).optional(),
+  category: organizationCategorySchema.optional(),
   search: z.string().trim().max(100).optional(),
   isActive: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
@@ -171,7 +172,7 @@ const organizationMemberQuerySchema = z.object({
 const organizationMemberIdSchema = z.string().uuid();
 const partnerIdSchema = z.string().uuid();
 const organizationMemberReorderSchema = z.object({
-  category: z.enum(ORGANIZATION_CATEGORY_ORDER),
+  category: organizationCategorySchema,
   memberIds: z.array(z.string().uuid()).min(1).max(200),
 }).strict().refine(
   (data) => new Set(data.memberIds).size === data.memberIds.length,
@@ -489,8 +490,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // The home page can show active survey details publicly, but only an
-  // authenticated response includes the external participation URL.
+  // Plural alias makes the collection contract explicit while retaining the
+  // original endpoint path for existing authenticated clients.
   app.get("/api/surveys", optionalAuthenticateToken, async (req, res) => {
     try {
       const now = new Date();

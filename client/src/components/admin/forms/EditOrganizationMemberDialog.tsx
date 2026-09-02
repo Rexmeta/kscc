@@ -15,7 +15,11 @@ import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
 import type { OrganizationMember } from '@shared/schema';
 import { isExecutiveManagementCategory } from '@shared/organization';
-import { organizationMemberSchema, ORGANIZATION_CATEGORIES } from '../adminSchemas';
+import {
+  organizationMemberSchema,
+  ORGANIZATION_CATEGORIES,
+  type OrganizationMemberFormValues,
+} from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
 
 export function EditOrganizationMemberDialog({
@@ -38,7 +42,7 @@ export function EditOrganizationMemberDialog({
     ? ORGANIZATION_CATEGORIES.filter((cat) => isExecutiveManagementCategory(cat.value))
     : ORGANIZATION_CATEGORIES;
 
-  const form = useForm({
+  const form = useForm<OrganizationMemberFormValues>({
     resolver: zodResolver(organizationMemberSchema),
     defaultValues: {
       name: member.name,

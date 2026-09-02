@@ -48,7 +48,12 @@ import {
 } from "./storage";
 import { EmailService } from "./email";
 import { issueAuthToken } from "./auth";
-import { sortOrganizationMembers } from "@shared/organization";
+import {
+  isExecutiveManagementCategory,
+  ORGANIZATION_CATEGORY_LABELS,
+  ORGANIZATION_CATEGORY_ORDER,
+  sortOrganizationMembers,
+} from "@shared/organization";
 import { getSurveyStatus, isSurveyVisible } from "@shared/survey";
 import {
   canAccessObject,
@@ -78,6 +83,26 @@ test("organization member ordering is deterministic for public and admin views",
     sortOrganizationMembers(members.filter((member) => member.isActive)).map((member) => member.id),
     ["b", "c", "d"],
   );
+});
+
+test("organization categories keep the public and admin contract in order", () => {
+  assert.deepEqual(ORGANIZATION_CATEGORY_ORDER, [
+    "executives",
+    "honorary",
+    "vicepresidents",
+    "secretary_office",
+    "directors",
+    "advisors",
+    "secretariat",
+    "committees",
+    "organizations",
+  ]);
+  assert.deepEqual(ORGANIZATION_CATEGORY_LABELS.secretary_office, {
+    ko: "비서실",
+    en: "Secretary Office",
+    zh: "秘书室",
+  });
+  assert.equal(isExecutiveManagementCategory("secretary_office"), false);
 });
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
@@ -3562,6 +3587,10 @@ test(
     const originalGetUser = storage.getUser;
     const originalGetOrganizationMembers = storage.getOrganizationMembers;
     const originalGetOrganizationMember = storage.getOrganizationMember;
+    const originalCreateOrganizationMember = storage.createOrganizationMember;
+    const originalUpdateOrganizationMember = storage.updateOrganizationMember;
+    const originalReorderOrganizationMembers = storage.reorderOrganizationMembers;
+    const secretaryMemberId = randomUUID();
 
     storage.getUser = async (id) =>
       id === adminUserId
@@ -3586,8 +3615,30 @@ test(
       if (id === inactiveMember.id) return inactiveMember as any;
       return undefined;
     };
+    storage.createOrganizationMember = async (member) => ({
+      ...member,
+      id: secretaryMemberId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+    storage.updateOrganizationMember = async (id, updates) => ({
+      ...(id === activeMember.id ? activeMember : inactiveMember),
+      ...updates,
+      id,
+      updatedAt: new Date(),
+    } as any);
+    storage.reorderOrganizationMembers = async (category, memberIds) => {
+      assert.equal(category, "secretary_office");
+      assert.deepEqual(memberIds, [secretaryMemberId]);
+      return [{
+        ...activeMember,
+        id: secretaryMemberId,
+        category,
+      }] as any;
+    };
 
     const app = express();
+    app.use(express.json());
     const server = await registerRoutes(app);
 
     try {
@@ -3627,6 +3678,11 @@ test(
       const invalidFilter = await request("/api/organization-members?isActive=all");
       assert.equal(invalidFilter.status, 400);
 
+      const invalidCategory = await request(
+        "/api/organization-members?category=unknown_category",
+      );
+      assert.equal(invalidCategory.status, 400);
+
       const publicActiveDetail = await request(`/api/organization-members/${activeMember.id}`);
       assert.equal(publicActiveDetail.status, 200);
       assert.equal(publicActiveDetail.body.id, activeMember.id);
@@ -3652,10 +3708,63 @@ test(
       );
       assert.equal(adminInactiveDetail.status, 200);
       assert.equal(adminInactiveDetail.body.id, inactiveMember.id);
+
+      const secretaryData = {
+        name: "Secretary Office Member",
+        position: "Secretary",
+        category: "secretary_office",
+        isActive: true,
+      };
+      const createdSecretary = await request("/api/organization-members", {
+        token: adminToken,
+        method: "POST",
+        body: secretaryData,
+      });
+      assert.equal(createdSecretary.status, 201, JSON.stringify(createdSecretary.body));
+      assert.equal(createdSecretary.body.category, "secretary_office");
+
+      const updatedSecretary = await request(`/api/organization-members/${activeMember.id}`, {
+        token: adminToken,
+        method: "PUT",
+        body: { category: "secretary_office" },
+      });
+      assert.equal(updatedSecretary.status, 200);
+      assert.equal(updatedSecretary.body.category, "secretary_office");
+
+      const reorderedSecretary = await request("/api/organization-members/reorder", {
+        token: adminToken,
+        method: "PUT",
+        body: {
+          category: "secretary_office",
+          memberIds: [secretaryMemberId],
+        },
+      });
+      assert.equal(reorderedSecretary.status, 200);
+      assert.equal(reorderedSecretary.body[0].category, "secretary_office");
+
+      assert.equal(
+        (await request("/api/organization-members", {
+          token: adminToken,
+          method: "POST",
+          body: { ...secretaryData, category: "unknown_category" },
+        })).status,
+        400,
+      );
+      assert.equal(
+        (await request(`/api/organization-members/${activeMember.id}`, {
+          token: adminToken,
+          method: "PUT",
+          body: { category: "unknown_category" },
+        })).status,
+        400,
+      );
     } finally {
       storage.getUser = originalGetUser;
       storage.getOrganizationMembers = originalGetOrganizationMembers;
       storage.getOrganizationMember = originalGetOrganizationMember;
+      storage.createOrganizationMember = originalCreateOrganizationMember;
+      storage.updateOrganizationMember = originalUpdateOrganizationMember;
+      storage.reorderOrganizationMembers = originalReorderOrganizationMembers;
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       if (originalSessionSecret === undefined) {
         delete process.env.SESSION_SECRET;
