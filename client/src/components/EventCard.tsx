@@ -83,21 +83,21 @@ export default function EventCard({ post }: EventCardProps) {
         <img
           src={featuredImage}
           alt={translation.title || post.slug}
-          className="w-full h-48 object-cover rounded-t-lg"
+           className="h-40 w-full rounded-t-lg object-cover sm:h-48"
           width={640}
           height={192}
           loading="lazy"
         />
       ) : (
-        <div className="w-full h-48 bg-gradient-to-r from-primary/10 to-accent/10 rounded-t-lg flex items-center justify-center">
+         <div className="flex h-40 w-full items-center justify-center rounded-t-lg bg-gradient-to-r from-primary/10 to-accent/10 sm:h-48">
           <Calendar className="h-12 w-12 text-muted-foreground" />
         </div>
       )}
       
-      <CardContent className="p-6">
+       <CardContent className="p-4 sm:p-6">
         {/* Event Badges */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex gap-2">
+         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+           <div className="flex flex-wrap gap-1.5">
             {getCategoryBadge(eventMeta.category)}
             {getTypeBadge(eventMeta.eventType)}
           </div>
@@ -120,9 +120,9 @@ export default function EventCard({ post }: EventCardProps) {
         
         {/* Event Details */}
         <div className="space-y-2 mb-4 text-sm">
-          <div className="flex items-center gap-2 text-muted-foreground">
+           <div className="flex min-w-0 items-start gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 text-primary" />
-            <span data-testid={`event-date-${post.id}`}>
+             <span className="min-w-0 break-words" data-testid={`event-date-${post.id}`}>
               {eventMeta.eventDate ? (
                 <>
                   {formatDate(eventMeta.eventDate)} {formatTime(eventMeta.eventDate)}
@@ -133,9 +133,9 @@ export default function EventCard({ post }: EventCardProps) {
               )}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
+           <div className="flex min-w-0 items-start gap-2 text-muted-foreground">
             <MapPin className="h-4 w-4 text-primary" />
-            <span data-testid={`event-location-${post.id}`}>{eventMeta.location || '장소 미정'}</span>
+             <span className="min-w-0 break-words" data-testid={`event-location-${post.id}`}>{eventMeta.location || '장소 미정'}</span>
           </div>
           {eventMeta.fee !== undefined && eventMeta.fee !== null && eventMeta.fee > 0 && (
             <div className="flex items-center gap-2 text-muted-foreground">

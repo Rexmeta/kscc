@@ -122,34 +122,34 @@ export default function Home() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 hero-overlay"></div>
         
-        <div className="container relative z-10 py-24 md:py-32">
+        <div className="container relative z-10 py-16 sm:py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center text-white">
-            <h1 className="mb-6 text-4xl font-bold leading-tight md:text-6xl fade-in-up">
+            <h1 className="mb-6 text-3xl font-bold leading-tight sm:text-4xl md:text-6xl fade-in-up">
               {t('hero.title')}
             </h1>
-            <p className="mb-4 text-xl opacity-95 md:text-2xl lang-en">
+            <p className="mb-4 text-base opacity-95 sm:text-xl md:text-2xl lang-en">
               {t('hero.subtitle')}
             </p>
-            <p className="mb-12 text-lg opacity-90 md:text-xl">
+            <p className="mb-10 text-base opacity-90 sm:mb-12 sm:text-lg md:text-xl">
               {t('hero.description')}
             </p>
             
             {/* CTA Buttons */}
-            <div className="mb-16 flex flex-wrap justify-center gap-4">
-              <Link href="/register">
-                <Button size="lg" className="btn-secondary text-lg" data-testid="button-join">
+            <div className="mb-12 flex flex-col justify-center gap-3 sm:mb-16 sm:flex-row sm:flex-wrap sm:gap-4">
+              <Link href="/register" className="w-full sm:w-auto">
+                <Button size="lg" className="btn-secondary w-full text-base sm:text-lg" data-testid="button-join">
                   <Users className="h-5 w-5" />
                   {t('hero.cta.member')}
                 </Button>
               </Link>
-              <Link href="/events">
-                <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10 text-lg bg-[#ffffff00]" data-testid="button-events">
+              <Link href="/events" className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" className="w-full border-white bg-[#ffffff00] text-base text-white hover:bg-white/10 sm:text-lg" data-testid="button-events">
                   <Calendar className="h-5 w-5" />
                   {t('hero.cta.event')}
                 </Button>
               </Link>
-              <Link href="/contact">
-                <Button size="lg" className="btn-accent text-lg" data-testid="button-contact">
+              <Link href="/contact" className="w-full sm:w-auto">
+                <Button size="lg" className="btn-accent w-full text-base sm:text-lg" data-testid="button-contact">
                   <Globe className="h-5 w-5" />
                   {t('hero.cta.contact')}
                 </Button>
@@ -157,14 +157,14 @@ export default function Home() {
             </div>
 
             {latestNews && (
-              <div className="mt-12 rounded-2xl border border-white/15 bg-white/5 p-6 text-left shadow-2xl backdrop-blur-lg">
-                <div className="flex flex-col gap-6 md:flex-row md:items-center">
+              <div className="mt-8 rounded-2xl border border-white/15 bg-white/5 p-4 text-left shadow-2xl backdrop-blur-lg sm:mt-12 sm:p-6">
+                <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:gap-6">
                   {latestNewsImage && (
                     <div className="w-full overflow-hidden rounded-xl shadow-lg md:w-5/12">
                       <img
                         src={latestNewsImage}
                         alt={latestNewsTranslation?.title || latestNews.slug}
-                        className="h-48 w-full object-cover md:h-56"
+                        className="h-40 w-full object-cover sm:h-48 md:h-56"
                         width={800}
                         height={448}
                         loading="lazy"
@@ -178,7 +178,7 @@ export default function Home() {
                       </Badge>
                       {latestNewsDate && <span className="text-white/70">{formatDate(latestNewsDate)}</span>}
                     </div>
-                    <h3 className="text-2xl font-semibold leading-snug text-white">
+                    <h3 className="text-xl font-semibold leading-snug text-white sm:text-2xl">
                       {latestNewsTranslation?.title || latestNews.slug}
                     </h3>
                     {latestNewsSummary && (
@@ -186,7 +186,7 @@ export default function Home() {
                     )}
                     <div className="flex flex-wrap gap-3">
                       <Link href={`/news/${latestNews.id}`}>
-                        <Button size="lg" className="btn-accent" data-testid="hero-latest-news">
+                        <Button size="lg" className="btn-accent w-full sm:w-auto" data-testid="hero-latest-news">
                           {t('news.readMore')}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
@@ -195,7 +195,7 @@ export default function Home() {
                         <Button
                           size="lg"
                           variant="outline"
-                          className="border-white text-white hover:bg-white/10"
+                          className="w-full border-white text-white hover:bg-white/10 sm:w-auto"
                           data-testid="hero-view-all-news"
                         >
                           {t('news.viewAll')}
@@ -212,15 +212,15 @@ export default function Home() {
 
       {/* Upcoming Events */}
       {showUpcomingEvents && (
-        <section className="bg-background dark:bg-background py-16">
+        <section className="bg-background dark:bg-background py-12 sm:py-16">
           <div className="container">
-            <div className="mb-8 flex items-center justify-between">
+            <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="mb-2 text-3xl font-bold text-foreground">{t('events.upcoming')}</h2>
+                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{t('events.upcoming')}</h2>
                 <p className="text-muted-foreground">{t('home.events.subtitle')}</p>
               </div>
               <Link href="/events">
-                <Button variant="outline" data-testid="link-all-events">
+              <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-events">
                   {t('home.events.viewAll')}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -243,15 +243,15 @@ export default function Home() {
       )}
 
       {/* Latest News */}
-      <section className="bg-muted dark:bg-muted py-16">
+      <section className="bg-muted dark:bg-muted py-12 sm:py-16">
         <div className="container">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="mb-2 text-3xl font-bold text-foreground">{t('news.latest')}</h2>
+              <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{t('news.latest')}</h2>
               <p className="text-muted-foreground">{t('home.news.subtitle')}</p>
             </div>
             <Link href="/news">
-              <Button variant="outline" data-testid="link-all-news">
+              <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-news">
                 {t('news.viewAll')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -274,7 +274,7 @@ export default function Home() {
 
       {/* Active Member Surveys */}
       {isAuthenticated && surveys.length > 0 && (
-        <section className="bg-background dark:bg-background py-16" data-testid="home-surveys-section">
+        <section className="bg-background dark:bg-background py-12 sm:py-16" data-testid="home-surveys-section">
           <div className="container">
             <div className="mb-8 text-center">
               <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.surveys.title')}</h2>
@@ -317,7 +317,7 @@ export default function Home() {
       )}
 
       {/* Partners Grid */}
-      <section className="bg-background dark:bg-background py-16">
+      <section className="bg-background dark:bg-background py-12 sm:py-16">
         <div className="container">
           <div className="mb-12 text-center">
             <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.partners.title')}</h2>
@@ -331,9 +331,9 @@ export default function Home() {
             empty={partners.length === 0}
             emptyMessage={t('home.partners.empty')}
           >
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3 lg:grid-cols-6">
             {partners.slice(0, 12).map((partner: Partner) => (
-                <Card key={partner.id} className="card-hover p-6 flex items-center justify-center h-32">
+                <Card key={partner.id} className="card-hover flex h-28 items-center justify-center p-4 sm:h-32 sm:p-6">
                   <div className="text-center">
                     {partner.logo ? (
                       <img 
@@ -380,7 +380,7 @@ export default function Home() {
       </section>
 
       {/* About Preview */}
-      <section className="bg-muted dark:bg-muted py-20">
+      <section className="bg-muted dark:bg-muted py-16 sm:py-20">
         <div className="container">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
@@ -457,13 +457,13 @@ export default function Home() {
                 />
               </div>
               
-              <div className="absolute -bottom-6 -left-6 rounded-lg border border-border bg-card p-6 shadow-xl">
-                <div className="mb-1 text-3xl font-bold text-primary">{memberCount}+</div>
+               <div className="absolute bottom-4 left-4 rounded-lg border border-border bg-card p-4 shadow-xl sm:-bottom-6 sm:-left-6 sm:p-6">
+                 <div className="mb-1 text-2xl font-bold text-primary sm:text-3xl">{memberCount}+</div>
                 <div className="text-sm text-muted-foreground">{t('home.about.statsMembers')}</div>
               </div>
               
-              <div className="absolute -right-6 -top-6 rounded-lg border border-border bg-card p-6 shadow-xl">
-                <div className="mb-1 text-3xl font-bold text-accent">50+</div>
+               <div className="absolute right-4 top-4 rounded-lg border border-border bg-card p-4 shadow-xl sm:-right-6 sm:-top-6 sm:p-6">
+                 <div className="mb-1 text-2xl font-bold text-accent sm:text-3xl">50+</div>
                 <div className="text-sm text-muted-foreground">{t('home.about.statsEvents')}</div>
               </div>
             </div>
@@ -472,9 +472,9 @@ export default function Home() {
       </section>
 
       {/* Member Benefits */}
-      <section className="bg-background dark:bg-background py-16">
+      <section className="bg-background dark:bg-background py-12 sm:py-16">
         <div className="container">
-          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-8">
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 p-4 sm:p-8">
             <div className="mx-auto max-w-3xl text-center">
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary">
                 <Users className="h-10 w-10 text-white" />
@@ -484,33 +484,33 @@ export default function Home() {
                 {t('home.benefits.subtitle')}
               </p>
               
-              <div className="mb-8 grid gap-6 md:grid-cols-3">
-                <Card className="border-border p-6">
+              <div className="mb-8 grid gap-4 sm:gap-6 md:grid-cols-3">
+                <Card className="border-border p-4 sm:p-6">
                   <Building className="mb-3 h-8 w-8 text-primary mx-auto" />
                   <h4 className="mb-2 font-bold">{t('home.benefits.card1.title')}</h4>
                   <p className="text-sm text-muted-foreground">{t('home.benefits.card1.description')}</p>
                 </Card>
-                <Card className="border-border p-6">
+                <Card className="border-border p-4 sm:p-6">
                   <Users className="mb-3 h-8 w-8 text-accent mx-auto" />
                   <h4 className="mb-2 font-bold">{t('home.benefits.card2.title')}</h4>
                   <p className="text-sm text-muted-foreground">{t('home.benefits.card2.description')}</p>
                 </Card>
-                <Card className="border-border p-6">
+                <Card className="border-border p-4 sm:p-6">
                   <Calendar className="mb-3 h-8 w-8 text-secondary mx-auto" />
                   <h4 className="mb-2 font-bold">{t('home.benefits.card3.title')}</h4>
                   <p className="text-sm text-muted-foreground">{t('home.benefits.card3.description')}</p>
                 </Card>
               </div>
               
-              <div className="flex flex-wrap justify-center gap-4">
-                <Link href="/login">
-                  <Button size="lg" data-testid="button-login">
+              <div className="flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+                <Link href="/login" className="w-full sm:w-auto">
+                  <Button size="lg" className="w-full sm:w-auto" data-testid="button-login">
                     <Users className="h-5 w-5" />
                     {t('nav.login')}
                   </Button>
                 </Link>
-                <Link href="/register">
-                  <Button size="lg" className="btn-secondary" data-testid="button-register">
+                <Link href="/register" className="w-full sm:w-auto">
+                  <Button size="lg" className="btn-secondary w-full sm:w-auto" data-testid="button-register">
                     <Users className="h-5 w-5" />
                     {t('nav.register')}
                   </Button>

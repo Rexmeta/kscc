@@ -117,12 +117,12 @@ export default function Organization() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-primary text-primary-foreground py-16">
+       <div className="bg-primary py-6 text-primary-foreground sm:py-16">
         <div className="container text-center">
-          <h1 className="text-4xl font-bold mb-4" data-testid="text-org-title">
+           <h1 className="mb-2 text-2xl font-bold sm:mb-4 sm:text-4xl" data-testid="text-org-title">
             {t('org.title')}
           </h1>
-          <p className="text-lg opacity-90 max-w-2xl mx-auto" data-testid="text-org-subtitle">
+           <p className="mx-auto max-w-2xl text-sm opacity-90 sm:text-lg" data-testid="text-org-subtitle">
             {t('org.subtitle')}
           </p>
         </div>

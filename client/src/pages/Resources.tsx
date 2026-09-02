@@ -252,23 +252,23 @@ export default function ResourcesPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted dark:bg-muted py-16">
+       <section className="page-banner bg-muted dark:bg-muted">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('resources.title')}</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Resource Center / 资料中心</p>
+             <h1 className="mb-2 text-2xl font-bold text-foreground dark:text-foreground sm:mb-4 sm:text-4xl">{t('resources.title')}</h1>
+             <p className="text-sm text-muted-foreground dark:text-muted-foreground sm:text-lg">Resource Center / 资料中心</p>
           </div>
         </div>
       </section>
 
       {/* Resource Categories */}
-      <section className="py-16 bg-background dark:bg-background">
+       <section className="bg-background py-12 dark:bg-background sm:py-16">
         <div className="container">
-          <div className="mb-12 grid gap-6 md:grid-cols-4">
+           <div className="mb-8 grid grid-cols-2 gap-3 sm:mb-12 sm:gap-6 md:grid-cols-4">
             {resourceCategoryCards.map(({ key, title, icon: Icon, cardClass, iconClass, textClass }) => {
               const count = categoryData?.categories?.[key] || 0;
               return (
-                <Card key={key} className={`card-hover p-6 bg-gradient-to-br ${cardClass}`}>
+                 <Card key={key} className={`card-hover bg-gradient-to-br p-4 sm:p-6 ${cardClass}`}>
                   <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${iconClass}`}>
                     <Icon className={`h-6 w-6 ${textClass}`} />
                   </div>
@@ -284,8 +284,8 @@ export default function ResourcesPage() {
           </div>
 
           {/* Filter */}
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold">자료 목록</h2>
+           <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+             <h2 className="text-xl font-semibold sm:text-2xl">자료 목록</h2>
             {isAdmin && (
               <Button asChild data-testid="button-upload-resource">
                 <Link href="/admin?tab=resources">
@@ -295,12 +295,12 @@ export default function ResourcesPage() {
               </Button>
             )}
           </div>
-          <Card className="p-6 mb-8">
-            <div className="flex gap-4 items-end">
-              <div>
-                <label className="form-label">카테고리</label>
+            <Card className="mb-6 page-filter-card sm:mb-8">
+             <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end sm:gap-4">
+               <div className="w-full sm:w-auto">
+                 <label className="form-label page-filter-label">카테고리</label>
                 <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
-                  <SelectTrigger className="w-48" data-testid="select-category">
+                    <SelectTrigger className="page-filter-control w-full sm:w-48" data-testid="select-category">
                     <SelectValue placeholder="전체 카테고리" />
                   </SelectTrigger>
                   <SelectContent>
@@ -312,12 +312,12 @@ export default function ResourcesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={handleFilter} data-testid="button-filter">
+               <div className="flex w-full gap-2 sm:w-auto">
+                 <Button className="page-filter-control flex-1 px-3 sm:flex-none" onClick={handleFilter} data-testid="button-filter">
                   <Filter className="h-4 w-4" />
                   필터
                 </Button>
-                <Button variant="outline" onClick={handleReset} data-testid="button-reset">
+                  <Button className="page-filter-control flex-1 px-3 sm:flex-none" variant="outline" onClick={handleReset} data-testid="button-reset">
                   <RefreshCw className="h-4 w-4" />
                   초기화
                 </Button>
@@ -327,7 +327,7 @@ export default function ResourcesPage() {
 
           {/* Resources List */}
           <Card className="overflow-hidden">
-            <div className="bg-muted px-6 py-4 border-b">
+               <div className="border-b bg-muted px-4 py-4 sm:px-6">
               <h3 className="text-lg font-bold text-foreground">자료 목록</h3>
             </div>
             
@@ -349,10 +349,10 @@ export default function ResourcesPage() {
                   const accessible = canAccess(resource);
                   
                   return (
-                    <div key={resource.id} className="px-6 py-4 hover:bg-muted transition-all">
-                      <div className="flex items-center justify-between">
+                     <div key={resource.id} className="px-4 py-4 transition-all hover:bg-muted sm:px-6">
+                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div 
-                          className="flex items-center space-x-4 flex-1 cursor-pointer"
+                           className="flex min-w-0 flex-1 cursor-pointer items-start space-x-3 sm:items-center sm:space-x-4"
                           onClick={() => handleViewDetails(resource)}
                         >
                           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10">
@@ -362,11 +362,11 @@ export default function ResourcesPage() {
                               <Lock className="h-6 w-6 text-muted-foreground" />
                             )}
                           </div>
-                          <div className="flex-1">
+                           <div className="min-w-0 flex-1">
                             <h4 className="font-semibold text-foreground mb-1" data-testid={`resource-title-${resource.id}`}>
                               {translation?.title || resource.slug}
                             </h4>
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                               <span className="flex items-center space-x-1">
                                 <File className="h-4 w-4" />
                                 <span>{formatLocalizedDate(resource.createdAt, language)}</span>
@@ -380,8 +380,9 @@ export default function ResourcesPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 ml-4">
-                          <Button
+                         <div className="ml-0 flex w-full gap-2 sm:ml-4 sm:w-auto">
+                             <Button
+                               className="flex-1 sm:flex-none"
                             variant="outline"
                             size="sm"
                             onClick={() => handleViewDetails(resource)}
@@ -391,7 +392,8 @@ export default function ResourcesPage() {
                             <span className="hidden sm:inline ml-2">상세보기</span>
                           </Button>
                           {accessible ? (
-                            <Button
+                             <Button
+                               className="flex-1 sm:flex-none"
                               size="sm"
                               onClick={(e) => handleDownload(resource, e)}
                               disabled={downloadMutation.isPending}
@@ -401,7 +403,8 @@ export default function ResourcesPage() {
                               <span className="hidden sm:inline ml-2">{t('common.download')}</span>
                             </Button>
                           ) : (
-                            <Button
+                             <Button
+                               className="flex-1 sm:flex-none"
                               size="sm"
                               variant="outline"
                               disabled
@@ -425,7 +428,7 @@ export default function ResourcesPage() {
 
           {/* Member-Only Notice */}
           {!isAuthenticated && (
-            <Card className="p-6 mt-8 bg-primary/5 border-primary/20">
+             <Card className="mt-8 border-primary/20 bg-primary/5 p-4 sm:p-6">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <Lock className="h-6 w-6 text-primary" />
@@ -447,9 +450,9 @@ export default function ResourcesPage() {
 
       {/* Resource Detail Dialog */}
       <Dialog open={!!selectedResource} onOpenChange={(open) => !open && setSelectedResource(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+       <DialogContent className="w-[calc(100%-1rem)] max-w-2xl max-h-[85vh] overflow-y-auto p-4 sm:w-full sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-2xl">
+             <DialogTitle className="text-xl sm:text-2xl">
               {resourceForDialog && getTranslation(resourceForDialog, language)?.title}
             </DialogTitle>
           </DialogHeader>
@@ -457,8 +460,8 @@ export default function ResourcesPage() {
           {resourceForDialog && (
             <div className="space-y-6">
               {/* File Info */}
-              <Card className="p-4 bg-muted/50">
-                <div className="grid grid-cols-2 gap-4">
+               <Card className="bg-muted/50 p-3 sm:p-4">
+                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm text-muted-foreground mb-1">파일 형식</p>
                     <Badge variant="secondary">
@@ -510,7 +513,7 @@ export default function ResourcesPage() {
               )}
 
               {/* Metadata */}
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+               <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -537,7 +540,7 @@ export default function ResourcesPage() {
 
               {/* Actions */}
               <div className="space-y-3 pt-4 border-t">
-                <div className="flex gap-2">
+                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
                   {canAccess(resourceForDialog) ? (
                     <Button
                       className="flex-1"

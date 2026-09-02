@@ -15,7 +15,11 @@ const languages: { code: Language; name: string; flag: string }[] = [
   { code: 'zh', name: '中文', flag: '🇨🇳' },
 ];
 
-export default function LanguageSwitcher() {
+interface LanguageSwitcherProps {
+  compact?: boolean;
+}
+
+export default function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
   const { language, setLanguage } = useLanguage();
 
   const current = languages.find(lang => lang.code === language) || languages[0];
@@ -23,10 +27,16 @@ export default function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          aria-label={`현재 언어: ${current.name}`}
+          title={current.name}
+        >
           <Globe className="h-4 w-4" />
-          <span className="hidden sm:inline">{current.flag}</span>
-          <span className="hidden sm:inline">{current.name}</span>
+          <span className={compact ? 'hidden 2xl:inline' : 'hidden sm:inline'}>{current.flag}</span>
+          <span className={compact ? 'hidden 2xl:inline' : 'hidden sm:inline'}>{current.name}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

@@ -63,22 +63,22 @@ export default function MembersPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted dark:bg-muted py-16">
+       <section className="page-banner bg-muted dark:bg-muted">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('members.title')}</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Member Directory / 会员名录</p>
+             <h1 className="mb-2 text-2xl font-bold text-foreground dark:text-foreground sm:mb-4 sm:text-4xl">{t('members.title')}</h1>
+             <p className="text-sm text-muted-foreground dark:text-muted-foreground sm:text-lg">Member Directory / 会员名录</p>
           </div>
         </div>
       </section>
 
       {/* Search & Filter */}
-      <section className="py-8 border-b border-border dark:border-border">
+       <section className="page-filter border-b border-border dark:border-border">
         <div className="container">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">회원 목록</h2>
+           <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+             <h2 className="text-xl font-semibold text-foreground dark:text-foreground sm:text-2xl">회원 목록</h2>
             {hasPermission('member.manage') && (
-              <Button asChild data-testid="button-manage-members">
+               <Button className="h-9 px-3 text-sm" asChild data-testid="button-manage-members">
                 <Link href="/admin?tab=members">
                   <Plus className="h-4 w-4 mr-2" />
                   회원 관리
@@ -86,26 +86,26 @@ export default function MembersPage() {
               </Button>
             )}
           </div>
-          <Card className="p-6 dark:bg-card dark:border-border">
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="md:col-span-2">
-                <label className="form-label text-foreground dark:text-foreground">{t('members.search.company')}</label>
+           <Card className="page-filter-card dark:border-border dark:bg-card">
+             <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4">
+               <div className="col-span-2 min-w-0 md:col-span-2">
+                 <label className="form-label page-filter-label text-foreground dark:text-foreground">{t('members.search.company')}</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="회사명 또는 키워드 입력..."
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    className="pl-10"
+                     className="page-filter-control pl-10"
                     data-testid="input-search-company"
                   />
                 </div>
               </div>
               
-              <div>
-                <label className="form-label text-foreground dark:text-foreground">{t('members.search.country')}</label>
+               <div className="min-w-0">
+                 <label className="form-label page-filter-label text-foreground dark:text-foreground">{t('members.search.country')}</label>
                 <Select value={country || "all"} onValueChange={(value) => { setCountry(value === "all" ? "" : value); setPage(1); }}>
-                  <SelectTrigger data-testid="select-country">
+                   <SelectTrigger className="page-filter-control w-full px-2 text-xs sm:px-3 sm:text-sm" data-testid="select-country">
                     <SelectValue placeholder="국가 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -116,10 +116,10 @@ export default function MembersPage() {
                 </Select>
               </div>
               
-              <div>
-                <label className="form-label text-foreground dark:text-foreground">{t('members.search.industry')}</label>
+               <div className="min-w-0">
+                 <label className="form-label page-filter-label text-foreground dark:text-foreground">{t('members.search.industry')}</label>
                 <Select value={industry || "all"} onValueChange={(value) => { setIndustry(value === "all" ? "" : value); setPage(1); }}>
-                  <SelectTrigger data-testid="select-industry">
+                   <SelectTrigger className="page-filter-control w-full px-2 text-xs sm:px-3 sm:text-sm" data-testid="select-industry">
                     <SelectValue placeholder="업종 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -135,11 +135,11 @@ export default function MembersPage() {
               </div>
             </div>
             
-            <div className="grid gap-4 md:grid-cols-4 mt-4">
-              <div>
-                <label className="form-label text-foreground dark:text-foreground">{t('members.search.level')}</label>
+             <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-4 md:grid-cols-4">
+               <div className="min-w-0">
+                 <label className="form-label page-filter-label text-foreground dark:text-foreground">{t('members.search.level')}</label>
                 <Select value={membershipLevel || "all"} onValueChange={(value) => { setMembershipLevel(value === "all" ? "" : value); setPage(1); }}>
-                  <SelectTrigger data-testid="select-level">
+                   <SelectTrigger className="page-filter-control w-full px-2 text-xs sm:px-3 sm:text-sm" data-testid="select-level">
                     <SelectValue placeholder="회원등급 선택" />
                   </SelectTrigger>
                   <SelectContent>
@@ -151,8 +151,8 @@ export default function MembersPage() {
                 </Select>
               </div>
               
-              <div className="flex gap-2 md:col-span-3 items-end">
-                <Button variant="outline" onClick={handleReset} data-testid="button-reset-filter">
+               <div className="flex items-end gap-2 md:col-span-3">
+                 <Button className="page-filter-control w-full px-3" variant="outline" onClick={handleReset} data-testid="button-reset-filter">
                   <RefreshCw className="h-4 w-4" />
                   초기화
                 </Button>

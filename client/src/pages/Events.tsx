@@ -64,20 +64,20 @@ export default function EventsPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted dark:bg-muted py-16">
+       <section className="page-banner bg-muted dark:bg-muted">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('events.title')}</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">{t('events.subtitle')}</p>
+             <h1 className="mb-2 text-2xl font-bold text-foreground dark:text-foreground sm:mb-4 sm:text-4xl">{t('events.title')}</h1>
+             <p className="text-sm text-muted-foreground dark:text-muted-foreground sm:text-lg">{t('events.subtitle')}</p>
           </div>
         </div>
       </section>
 
       {/* Filter */}
-      <section className="py-8 border-b border-border dark:border-border">
+       <section className="page-filter border-b border-border dark:border-border">
         <div className="container">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold text-foreground dark:text-foreground">행사 목록</h2>
+           <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+             <h2 className="text-xl font-semibold text-foreground dark:text-foreground sm:text-2xl">행사 목록</h2>
             {hasPermission('event.create') && (
               <Button asChild data-testid="button-create-event">
                 <Link href="/admin?tab=events">
@@ -87,10 +87,10 @@ export default function EventsPage() {
               </Button>
             )}
           </div>
-          <Card className="p-6">
-            <div className="grid gap-4 md:grid-cols-4">
-              <Select value={upcomingInput || "all"} onValueChange={(value) => setUpcomingInput(value === "all" ? "" : value)}>
-                <SelectTrigger data-testid="select-time">
+            <Card className="page-filter-card">
+             <div className="grid gap-2 sm:gap-4 md:grid-cols-4">
+               <Select value={upcomingInput || "all"} onValueChange={(value) => setUpcomingInput(value === "all" ? "" : value)}>
+                 <SelectTrigger className="page-filter-control" data-testid="select-time">
                   <SelectValue placeholder="시간 필터" />
                 </SelectTrigger>
                 <SelectContent>
@@ -100,7 +100,7 @@ export default function EventsPage() {
               </Select>
               
               <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
-                <SelectTrigger data-testid="select-category">
+               <SelectTrigger className="page-filter-control" data-testid="select-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
                 <SelectContent>
@@ -112,12 +112,12 @@ export default function EventsPage() {
                 </SelectContent>
               </Select>
               
-              <div className="flex gap-2 md:col-span-2">
-                <Button onClick={handleFilter} data-testid="button-filter">
+               <div className="flex gap-2 md:col-span-2">
+                 <Button className="page-filter-control flex-1 px-3" onClick={handleFilter} data-testid="button-filter">
                   <Filter className="h-4 w-4" />
                   필터 적용
                 </Button>
-                <Button variant="outline" onClick={handleReset} data-testid="button-reset">
+                  <Button className="page-filter-control flex-1 px-3" variant="outline" onClick={handleReset} data-testid="button-reset">
                   <RefreshCw className="h-4 w-4" />
                   초기화
                 </Button>
@@ -128,7 +128,7 @@ export default function EventsPage() {
       </section>
 
       {/* Events Grid */}
-      <section className="py-16">
+       <section className="py-12 sm:py-16">
           <div className="container">
            <QueryState
              isLoading={isLoading}

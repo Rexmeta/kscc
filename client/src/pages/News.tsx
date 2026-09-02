@@ -67,17 +67,17 @@ export default function NewsPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-background">
       {/* Header */}
-      <section className="bg-muted dark:bg-muted py-16">
+       <section className="page-banner bg-muted dark:bg-muted">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">{t('news.title')}</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Latest News / 最新消息</p>
+             <h1 className="mb-2 text-2xl font-bold text-foreground dark:text-foreground sm:mb-4 sm:text-4xl">{t('news.title')}</h1>
+             <p className="text-sm text-muted-foreground dark:text-muted-foreground sm:text-lg">Latest News / 最新消息</p>
           </div>
         </div>
       </section>
 
       {/* Search & Filter */}
-      <section className="py-8 border-b border-border dark:border-border">
+       <section className="page-filter border-b border-border dark:border-border">
         <div className="container">
           <div className="flex justify-end items-center mb-4">
             {hasPermission('news.create') && (
@@ -89,23 +89,23 @@ export default function NewsPage() {
               </Button>
             )}
           </div>
-          <Card className="p-6">
-            <div className="grid gap-4 md:grid-cols-4">
+            <Card className="page-filter-card">
+             <div className="grid gap-2 sm:gap-4 md:grid-cols-4">
               <div className="md:col-span-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
+                   <Input
                     placeholder="뉴스 제목 또는 내용 검색..."
                      value={searchInput}
                      onChange={(e) => setSearchInput(e.target.value)}
-                    className="pl-10"
+                     className="page-filter-control pl-10"
                     data-testid="input-search"
                   />
                 </div>
               </div>
               
                <Select value={categoryInput || "all"} onValueChange={(value) => setCategoryInput(value === "all" ? "" : value)}>
-                <SelectTrigger data-testid="select-category">
+                <SelectTrigger className="page-filter-control" data-testid="select-category">
                   <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
                 <SelectContent>
@@ -116,12 +116,12 @@ export default function NewsPage() {
                 </SelectContent>
               </Select>
               
-              <div className="flex gap-2">
-                <Button onClick={handleFilter} data-testid="button-filter">
+               <div className="flex w-full gap-2 md:col-span-1">
+                 <Button className="page-filter-control flex-1 px-3" onClick={handleFilter} data-testid="button-filter">
                   <Filter className="h-4 w-4" />
                   필터
                 </Button>
-                <Button variant="outline" onClick={handleReset} data-testid="button-reset">
+                  <Button className="page-filter-control flex-1 px-3" variant="outline" onClick={handleReset} data-testid="button-reset">
                   <RefreshCw className="h-4 w-4" />
                   초기화
                 </Button>
@@ -190,7 +190,7 @@ export default function NewsPage() {
                   })()}
 
                   {/* Recent Articles List - Right */}
-                  <div className="space-y-4">
+                   <div className="space-y-4">
                     {posts.slice(1, 6).map((post: PostWithTranslations) => {
                       const translation = getTranslationSafe(post, language);
                       const images = getMetaValue(post.meta || [], 'news.images');
@@ -203,10 +203,10 @@ export default function NewsPage() {
                         <Link 
                           key={post.id} 
                           href={`/news/${post.slug}`} 
-                          className="flex gap-4 group border-b border-border pb-4 last:border-0"
+                           className="group flex min-w-0 gap-3 border-b border-border pb-4 last:border-0 sm:gap-4"
                           data-testid={`news-list-item-${post.id}`}
                         >
-                          <div className="flex-1 space-y-2">
+                           <div className="min-w-0 flex-1 space-y-2">
                             <div className="flex items-center gap-2">
                               <ChevronRight className="h-4 w-4 text-primary" />
                               <h4 className="font-semibold line-clamp-1 group-hover:text-primary transition-colors">
@@ -216,13 +216,13 @@ export default function NewsPage() {
                             <p className="text-sm text-muted-foreground line-clamp-2 pl-6">
                               {translation?.excerpt || ''}
                             </p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground pl-6">
+                             <div className="flex flex-wrap items-center gap-2 pl-6 text-xs text-muted-foreground">
                               <Clock className="h-3 w-3" />
                               <span>게시 시간 : {formatDate(post.publishedAt || post.createdAt)}</span>
                             </div>
                           </div>
                           {featuredImage && (
-                            <div className="w-28 h-20 flex-shrink-0 overflow-hidden rounded-lg">
+                             <div className="h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-28">
                               <img 
                                 src={featuredImage} 
                                 alt={translation?.title || ''} 
@@ -274,7 +274,7 @@ export default function NewsPage() {
                             </div>
                           )}
                         </div>
-                        <div className="p-4 space-y-2">
+                         <div className="space-y-2 p-4">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             <span>게시 시간 : {formatDate(post.publishedAt || post.createdAt)}</span>

@@ -132,19 +132,19 @@ export default function PartnersPage() {
       <section className="relative overflow-hidden border-b border-border/70 bg-muted/40">
         <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 left-[-5rem] h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="container relative py-16 md:py-24">
+        <div className="container relative py-8 sm:py-16 md:py-24">
           <div className="max-w-3xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-background/75 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-background/75 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary sm:mb-6">
               <Handshake className="h-4 w-4" aria-hidden="true" />
               {t('partners.eyebrow')}
             </div>
-            <h1 className="max-w-2xl text-4xl font-bold tracking-[-0.04em] text-foreground md:text-6xl">
+            <h1 className="max-w-2xl text-3xl font-bold tracking-[-0.04em] text-foreground sm:text-4xl md:text-6xl">
               {t('partners.title')}
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:mt-6 sm:text-base md:text-lg">
               {t('partners.subtitle')}
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground sm:mt-8 sm:gap-y-3 sm:text-sm">
               <span className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" aria-hidden="true" />
                 {t('partners.trustNote')}

@@ -92,23 +92,23 @@ export default function AboutPage() {
       )}
 
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-blue-600 to-blue-800 text-white py-20">
+      <section className="relative bg-gradient-to-r from-blue-600 to-blue-800 py-8 text-white sm:py-20">
         <div className="container">
-          <div className="flex items-center gap-8">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-8">
             <img 
               src={ksccLogoPath} 
               alt="KSCC Logo" 
-              className="w-32 h-32 md:w-40 md:h-40 flex-shrink-0"
+              className="h-20 w-20 flex-shrink-0 sm:h-32 sm:w-32 md:h-40 md:w-40"
               width={776}
               height={800}
               loading="lazy"
               data-testid="img-kscc-logo"
             />
-            <div className="max-w-3xl flex-1">
-              <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <div className="min-w-0 max-w-3xl flex-1">
+              <h1 className="mb-3 text-2xl font-bold sm:mb-6 sm:text-4xl md:text-5xl">
                 {content.hero.title}
               </h1>
-              <p className="text-xl text-blue-100 leading-relaxed">
+              <p className="text-base leading-relaxed text-blue-100 sm:text-xl">
                 {content.hero.intro}
               </p>
             </div>

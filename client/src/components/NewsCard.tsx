@@ -82,9 +82,9 @@ export default function NewsCard({ post }: NewsCardProps) {
         </div>
       )}
       
-      <CardContent className="p-6">
+       <CardContent className="p-4 sm:p-6">
         {/* Article Meta */}
-        <div className="flex items-center justify-between mb-3">
+         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           {getCategoryBadge(category)}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">

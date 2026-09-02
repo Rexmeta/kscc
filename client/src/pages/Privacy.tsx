@@ -5,11 +5,11 @@ import { ArrowLeft } from 'lucide-react';
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background dark:bg-background">
-      <section className="bg-muted dark:bg-muted py-16">
+       <section className="page-banner bg-muted dark:bg-muted">
         <div className="container">
           <div className="text-center">
-            <h1 className="mb-4 text-4xl font-bold text-foreground dark:text-foreground">개인정보처리방침</h1>
-            <p className="text-lg text-muted-foreground dark:text-muted-foreground">Privacy Policy</p>
+            <h1 className="mb-2 text-2xl font-bold text-foreground dark:text-foreground sm:mb-4 sm:text-4xl">개인정보처리방침</h1>
+            <p className="text-sm text-muted-foreground dark:text-muted-foreground sm:text-lg">Privacy Policy</p>
           </div>
         </div>
       </section>

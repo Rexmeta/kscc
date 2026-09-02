@@ -44,9 +44,9 @@ export function AdminFilterBar({
 
   return (
     <>
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-lg border bg-card p-4 md:flex-row md:items-end md:flex-wrap" data-testid={`admin-filters-${scope}`}>
-      <div className="min-w-[220px] flex-1 space-y-2">
-        <label htmlFor={`${scope}-search`} className="text-sm font-medium">{searchLabel}</label>
+    <form onSubmit={submit} className="flex flex-col gap-2 rounded-lg border bg-card p-3 sm:gap-3 sm:p-4 md:flex-row md:items-end md:flex-wrap" data-testid={`admin-filters-${scope}`}>
+      <div className="min-w-0 flex-1 space-y-1.5 sm:min-w-[220px] sm:space-y-2">
+        <label htmlFor={`${scope}-search`} className="text-xs font-medium sm:text-sm">{searchLabel}</label>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -54,16 +54,16 @@ export function AdminFilterBar({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={searchPlaceholder}
-            className="pl-9"
+            className="h-9 pl-9 text-sm sm:h-10"
             data-testid={searchTestId || `input-search-${scope}`}
           />
         </div>
       </div>
       {filters.map((filter) => (
-        <div key={filter.name} className="w-full space-y-2 md:w-40">
-          <label htmlFor={filter.testId} className="text-sm font-medium">{filter.label}</label>
+        <div key={filter.name} className="w-full space-y-1.5 sm:space-y-2 md:w-40">
+          <label htmlFor={filter.testId} className="text-xs font-medium sm:text-sm">{filter.label}</label>
           <Select value={filter.value} onValueChange={filter.onChange}>
-            <SelectTrigger id={filter.testId} data-testid={filter.testId}>
+            <SelectTrigger id={filter.testId} className="h-9 text-sm sm:h-10" data-testid={filter.testId}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -74,11 +74,11 @@ export function AdminFilterBar({
           </Select>
         </div>
       ))}
-      <div className="flex gap-2">
-        <Button type="submit" data-testid={`button-filter-${scope}`}>
+      <div className="flex w-full gap-2 md:w-auto">
+        <Button className="h-9 flex-1 px-3 text-sm md:flex-none" type="submit" data-testid={`button-filter-${scope}`}>
           <Search className="mr-2 h-4 w-4" />검색
         </Button>
-        <Button type="button" variant="outline" onClick={onReset} data-testid={`button-reset-${scope}`}>
+        <Button className="h-9 flex-1 px-3 text-sm md:flex-none" type="button" variant="outline" onClick={onReset} data-testid={`button-reset-${scope}`}>
           초기화
         </Button>
       </div>

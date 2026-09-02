@@ -232,15 +232,16 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <section className="bg-muted py-16">
+       <section className="bg-muted py-6 sm:py-16">
         <div className="container">
-          <div className="flex items-center justify-between">
+           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h1 className="mb-2 text-4xl font-bold text-foreground">{t('dashboard.title')}</h1>
-              <p className="text-lg text-muted-foreground">안녕하세요, {user?.name}님!</p>
+               <h1 className="mb-1 text-2xl font-bold text-foreground sm:mb-2 sm:text-4xl">{t('dashboard.title')}</h1>
+               <p className="text-sm text-muted-foreground sm:text-lg">안녕하세요, {user?.name}님!</p>
             </div>
             <Button 
               variant="outline" 
+               className="w-full sm:w-auto"
               data-testid="button-edit-profile"
               onClick={() => setIsProfileDialogOpen(true)}
             >

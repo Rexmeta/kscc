@@ -53,11 +53,11 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full nav-shadow">
       <div className="container">
-        <div className="flex h-20 items-center justify-between">
+        <div className="flex h-16 items-center justify-between md:h-20">
           {/* Logo — text mark used consistently across all pages */}
           <Link href="/">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent flex-shrink-0">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent flex-shrink-0 md:h-14 md:w-14">
                 <span className="text-lg font-bold text-white leading-none">KSCC</span>
               </div>
               <div className="hidden md:flex flex-col justify-center gap-0.5">
@@ -79,6 +79,7 @@ export default function Header() {
                   variant="ghost"
                   size="sm"
                   className={`
+                    px-2 text-xs 2xl:px-3 2xl:text-sm
                     ${isActive(item.href) 
                       ? 'bg-muted text-primary font-medium' 
                       : 'text-foreground hover:text-primary'
@@ -92,8 +93,10 @@ export default function Header() {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden md:block">
+              <LanguageSwitcher compact />
+            </div>
             
             {isAuthenticated ? (
               <DropdownMenu>
@@ -129,7 +132,7 @@ export default function Header() {
                     {t('nav.login')}
                   </Button>
                 </Link>
-                <Link href="/register">
+                <Link href="/register" className="hidden md:inline-flex">
                   <Button>
                     {t('nav.register')}
                   </Button>
@@ -140,11 +143,11 @@ export default function Header() {
             {/* Mobile Menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" size="sm" className="lg:hidden">
+                  <Button variant="outline" size="sm" className="lg:hidden" aria-label="메뉴 열기">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-80">
+               <SheetContent side="right" className="w-[min(20rem,calc(100vw-1rem))]">
                 <div className="flex flex-col space-y-4 mt-8">
                   {navigation.map((item) => (
                     <Link
