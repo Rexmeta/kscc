@@ -57,17 +57,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-muted/10 py-12">
       <div className="container">
         <div className="mx-auto max-w-md">
-          {/* Logo */}
-          <div className="mb-8 text-center">
-            <Link href="/">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
-                <span className="text-2xl font-bold text-white">KSCC</span>
-              </div>
-            </Link>
-            <h1 className="text-2xl font-bold text-foreground dark:text-foreground">{t('auth.login.title')}</h1>
-            <p className="text-muted-foreground dark:text-muted-foreground">계정에 로그인하세요</p>
-          </div>
-
           <Card className="dark:bg-card dark:border-border">
             <CardHeader>
               <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.login.title')}</CardTitle>
