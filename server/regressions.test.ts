@@ -621,6 +621,280 @@ test("managed object intents bind the caller and path, and private reads are not
   }
 });
 
+test(
+  "object ACL routes reject anonymous, cross-user, expired-intent, and namespace takeover attempts",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const suffix = randomUUID();
+    const ownerId = randomUUID();
+    const crossUserId = randomUUID();
+    const linkedObjectPath = "/objects/uploads/acl-route-linked";
+    const unlinkedObjectPath = "/objects/uploads/acl-route-unlinked";
+    const secret = process.env.SESSION_SECRET;
+    assert.ok(secret, "SESSION_SECRET must be set for route tests");
+
+    const [tier] = await db
+      .select()
+      .from(tiers)
+      .where(eq(tiers.code, "MEMBER"))
+      .limit(1);
+    const [uploadPermission] = await db
+      .select()
+      .from(permissions)
+      .where(eq(permissions.key, "resource.upload"))
+      .limit(1);
+    const [updatePermission] = await db
+      .select()
+      .from(permissions)
+      .where(eq(permissions.key, "resource.update"))
+      .limit(1);
+    assert.ok(tier, "ACL seed must include the MEMBER tier");
+    assert.ok(uploadPermission, "ACL seed must include resource.upload");
+    assert.ok(updatePermission, "ACL seed must include resource.update");
+
+    const [editorRole] = await db.insert(roles).values({
+      code: `acl-route-editor-${suffix}`,
+      name: "Object ACL route regression editor",
+    }).returning();
+    await db.insert(rolePermissions).values([
+      { roleId: editorRole.id, permissionId: uploadPermission.id },
+      { roleId: editorRole.id, permissionId: updatePermission.id },
+    ]);
+    const operator = await storage.createUser({
+      email: `acl-route-editor-${suffix}@example.test`,
+      password: "test-password",
+      name: "Object ACL route editor",
+      role: "operator",
+      userType: "staff",
+    });
+    const [membership] = await db.insert(userMemberships).values({
+      userId: operator.id,
+      tierId: tier.id,
+      roleId: editorRole.id,
+    }).returning();
+
+    const crossUser = {
+      ...operator,
+      id: crossUserId,
+      email: `acl-route-cross-user-${suffix}@example.test`,
+      role: "user",
+    } as any;
+    const linkedPost = {
+      id: randomUUID(),
+      postType: "resource",
+      status: "draft",
+      visibility: "public",
+      publishedAt: null,
+      expiresAt: null,
+    } as any;
+    const aclPolicy = {
+      owner: ownerId,
+      visibility: "private" as const,
+    };
+    const fakeObjectFile = { name: "test-bucket/.private/uploads/acl-route" } as any;
+    const editorAccess = {
+      userId: operator.id,
+      isAdmin: false,
+      isEditor: true,
+      managedPostTypes: new Set(["resource"]),
+      canReadMembers: false,
+      canReadPremium: false,
+    };
+    let appliedPolicy: any;
+    let server: import("node:http").Server | undefined;
+
+    const originalStorageMethods = {
+      getUser: storage.getUser,
+      getPostByObjectPath: storage.getPostByObjectPath,
+      getPostAccessContext: storage.getPostAccessContext,
+    };
+    const originalObjectStorageMethods = {
+      getObjectEntityFile: ObjectStorageService.prototype.getObjectEntityFile,
+      getObjectEntityAclPolicy: ObjectStorageService.prototype.getObjectEntityAclPolicy,
+      canAccessObjectEntity: ObjectStorageService.prototype.canAccessObjectEntity,
+      trySetObjectEntityAclPolicy: ObjectStorageService.prototype.trySetObjectEntityAclPolicy,
+      downloadObject: ObjectStorageService.prototype.downloadObject,
+    };
+
+    try {
+      storage.getUser = async (id) => {
+        if (id === operator.id) return operator;
+        if (id === crossUser.id) return crossUser;
+        return undefined;
+      };
+      storage.getPostByObjectPath = async (objectPath) =>
+        objectPath === linkedObjectPath ? linkedPost : undefined;
+      storage.getPostAccessContext = async () => editorAccess;
+
+      (ObjectStorageService.prototype as any).getObjectEntityFile = async () =>
+        fakeObjectFile;
+      (ObjectStorageService.prototype as any).getObjectEntityAclPolicy = async () =>
+        aclPolicy;
+      (ObjectStorageService.prototype as any).canAccessObjectEntity = async ({
+        userId,
+      }: { userId?: string }) => userId === ownerId;
+      (ObjectStorageService.prototype as any).trySetObjectEntityAclPolicy = async (
+        _rawPath: string,
+        nextPolicy: unknown,
+      ) => {
+        appliedPolicy = nextPolicy;
+        return linkedObjectPath;
+      };
+      (ObjectStorageService.prototype as any).downloadObject = async (
+        _file: unknown,
+        res: import("express").Response,
+        _cacheTtlSec: number,
+        options: { publicCache?: boolean } = {},
+      ) => {
+        res.set(
+          "Cache-Control",
+          options.publicCache ? "public, max-age=3600" : "private, no-store",
+        );
+        res.status(200).end();
+      };
+
+      const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+      const app = express();
+      app.use(express.json());
+      server = await registerRoutes(app);
+      await new Promise<void>((resolve, reject) => {
+        server!.once("error", reject);
+        server!.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const operatorToken = issueAuthToken(operator, secret);
+      const crossUserToken = issueAuthToken(crossUser, secret);
+
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method ?? "GET",
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        });
+        // Consume and discard every response body so this helper never logs
+        // or returns object contents.
+        await response.arrayBuffer();
+        return {
+          status: response.status,
+          cacheControl: response.headers.get("cache-control"),
+        };
+      };
+
+      const anonymousRead = await request("/objects/uploads/acl-route-unlinked");
+      assert.deepEqual(anonymousRead, { status: 403, cacheControl: null });
+
+      const crossUserRead = await request(
+        "/objects/uploads/acl-route-unlinked",
+        { token: crossUserToken },
+      );
+      assert.deepEqual(crossUserRead, { status: 403, cacheControl: null });
+
+      const linkedEditorRead = await request(
+        "/objects/uploads/acl-route-linked",
+        { token: operatorToken },
+      );
+      assert.deepEqual(linkedEditorRead, {
+        status: 200,
+        cacheControl: "private, no-store",
+      });
+
+      const ownerIntent = jwt.sign(
+        {
+          typ: "managed-object-upload",
+          sub: ownerId,
+          objectPath: unlinkedObjectPath,
+          purpose: "managed-content",
+        },
+        secret,
+        { expiresIn: "15m" },
+      );
+      const crossUserTakeover = await request("/api/images", {
+        token: operatorToken,
+        method: "PUT",
+        body: {
+          imageURL: unlinkedObjectPath,
+          visibility: "public",
+          uploadIntent: ownerIntent,
+        },
+      });
+      assert.deepEqual(crossUserTakeover, { status: 403, cacheControl: null });
+
+      const linkedEditorUpdate = await request("/api/images", {
+        token: operatorToken,
+        method: "PUT",
+        body: {
+          imageURL: linkedObjectPath,
+          visibility: "public",
+        },
+      });
+      assert.deepEqual(linkedEditorUpdate, { status: 200, cacheControl: null });
+      assert.equal(appliedPolicy.owner, ownerId);
+      assert.equal(appliedPolicy.visibility, "public");
+
+      const expiredIntent = jwt.sign(
+        {
+          typ: "managed-object-upload",
+          sub: operator.id,
+          objectPath: unlinkedObjectPath,
+          purpose: "managed-content",
+        },
+        secret,
+        { expiresIn: -1 },
+      );
+      const expiredIntentUpdate = await request("/api/images", {
+        token: operatorToken,
+        method: "PUT",
+        body: {
+          imageURL: unlinkedObjectPath,
+          visibility: "public",
+          uploadIntent: expiredIntent,
+        },
+      });
+      assert.deepEqual(expiredIntentUpdate, { status: 403, cacheControl: null });
+
+      const invalidNamespaceUpdate = await request("/api/images", {
+        token: operatorToken,
+        method: "PUT",
+        body: {
+          imageURL: "/objects/../acl-route-takeover",
+          visibility: "public",
+        },
+      });
+      assert.deepEqual(invalidNamespaceUpdate, { status: 400, cacheControl: null });
+    } finally {
+      if (server) {
+        await new Promise<void>((resolve) => server!.close(() => resolve()));
+      }
+      storage.getUser = originalStorageMethods.getUser;
+      storage.getPostByObjectPath = originalStorageMethods.getPostByObjectPath;
+      storage.getPostAccessContext = originalStorageMethods.getPostAccessContext;
+      (ObjectStorageService.prototype as any).getObjectEntityFile =
+        originalObjectStorageMethods.getObjectEntityFile;
+      (ObjectStorageService.prototype as any).getObjectEntityAclPolicy =
+        originalObjectStorageMethods.getObjectEntityAclPolicy;
+      (ObjectStorageService.prototype as any).canAccessObjectEntity =
+        originalObjectStorageMethods.canAccessObjectEntity;
+      (ObjectStorageService.prototype as any).trySetObjectEntityAclPolicy =
+        originalObjectStorageMethods.trySetObjectEntityAclPolicy;
+      (ObjectStorageService.prototype as any).downloadObject =
+        originalObjectStorageMethods.downloadObject;
+      await db.delete(userMemberships).where(eq(userMemberships.id, membership.id));
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, editorRole.id));
+      await db.delete(users).where(eq(users.id, operator.id));
+      await db.delete(roles).where(eq(roles.id, editorRole.id));
+    }
+  },
+);
+
 test("survey settings validate external links and enforce member visibility", async (t) => {
   assert.throws(() => surveySettingsSchema.parse({
     title: "Survey",
