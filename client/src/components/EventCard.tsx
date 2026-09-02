@@ -78,7 +78,7 @@ export default function EventCard({ post }: EventCardProps) {
     : post.coverImage;
 
   return (
-    <Card className="card-hover border border-border" data-testid={`event-card-${post.id}`}>
+    <Card className="card-hover min-w-0 max-w-full overflow-hidden border border-border" data-testid={`event-card-${post.id}`}>
       {featuredImage ? (
         <img
           src={featuredImage}
@@ -94,34 +94,34 @@ export default function EventCard({ post }: EventCardProps) {
         </div>
       )}
       
-       <CardContent className="p-4 sm:p-6">
+       <CardContent className="min-w-0 p-3 sm:p-6">
         {/* Event Badges */}
-         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-           <div className="flex flex-wrap gap-1.5">
+         <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
+           <div className="flex min-w-0 flex-wrap gap-1.5">
             {getCategoryBadge(eventMeta.category)}
             {getTypeBadge(eventMeta.eventType)}
           </div>
           {eventMeta.capacity && (
-            <span className="text-xs text-muted-foreground">
+            <span className="min-w-0 max-w-full break-words text-right text-xs text-muted-foreground">
               정원: {eventMeta.capacity}명
             </span>
           )}
         </div>
         
         {/* Event Title */}
-        <h3 className="text-xl font-bold text-foreground mb-2 line-clamp-2" data-testid={`event-title-${post.id}`}>
+        <h3 className="mb-2 min-w-0 text-lg font-bold text-foreground line-clamp-2 sm:text-xl" data-testid={`event-title-${post.id}`}>
           {translation.title || post.slug}
         </h3>
         
         {/* Event Description */}
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+        <p className="mb-4 min-w-0 text-sm text-muted-foreground line-clamp-2">
           {translation.content || translation.excerpt || ''}
         </p>
         
         {/* Event Details */}
-        <div className="space-y-2 mb-4 text-sm">
+        <div className="mb-4 min-w-0 space-y-2 text-sm">
            <div className="flex min-w-0 items-start gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4 text-primary" />
+            <Calendar className="h-4 w-4 shrink-0 text-primary" />
              <span className="min-w-0 break-words" data-testid={`event-date-${post.id}`}>
               {eventMeta.eventDate ? (
                 <>
@@ -134,24 +134,24 @@ export default function EventCard({ post }: EventCardProps) {
             </span>
           </div>
            <div className="flex min-w-0 items-start gap-2 text-muted-foreground">
-            <MapPin className="h-4 w-4 text-primary" />
+            <MapPin className="h-4 w-4 shrink-0 text-primary" />
              <span className="min-w-0 break-words" data-testid={`event-location-${post.id}`}>{eventMeta.location || '장소 미정'}</span>
           </div>
           {eventMeta.fee !== undefined && eventMeta.fee !== null && eventMeta.fee > 0 && (
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-muted-foreground">
               <span className="text-primary font-medium">참가비:</span>
-              <span>{eventMeta.fee.toLocaleString()}원</span>
+              <span className="break-words">{eventMeta.fee.toLocaleString()}원</span>
             </div>
           )}
         </div>
         
         {/* Speakers */}
         {eventMeta.speakers && Array.isArray(eventMeta.speakers) && eventMeta.speakers.length > 0 && (
-          <div className="mb-4">
+          <div className="mb-4 min-w-0">
             <h4 className="text-sm font-medium text-foreground mb-2">연사</h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               {eventMeta.speakers.map((speaker, index) => (
-                <Badge key={index} variant="outline" className="text-xs">
+                <Badge key={index} variant="outline" className="max-w-full break-words text-xs">
                   {speaker.name}
                 </Badge>
               ))}
@@ -178,7 +178,7 @@ export default function EventCard({ post }: EventCardProps) {
         
         {/* Action Button */}
         <Button
-          className="w-full btn-primary"
+          className="w-full min-w-0 btn-primary"
           onClick={() => navigate(`/events/${post.id}`)}
           data-testid={`button-view-event-${post.id}`}
         >

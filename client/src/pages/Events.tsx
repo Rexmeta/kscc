@@ -128,8 +128,8 @@ export default function EventsPage() {
       </section>
 
       {/* Events Grid */}
-       <section className="py-12 sm:py-16">
-          <div className="container">
+       <section className="py-8 sm:py-16">
+          <div className="container min-w-0">
            <QueryState
              isLoading={isLoading}
              isError={isError}
@@ -138,7 +138,7 @@ export default function EventsPage() {
              emptyMessage={t('home.events.empty')}
            >
             <>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+               <div className="grid min-w-0 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {events.map((post: PostWithTranslations) => (
                   <EventCard key={post.id} post={post} />
                 ))}
