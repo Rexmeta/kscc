@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { Loader2, Save, X } from 'lucide-react';
 import type { PostWithTranslations } from '@shared/schema';
+import { getDefaultHomeTranslation } from '@shared/homeContent';
 
 interface PageEditModalProps {
   isOpen: boolean;
@@ -136,8 +137,8 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            페이지 편집: {page.slug}
+           <DialogTitle className="flex items-center gap-2">
+             {page.slug === 'home' ? '홈 화면 편집' : `페이지 편집: ${page.slug}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -185,29 +186,33 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                 <div className="flex items-center justify-between">
                   <Label htmlFor={`content-${locale}`} className="font-semibold">
                     콘텐츠 (JSON 형식)
                   </Label>
-                  <span className="text-xs text-muted-foreground">구조화된 데이터</span>
+                   <span className="text-xs text-muted-foreground">구조화된 데이터</span>
                 </div>
                 <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-4">
                   <Textarea
                     id={`content-${locale}`}
                     value={formData[locale]?.content || ''}
                     onChange={(e) => handleInputChange(locale, 'content', e.target.value)}
-                    placeholder={`{\n  "section1": "내용을 입력하세요",\n  "section2": "이렇게 구조화된 형식으로"\n}`}
+                     placeholder={page.slug === 'home'
+                       ? getDefaultHomeTranslation(locale).content
+                       : `{\n  "section1": "내용을 입력하세요",\n  "section2": "이렇게 구조화된 형식으로"\n}`}
                     rows={18}
                     className="font-mono text-sm bg-white dark:bg-slate-950 rounded border-0 resize-none"
                     data-testid={`input-content-${locale}`}
                   />
                 </div>
                 <div className="space-y-1 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
-                    💡 JSON 형식 가이드
+                   <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
+                     JSON 형식 가이드
                   </p>
                   <p className="text-xs text-blue-800 dark:text-blue-300">
-                    객체 형식으로 섹션을 구성하세요: {"{"}"key": "value"{"}"} 또는 배열 형식도 사용 가능합니다.
+                     {page.slug === 'home'
+                       ? '홈 화면은 hero.cta, events, news, surveys, partners, about, benefits 구조를 사용합니다. 문자열과 배열 구조를 유지하면 항목별로 안전하게 반영됩니다.'
+                       : <>객체 형식으로 섹션을 구성하세요: {"{"}"key": "value"{"}"} 또는 배열 형식도 사용 가능합니다.</>}
                   </p>
                 </div>
               </div>

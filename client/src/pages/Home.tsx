@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp, ClipboardList } from 'lucide-react';
-import { t, formatLocalizedDate } from '@/lib/i18n';
+import { formatLocalizedDate } from '@/lib/i18n';
 import { Partner, PostWithTranslations } from '@shared/schema';
+import { parseHomeTranslation, type HomeLocale } from '@shared/homeContent';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
@@ -25,6 +26,26 @@ export default function Home() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
+
+  const { data: homePage } = useQuery<PostWithTranslations>({
+    queryKey: queryKeys.posts.home(language),
+    queryFn: ({ signal }) => fetchJson<PostWithTranslations>(
+      `/api/posts/slug/home?locale=${language}`,
+      { signal },
+    ),
+    staleTime: 60 * 1000,
+  });
+
+  // The API returns the requested locale and its fallback translations. Keep
+  // this selection local to the home page so a missing or malformed CMS
+  // record can never prevent the rest of the homepage from rendering.
+  const homeTranslation = homePage?.translations?.find((translation) => translation.locale === language)
+    || homePage?.translations?.find((translation) => translation.locale === 'ko')
+    || homePage?.translations?.[0];
+  const homeContent = parseHomeTranslation(
+    homeTranslation,
+    language as HomeLocale,
+  );
 
   const formatDate = (date?: string | Date | null) => {
     if (!date) return '';
@@ -138,13 +159,13 @@ export default function Home() {
         <div className="container relative z-10 py-16 sm:py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center text-white">
             <h1 className="mb-6 text-3xl font-bold leading-tight sm:text-4xl md:text-6xl fade-in-up">
-              {t('hero.title')}
+              {homeContent.hero.title}
             </h1>
             <p className="mb-4 text-base opacity-95 sm:text-xl md:text-2xl lang-en">
-              {t('hero.subtitle')}
+              {homeContent.hero.subtitle}
             </p>
             <p className="mb-10 text-base opacity-90 sm:mb-12 sm:text-lg md:text-xl">
-              {t('hero.description')}
+              {homeContent.hero.description}
             </p>
             
             {/* CTA Buttons */}
@@ -152,19 +173,19 @@ export default function Home() {
               <Link href="/register" className="w-full sm:w-auto">
                 <Button size="lg" className="btn-secondary w-full text-base sm:text-lg" data-testid="button-join">
                   <Users className="h-5 w-5" />
-                  {t('hero.cta.member')}
+                  {homeContent.hero.cta.member}
                 </Button>
               </Link>
               <Link href="/events" className="w-full sm:w-auto">
                 <Button size="lg" variant="outline" className="w-full border-white bg-[#ffffff00] text-base text-white hover:bg-white/10 sm:text-lg" data-testid="button-events">
                   <Calendar className="h-5 w-5" />
-                  {t('hero.cta.event')}
+                  {homeContent.hero.cta.event}
                 </Button>
               </Link>
               <Link href="/contact" className="w-full sm:w-auto">
                 <Button size="lg" className="btn-accent w-full text-base sm:text-lg" data-testid="button-contact">
                   <Globe className="h-5 w-5" />
-                  {t('hero.cta.contact')}
+                  {homeContent.hero.cta.contact}
                 </Button>
               </Link>
             </div>
@@ -187,7 +208,7 @@ export default function Home() {
                   <div className="flex-1 space-y-3">
                     <div className="flex flex-wrap items-center gap-3 text-sm text-white/80">
                       <Badge variant="secondary" className="bg-white/20 text-white">
-                        {t('news.latest')}
+                         {homeContent.news.title}
                       </Badge>
                       {latestNewsDate && <span className="text-white/70">{formatDate(latestNewsDate)}</span>}
                     </div>
@@ -200,7 +221,7 @@ export default function Home() {
                     <div className="flex flex-wrap gap-3">
                       <Link href={`/news/${latestNews.id}`}>
                         <Button size="lg" className="btn-accent w-full sm:w-auto" data-testid="hero-latest-news">
-                          {t('news.readMore')}
+                           {homeContent.news.readMore}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
                       </Link>
@@ -211,7 +232,7 @@ export default function Home() {
                           className="w-full border-white text-white hover:bg-white/10 sm:w-auto"
                           data-testid="hero-view-all-news"
                         >
-                          {t('news.viewAll')}
+                           {homeContent.news.viewAll}
                         </Button>
                       </Link>
                     </div>
@@ -229,12 +250,12 @@ export default function Home() {
           <div className="container">
             <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{t('events.upcoming')}</h2>
-                <p className="text-muted-foreground">{t('home.events.subtitle')}</p>
+                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{homeContent.events.title}</h2>
+                <p className="text-muted-foreground">{homeContent.events.subtitle}</p>
               </div>
               <Link href="/events">
               <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-events">
-                  {t('home.events.viewAll')}
+                  {homeContent.events.viewAll}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -245,7 +266,7 @@ export default function Home() {
               isError={eventsError}
               onRetry={() => refetchEvents()}
               empty={events.length === 0}
-              emptyMessage={t('home.events.empty')}
+               emptyMessage={homeContent.events.empty}
             >
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {events.map((post: PostWithTranslations) => <EventCard key={post.id} post={post} />)}
@@ -260,12 +281,12 @@ export default function Home() {
         <div className="container">
           <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{t('news.latest')}</h2>
-              <p className="text-muted-foreground">{t('home.news.subtitle')}</p>
+                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{homeContent.news.title}</h2>
+                <p className="text-muted-foreground">{homeContent.news.subtitle}</p>
             </div>
             <Link href="/news">
               <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-news">
-                {t('news.viewAll')}
+                {homeContent.news.viewAll}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -276,7 +297,7 @@ export default function Home() {
             isError={newsError}
             onRetry={() => refetchNews()}
             empty={news.length === 0}
-            emptyMessage={t('home.news.empty')}
+             emptyMessage={homeContent.news.empty}
           >
             <div className="grid gap-6 lg:grid-cols-3">
               {news.map((post: PostWithTranslations) => <NewsCard key={post.id} post={post} />)}
@@ -290,8 +311,8 @@ export default function Home() {
         <section className="section-surface-survey py-12 sm:py-16" data-testid="home-surveys-section">
           <div className="container">
             <div className="mb-8 text-center">
-              <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.surveys.title')}</h2>
-              <p className="text-muted-foreground">{t('home.surveys.subtitle')}</p>
+               <h2 className="mb-2 text-3xl font-bold text-foreground">{homeContent.surveys.title}</h2>
+               <p className="text-muted-foreground">{homeContent.surveys.subtitle}</p>
             </div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {surveys.map((survey) => (
@@ -304,7 +325,7 @@ export default function Home() {
                     <p className="mt-3 flex-1 text-muted-foreground">{survey.description}</p>
                     {(survey.startsAt || survey.endsAt) && (
                       <p className="mt-4 text-sm text-muted-foreground">
-                        {t('home.surveys.period')}: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
+                         {homeContent.surveys.period}: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
                       </p>
                     )}
                     {isAuthenticated && survey.externalUrl ? (
@@ -316,7 +337,7 @@ export default function Home() {
                           data-testid={`button-home-survey-${survey.id}`}
                           onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_section' })}
                         >
-                          {t('home.surveys.participate')}
+                           {homeContent.surveys.participate}
                           <ArrowRight className="h-4 w-4" />
                         </a>
                       </Button>
@@ -326,7 +347,7 @@ export default function Home() {
                         data-testid={`button-home-survey-${survey.id}`}
                         onClick={handleSurveyLoginRequired}
                       >
-                        {t('home.surveys.participate')}
+                         {homeContent.surveys.participate}
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     )}
@@ -352,7 +373,7 @@ export default function Home() {
           <div className="mx-auto mb-7 max-w-5xl sm:mb-8">
             <div className="grid items-center sm:grid-cols-[1fr_auto_1fr]">
               <h2 className="text-center text-2xl font-bold text-foreground sm:col-start-2 sm:row-start-1 sm:text-3xl">
-                {t('home.partners.title')}
+                {homeContent.partners.title}
               </h2>
               <Link
                 href="/partners"
@@ -364,12 +385,12 @@ export default function Home() {
                   className="h-8 bg-card/70 px-2.5 text-xs"
                   data-testid="link-partner-directory"
                 >
-                  {t('home.partners.viewAll')}
+                  {homeContent.partners.viewAll}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
               <p className="mt-1.5 text-center text-sm text-muted-foreground sm:col-span-3 sm:row-start-2 sm:text-base">
-                {t('home.partners.subtitle')}
+                {homeContent.partners.subtitle}
               </p>
             </div>
           </div>
@@ -379,7 +400,7 @@ export default function Home() {
             isError={partnersError}
             onRetry={() => refetchPartners()}
             empty={partners.length === 0}
-            emptyMessage={t('home.partners.empty')}
+             emptyMessage={homeContent.partners.empty}
           >
             <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
               {partners.slice(0, 12).map((partner: Partner) => (
@@ -434,15 +455,15 @@ export default function Home() {
             <div>
               <div className="mb-6 inline-flex items-center space-x-2 rounded-full bg-primary/10 px-4 py-2 text-primary">
                 <TrendingUp className="h-4 w-4" />
-                <span className="text-sm font-medium">{t('about.title')}</span>
+                 <span className="text-sm font-medium">{homeContent.about.eyebrow}</span>
               </div>
               
               <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">
-                {t('home.about.heading')}
+                {homeContent.about.heading}
               </h2>
               
               <p className="mb-6 text-lg text-muted-foreground">
-                {t('about.mission.description')}
+                {homeContent.about.missionDescription}
               </p>
               
               <div className="mb-8 space-y-4">
@@ -451,8 +472,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit1.title')}</h4>
-                    <p className="text-sm text-muted-foreground">{t('home.about.benefit1.description')}</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{homeContent.about.benefits[0].title}</h4>
+                    <p className="text-sm text-muted-foreground">{homeContent.about.benefits[0].description}</p>
                   </div>
                 </div>
                 
@@ -461,8 +482,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit2.title')}</h4>
-                    <p className="text-sm text-muted-foreground">{t('home.about.benefit2.description')}</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{homeContent.about.benefits[1].title}</h4>
+                    <p className="text-sm text-muted-foreground">{homeContent.about.benefits[1].description}</p>
                   </div>
                 </div>
                 
@@ -471,8 +492,8 @@ export default function Home() {
                     <span className="text-xs text-primary-foreground">✓</span>
                   </div>
                   <div>
-                    <h4 className="mb-1 font-semibold text-foreground">{t('home.about.benefit3.title')}</h4>
-                    <p className="text-sm text-muted-foreground">{t('home.about.benefit3.description')}</p>
+                    <h4 className="mb-1 font-semibold text-foreground">{homeContent.about.benefits[2].title}</h4>
+                    <p className="text-sm text-muted-foreground">{homeContent.about.benefits[2].description}</p>
                   </div>
                 </div>
               </div>
@@ -480,13 +501,13 @@ export default function Home() {
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Link href="/about">
                   <Button data-testid="button-about">
-                    {t('home.about.downloadBrochure')}
+                    {homeContent.about.downloadBrochure}
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 </Link>
                 <Link href="/contact">
                   <Button variant="outline" data-testid="button-org-chart">
-                    {t('home.about.viewOrgChart')}
+                    {homeContent.about.viewOrgChart}
                     <ArrowRight className="h-5 w-5" />
                   </Button>
                 </Link>
@@ -507,12 +528,12 @@ export default function Home() {
               
                <div className="absolute bottom-4 left-4 rounded-lg border border-border bg-card p-4 shadow-xl sm:-bottom-6 sm:-left-6 sm:p-6">
                  <div className="mb-1 text-2xl font-bold text-primary sm:text-3xl">{memberCount}+</div>
-                <div className="text-sm text-muted-foreground">{t('home.about.statsMembers')}</div>
+                <div className="text-sm text-muted-foreground">{homeContent.about.statsMembers}</div>
               </div>
               
                <div className="absolute right-4 top-4 rounded-lg border border-border bg-card p-4 shadow-xl sm:-right-6 sm:-top-6 sm:p-6">
                  <div className="mb-1 text-2xl font-bold text-accent sm:text-3xl">50+</div>
-                <div className="text-sm text-muted-foreground">{t('home.about.statsEvents')}</div>
+                <div className="text-sm text-muted-foreground">{homeContent.about.statsEvents}</div>
               </div>
             </div>
           </div>
@@ -527,26 +548,26 @@ export default function Home() {
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary">
                 <Users className="h-10 w-10 text-white" />
               </div>
-              <h2 className="mb-4 text-3xl font-bold text-foreground">{t('home.benefits.title')}</h2>
+              <h2 className="mb-4 text-3xl font-bold text-foreground">{homeContent.benefits.title}</h2>
               <p className="mb-8 text-muted-foreground">
-                {t('home.benefits.subtitle')}
+                {homeContent.benefits.subtitle}
               </p>
               
               <div className="mb-8 grid gap-4 sm:gap-6 md:grid-cols-3">
                 <Card className="border-border p-4 sm:p-6">
                   <Building className="mb-3 h-8 w-8 text-primary mx-auto" />
-                  <h4 className="mb-2 font-bold">{t('home.benefits.card1.title')}</h4>
-                  <p className="text-sm text-muted-foreground">{t('home.benefits.card1.description')}</p>
+                  <h4 className="mb-2 font-bold">{homeContent.benefits.cards[0].title}</h4>
+                  <p className="text-sm text-muted-foreground">{homeContent.benefits.cards[0].description}</p>
                 </Card>
                 <Card className="border-border p-4 sm:p-6">
                   <Users className="mb-3 h-8 w-8 text-accent mx-auto" />
-                  <h4 className="mb-2 font-bold">{t('home.benefits.card2.title')}</h4>
-                  <p className="text-sm text-muted-foreground">{t('home.benefits.card2.description')}</p>
+                  <h4 className="mb-2 font-bold">{homeContent.benefits.cards[1].title}</h4>
+                  <p className="text-sm text-muted-foreground">{homeContent.benefits.cards[1].description}</p>
                 </Card>
                 <Card className="border-border p-4 sm:p-6">
                   <Calendar className="mb-3 h-8 w-8 text-secondary mx-auto" />
-                  <h4 className="mb-2 font-bold">{t('home.benefits.card3.title')}</h4>
-                  <p className="text-sm text-muted-foreground">{t('home.benefits.card3.description')}</p>
+                  <h4 className="mb-2 font-bold">{homeContent.benefits.cards[2].title}</h4>
+                  <p className="text-sm text-muted-foreground">{homeContent.benefits.cards[2].description}</p>
                 </Card>
               </div>
               
@@ -554,13 +575,13 @@ export default function Home() {
                 <Link href="/login" className="w-full sm:w-auto">
                   <Button size="lg" className="w-full sm:w-auto" data-testid="button-login">
                     <Users className="h-5 w-5" />
-                    {t('nav.login')}
+                    {homeContent.benefits.login}
                   </Button>
                 </Link>
                 <Link href="/register" className="w-full sm:w-auto">
                   <Button size="lg" className="btn-secondary w-full sm:w-auto" data-testid="button-register">
                     <Users className="h-5 w-5" />
-                    {t('nav.register')}
+                    {homeContent.benefits.register}
                   </Button>
                 </Link>
               </div>

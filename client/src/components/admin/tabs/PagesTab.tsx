@@ -82,11 +82,17 @@ export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: b
           {pagesData?.posts?.map((page: PostWithTranslations) => {
             const translation = page.translations?.find(t => t.locale === 'ko') || page.translations?.[0];
             return (
-              <div key={page.id} className="p-4 flex items-center justify-between" data-testid={`page-row-${page.id}`}>
+               <div
+                 key={page.id}
+                 className="p-4 flex items-center justify-between"
+                 data-testid={page.slug === 'home' ? 'page-row-home' : `page-row-${page.id}`}
+               >
                 <div className="flex-1">
-                  <h4 className="font-medium">{translation?.title || page.slug}</h4>
+                   <h4 className="font-medium">
+                     {page.slug === 'home' ? '홈 화면' : (translation?.title || page.slug)}
+                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    /{page.slug} • {page.status}
+                     {page.slug === 'home' ? '/' : `/${page.slug}`} • {page.status}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
                     {translation?.excerpt || '페이지 설명 없음'}
@@ -101,7 +107,7 @@ export function PagesTab({ activeTab, canEdit }: { activeTab: string; canEdit: b
                          setSelectedPage(page);
                          setPageEditModalOpen(true);
                        }}
-                       data-testid={`button-edit-page-${page.id}`}
+                        data-testid={page.slug === 'home' ? 'button-edit-page-home' : `button-edit-page-${page.id}`}
                      >
                        <Edit className="h-4 w-4" />
                      </Button>

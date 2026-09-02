@@ -2182,7 +2182,12 @@ export class DatabaseStorage implements IStorage {
       .limit(boundedPageSize(limit, 100));
   }
 
-  private async getLocalizedPostTranslations(postId: string, primaryLocale: string, locale?: string): Promise<PostTranslation[]> {
+  private async getLocalizedPostTranslations(
+    postId: string,
+    primaryLocale: string,
+    locale?: string,
+    includeDefaultLocale = false,
+  ): Promise<PostTranslation[]> {
     if (!locale) {
       return db
         .select()
@@ -2190,7 +2195,14 @@ export class DatabaseStorage implements IStorage {
         .where(eq(postTranslations.postId, postId));
     }
 
-    const locales = Array.from(new Set([locale, primaryLocale]));
+    // The home page prefers the requested language, then Korean (the site's
+    // default language), then the post's configured primary locale. Keep the
+    // existing fallback behavior for other page types.
+    const locales = Array.from(new Set([
+      locale,
+      ...(includeDefaultLocale ? ["ko"] : []),
+      primaryLocale,
+    ]));
     const translations = await db
       .select()
       .from(postTranslations)
@@ -2207,7 +2219,11 @@ export class DatabaseStorage implements IStorage {
         .where(eq(postTranslations.postId, postId))
         .limit(1);
     }
-    return translations;
+    const localeOrder = new Map(locales.map((value, index) => [value, index]));
+    return translations.sort(
+      (a, b) => (localeOrder.get(a.locale) ?? locales.length) -
+        (localeOrder.get(b.locale) ?? locales.length),
+    );
   }
 
   async getPostBySlugWithTranslations(
@@ -2219,7 +2235,12 @@ export class DatabaseStorage implements IStorage {
     if (!post || !canReadPost(post, access)) return undefined;
 
     const [translations, meta] = await Promise.all([
-      this.getLocalizedPostTranslations(post.id, post.primaryLocale, locale),
+      this.getLocalizedPostTranslations(
+        post.id,
+        post.primaryLocale,
+        locale,
+        slug === "home",
+      ),
       this.getPostMetaAll(post.id, access),
     ]);
     const registrationCount = post.postType === "event"

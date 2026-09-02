@@ -101,6 +101,8 @@ export const queryKeys = {
       ["/api/posts", "list", params] as const,
     detail: (id: string, locale?: string) =>
       ["/api/posts", "detail", id, locale ?? null] as const,
+    home: (locale?: string) =>
+      ["/api/posts/slug", "home", locale ?? null] as const,
   },
   members: {
     list: (params: Record<string, unknown> = {}) =>
