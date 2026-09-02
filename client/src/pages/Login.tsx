@@ -54,15 +54,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-muted/10 py-12">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-muted/30 px-4 py-4 dark:bg-muted/10 sm:py-6 md:min-h-[calc(100dvh-5rem)]">
       <div className="container">
         <div className="mx-auto max-w-md">
           <Card className="dark:bg-card dark:border-border">
-            <CardHeader>
+           <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.login.title')}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+             <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+               <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
                 <div>
                   <Label htmlFor="email">{t('auth.login.email')}</Label>
                   <div className="relative">
@@ -128,7 +128,7 @@ export default function LoginPage() {
                 </Button>
               </form>
               
-              <div className="mt-6 text-center">
+               <div className="mt-4 text-center sm:mt-6">
                 <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                   아직 계정이 없으신가요?{' '}
                   <Link href="/register" className="text-primary hover:underline">

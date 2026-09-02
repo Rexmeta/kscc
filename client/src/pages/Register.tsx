@@ -71,22 +71,22 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-muted/10 py-12">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-muted/30 px-4 py-4 dark:bg-muted/10 sm:py-6 md:min-h-[calc(100dvh-5rem)]">
       <div className="container">
         <div className="mx-auto max-w-md">
           <Card className="dark:bg-card dark:border-border">
-            <CardHeader>
+             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.register.title')}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <Tabs value={userType} onValueChange={handleTabChange} className="mb-6">
+             <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+               <Tabs value={userType} onValueChange={handleTabChange} className="mb-4 sm:mb-6">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="staff" data-testid="tab-staff">운영진</TabsTrigger>
                   <TabsTrigger value="company" data-testid="tab-company">회원사</TabsTrigger>
                 </TabsList>
               </Tabs>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+               <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
                 <div>
                   <Label htmlFor="name">{t('auth.register.name')}</Label>
                   <div className="relative">
@@ -271,7 +271,7 @@ export default function RegisterPage() {
                 </Button>
               </form>
               
-              <div className="mt-6 text-center">
+               <div className="mt-4 text-center sm:mt-6">
                 <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                   이미 계정이 있으신가요?{' '}
                   <Link href="/login" className="text-primary hover:underline">
