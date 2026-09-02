@@ -349,9 +349,14 @@ export default function Home() {
       {/* Partners Grid */}
       <section id="home-partners-section" className="section-surface-partners border-y border-secondary/10 py-10 sm:py-12">
         <div className="container">
-          <div className="mx-auto mb-7 max-w-2xl text-center sm:mb-8">
-            <h2 className="mb-1.5 text-2xl font-bold text-foreground sm:text-3xl">{t('home.partners.title')}</h2>
+          <div className="mx-auto mb-7 flex max-w-5xl flex-col gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground sm:text-base">{t('home.partners.subtitle')}</p>
+            <Link href="/partners" className="shrink-0 self-start sm:self-auto">
+              <Button variant="outline" size="sm" className="bg-card/70" data-testid="link-partner-directory">
+                {t('home.partners.viewAll')}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
           
           <QueryState
@@ -404,15 +409,6 @@ export default function Home() {
               ))}
             </div>
           </QueryState>
-          
-          <div className="mt-7 text-center sm:mt-8">
-            <Link href="/partners">
-              <Button variant="outline" size="sm" className="bg-card/70" data-testid="link-partner-directory">
-                {t('home.partners.viewAll')}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
         </div>
       </section>
 
