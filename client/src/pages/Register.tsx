@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,21 +74,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-muted/10 py-12">
       <div className="container">
         <div className="mx-auto max-w-md">
-          {/* Logo */}
-          <div className="mb-8 text-center">
-            <Link href="/">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
-                <span className="text-2xl font-bold text-white">KSCC</span>
-              </div>
-            </Link>
-            <h1 className="text-2xl font-bold text-foreground dark:text-foreground">{t('auth.register.title')}</h1>
-            <p className="text-muted-foreground dark:text-muted-foreground">새 계정을 만들어 시작하세요</p>
-          </div>
-
           <Card className="dark:bg-card dark:border-border">
-            <CardHeader>
-              <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.register.title')}</CardTitle>
-            </CardHeader>
             <CardContent>
               <Tabs value={userType} onValueChange={handleTabChange} className="mb-6">
                 <TabsList className="grid w-full grid-cols-2">
