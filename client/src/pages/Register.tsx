@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +75,9 @@ export default function RegisterPage() {
       <div className="container">
         <div className="mx-auto max-w-md">
           <Card className="dark:bg-card dark:border-border">
+            <CardHeader>
+              <CardTitle className="text-center text-foreground dark:text-foreground">{t('auth.register.title')}</CardTitle>
+            </CardHeader>
             <CardContent>
               <Tabs value={userType} onValueChange={handleTabChange} className="mb-6">
                 <TabsList className="grid w-full grid-cols-2">
