@@ -54,7 +54,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-4rem)] items-center justify-center bg-muted/30 px-4 py-4 dark:bg-muted/10 sm:py-6 md:min-h-[calc(100dvh-5rem)]">
+    <div className="flex min-h-[calc(100dvh-4rem)] items-start justify-center bg-muted/30 px-4 py-2 dark:bg-muted/10 sm:py-4 md:min-h-[calc(100dvh-5rem)]">
       <div className="container">
         <div className="mx-auto max-w-md">
           <Card className="dark:bg-card dark:border-border">
