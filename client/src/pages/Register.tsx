@@ -71,7 +71,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-4rem)] items-start justify-center bg-muted/30 px-4 py-2 dark:bg-muted/10 sm:py-4 md:min-h-[calc(100dvh-5rem)]">
+    <div className="flex items-start justify-center bg-muted/30 px-4 pb-2 pt-4 dark:bg-muted/10 sm:pt-6">
       <div className="container">
         <div className="mx-auto max-w-md">
           <Card className="dark:bg-card dark:border-border">
