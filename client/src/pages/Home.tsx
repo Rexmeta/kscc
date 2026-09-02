@@ -135,7 +135,7 @@ export default function Home() {
             </p>
             
             {/* CTA Buttons */}
-            <div className="mb-12 flex flex-col justify-center gap-3 sm:mb-16 sm:flex-row sm:flex-wrap sm:gap-4">
+            <div className="mb-12 hidden flex-col justify-center gap-3 sm:mb-16 sm:flex sm:flex-row sm:flex-wrap sm:gap-4">
               <Link href="/register" className="w-full sm:w-auto">
                 <Button size="lg" className="btn-secondary w-full text-base sm:text-lg" data-testid="button-join">
                   <Users className="h-5 w-5" />
@@ -157,7 +157,7 @@ export default function Home() {
             </div>
 
             {latestNews && (
-              <div className="mt-8 rounded-2xl border border-white/15 bg-white/5 p-4 text-left shadow-2xl backdrop-blur-lg sm:mt-12 sm:p-6">
+              <div className="mt-8 hidden rounded-2xl border border-white/15 bg-white/5 p-4 text-left shadow-2xl backdrop-blur-lg sm:mt-12 sm:block sm:p-6">
                 <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-center md:gap-6">
                   {latestNewsImage && (
                     <div className="w-full overflow-hidden rounded-xl shadow-lg md:w-5/12">
