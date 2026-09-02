@@ -1,5 +1,6 @@
+import { useState, type MouseEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,10 +18,13 @@ import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 import { fetchPublicPartners } from '@/lib/publicPartners';
 import { shouldRenderUpcomingEvents } from '@/lib/homeUpcomingEvents';
+import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 
 export default function Home() {
   const { language } = useLanguage();
   const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
 
   const formatDate = (date?: string | Date | null) => {
     if (!date) return '';
@@ -80,7 +84,7 @@ export default function Home() {
   });
 
   const { data: surveysData } = useQuery<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>({
-    queryKey: ['/api/surveys'],
+    queryKey: ['/api/surveys', isAuthenticated ? 'authenticated' : 'public'],
     queryFn: async ({ signal }) => {
       try {
         return await fetchJson<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>('/api/surveys', { signal });
@@ -89,7 +93,6 @@ export default function Home() {
         throw error;
       }
     },
-    enabled: isAuthenticated,
     // Survey settings change infrequently and are not a live participation
     // counter. Avoid a background request every 30 seconds for every member
     // who leaves the homepage open.
@@ -115,6 +118,16 @@ export default function Home() {
     : null;
   const latestNewsSummary = latestNewsTranslation?.excerpt || latestNewsTranslation?.subtitle || '';
   const latestNewsDate = latestNews?.publishedAt || latestNews?.createdAt;
+
+  const handleSurveyLoginRequired = (event: MouseEvent) => {
+    event.preventDefault();
+    setLoginRequiredOpen(true);
+  };
+
+  const goToLogin = () => {
+    setLoginRequiredOpen(false);
+    setLocation('/login');
+  };
 
   return (
     <div className="min-h-screen">
@@ -273,7 +286,7 @@ export default function Home() {
       </section>
 
       {/* Active Member Surveys */}
-      {isAuthenticated && surveys.length > 0 && (
+      {surveys.length > 0 && (
         <section className="bg-background dark:bg-background py-12 sm:py-16" data-testid="home-surveys-section">
           <div className="container">
             <div className="mb-8 text-center">
@@ -294,7 +307,7 @@ export default function Home() {
                         {t('home.surveys.period')}: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
                       </p>
                     )}
-                    {survey.externalUrl && (
+                    {isAuthenticated && survey.externalUrl ? (
                       <Button asChild className="btn-accent mt-6 w-full">
                         <a
                           href={survey.externalUrl}
@@ -307,6 +320,15 @@ export default function Home() {
                           <ArrowRight className="h-4 w-4" />
                         </a>
                       </Button>
+                    ) : (
+                      <Button
+                        className="btn-accent mt-6 w-full"
+                        data-testid={`button-home-survey-${survey.id}`}
+                        onClick={handleSurveyLoginRequired}
+                      >
+                        {t('home.surveys.participate')}
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
                     )}
                   </CardContent>
                 </Card>
@@ -315,6 +337,14 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <LoginRequiredDialog
+        open={loginRequiredOpen}
+        onOpenChange={setLoginRequiredOpen}
+        onLogin={goToLogin}
+        title="로그인이 필요한 서비스입니다"
+        description="설문 참여는 로그인 후에 사용할 수 있습니다."
+      />
 
       {/* Partners Grid */}
       <section className="bg-background dark:bg-background py-12 sm:py-16">

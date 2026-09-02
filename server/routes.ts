@@ -459,12 +459,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const toPublicSurvey = (settings: import("@shared/schema").SurveySettings) => ({
+  const toPublicSurvey = (
+    settings: import("@shared/schema").SurveySettings,
+    includeExternalUrl = true,
+  ) => ({
     id: settings.id,
     title: settings.title,
     description: settings.description,
-    externalUrl: settings.externalUrl,
     isActive: true,
+    ...(includeExternalUrl && settings.externalUrl ? { externalUrl: settings.externalUrl } : {}),
     ...(settings.startsAt ? { startsAt: settings.startsAt } : {}),
     ...(settings.endsAt ? { endsAt: settings.endsAt } : {}),
   });
@@ -475,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const surveys = await storage.getActiveSurveySettings(now);
       res.json(surveys
         .filter((settings) => settings.externalUrl && isSurveyVisible(settings, now))
-        .map(toPublicSurvey));
+        .map((settings) => toPublicSurvey(settings)));
     } catch (error) {
       emitOperationalEvent("survey.operation", "error", {
         correlationId: getCorrelationId(_req),
@@ -486,15 +489,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Plural alias makes the collection contract explicit while retaining the
-  // original endpoint path for existing authenticated clients.
-  app.get("/api/surveys", authenticateToken, async (req, res) => {
+  // The home page can show active survey details publicly, but only an
+  // authenticated response includes the external participation URL.
+  app.get("/api/surveys", optionalAuthenticateToken, async (req, res) => {
     try {
       const now = new Date();
       const surveys = await storage.getActiveSurveySettings(now);
       res.json(surveys
         .filter((settings) => settings.externalUrl && isSurveyVisible(settings, now))
-        .map(toPublicSurvey));
+        .map((settings) => toPublicSurvey(settings, Boolean(req.user))));
     } catch (error) {
       emitOperationalEvent("survey.operation", "error", {
         correlationId: getCorrelationId(req),

@@ -1057,6 +1057,26 @@ test("survey settings validate external links and enforce member visibility", as
     }]);
     assert.equal("updatedBy" in (memberSurvey.body[0] as Record<string, unknown>), false);
 
+    const anonymousHomeSurveys = await request("/api/surveys");
+    assert.equal(anonymousHomeSurveys.status, 200);
+    assert.deepEqual(anonymousHomeSurveys.body, [{
+      id: "default",
+      title: activeSettings.title,
+      description: activeSettings.description,
+      isActive: true,
+    }]);
+    assert.equal("externalUrl" in (anonymousHomeSurveys.body[0] as Record<string, unknown>), false);
+
+    const authenticatedHomeSurveys = await request("/api/surveys", { token: memberToken });
+    assert.equal(authenticatedHomeSurveys.status, 200);
+    assert.deepEqual(authenticatedHomeSurveys.body, [{
+      id: "default",
+      title: activeSettings.title,
+      description: activeSettings.description,
+      externalUrl: activeSettings.externalUrl,
+      isActive: true,
+    }]);
+
     const adminSurvey = await request("/api/admin/survey", { token: adminToken });
     assert.equal(adminSurvey.status, 200);
     assert.equal(adminSurvey.body.surveys.length, 1);
