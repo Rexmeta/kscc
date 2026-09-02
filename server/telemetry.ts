@@ -20,6 +20,18 @@ const MAX_CORRELATION_ID_LENGTH = 128;
 const MAX_FIELD_LENGTH = 160;
 const MAX_ROUTE_ENTRIES = 100;
 
+/**
+ * Provider-neutral alert policy. These values intentionally describe the
+ * application process rather than a particular monitoring vendor.
+ */
+export const API_ALERT_THRESHOLDS = {
+  windowMs: 5 * 60 * 1000,
+  minimumRequests: 20,
+  serverErrorRate: 0.05,
+  latencyP95Ms: 1_000,
+  maxSamples: 1_000,
+} as const;
+
 const SAFE_FIELDS = new Set([
   "correlationId",
   "requestId",
@@ -39,6 +51,7 @@ const SAFE_FIELDS = new Set([
   "result",
   "state",
   "count",
+  "rate",
   "threshold",
 ]);
 
@@ -46,6 +59,12 @@ interface RequestMetric {
   count: number;
   errorCount: number;
   durationMs: number;
+}
+
+interface AlertSample {
+  at: number;
+  durationMs: number;
+  outcome: RequestOutcome;
 }
 
 const metrics = {
@@ -58,6 +77,12 @@ const metrics = {
     server_error: 0,
   } as Record<RequestOutcome, number>,
   routes: new Map<string, RequestMetric>(),
+};
+
+const alertSamples: AlertSample[] = [];
+const alertState = {
+  serverErrorRate: false,
+  latencyP95: false,
 };
 
 function boundedString(value: string): string {
@@ -167,6 +192,79 @@ function recordRequest(route: string, durationMs: number, outcome: RequestOutcom
   if (outcome !== "success") routeMetric.errorCount += 1;
 }
 
+function percentile(values: number[], percentileRank: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * percentileRank) - 1),
+  );
+  return sorted[index];
+}
+
+function emitThresholdAlerts(correlationId: string, now: number): void {
+  const windowStart = now - API_ALERT_THRESHOLDS.windowMs;
+  while (alertSamples.length > 0 && alertSamples[0].at < windowStart) {
+    alertSamples.shift();
+  }
+
+  const requestCount = alertSamples.length;
+  if (requestCount < API_ALERT_THRESHOLDS.minimumRequests) {
+    alertState.serverErrorRate = false;
+    alertState.latencyP95 = false;
+    return;
+  }
+
+  const serverErrorCount = alertSamples.reduce(
+    (count, sample) => count + (sample.outcome === "server_error" ? 1 : 0),
+    0,
+  );
+  const serverErrorRate = serverErrorCount / requestCount;
+  const latencyP95Ms = percentile(
+    alertSamples.map((sample) => sample.durationMs),
+    0.95,
+  );
+  const serverErrorRateExceeded = serverErrorRate >= API_ALERT_THRESHOLDS.serverErrorRate;
+  const latencyExceeded = latencyP95Ms >= API_ALERT_THRESHOLDS.latencyP95Ms;
+
+  if (serverErrorRateExceeded && !alertState.serverErrorRate) {
+    emitOperationalEvent("http.alert", "warn", {
+      correlationId,
+      requestId: correlationId,
+      reason: "server_error_rate",
+      count: requestCount,
+      rate: serverErrorRate,
+      threshold: API_ALERT_THRESHOLDS.serverErrorRate,
+    });
+  }
+  if (latencyExceeded && !alertState.latencyP95) {
+    emitOperationalEvent("http.alert", "warn", {
+      correlationId,
+      requestId: correlationId,
+      reason: "latency_p95",
+      count: requestCount,
+      durationMs: latencyP95Ms,
+      threshold: API_ALERT_THRESHOLDS.latencyP95Ms,
+    });
+  }
+
+  alertState.serverErrorRate = serverErrorRateExceeded;
+  alertState.latencyP95 = latencyExceeded;
+}
+
+function recordAlertSample(
+  durationMs: number,
+  outcome: RequestOutcome,
+  correlationId: string,
+): void {
+  const now = Date.now();
+  alertSamples.push({ at: now, durationMs, outcome });
+  if (alertSamples.length > API_ALERT_THRESHOLDS.maxSamples) {
+    alertSamples.splice(0, alertSamples.length - API_ALERT_THRESHOLDS.maxSamples);
+  }
+  emitThresholdAlerts(correlationId, now);
+}
+
 function isAdministrativeMutation(req: Request): boolean {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return false;
   const path = req.path;
@@ -199,6 +297,7 @@ export function requestTelemetry(req: Request, res: Response, next: NextFunction
 
     if (req.path.startsWith("/api")) {
       recordRequest(route, roundedDurationMs, outcome);
+      recordAlertSample(roundedDurationMs, outcome, correlationId);
       emitOperationalEvent("http.request", outcome === "server_error" ? "error" : outcome === "client_error" ? "warn" : "info", {
         correlationId,
         requestId: correlationId,
@@ -254,4 +353,7 @@ export function resetMetricsForTests(): void {
   metrics.outcomes.client_error = 0;
   metrics.outcomes.server_error = 0;
   metrics.routes.clear();
+  alertSamples.length = 0;
+  alertState.serverErrorRate = false;
+  alertState.latencyP95 = false;
 }
