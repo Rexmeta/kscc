@@ -347,11 +347,11 @@ export default function Home() {
       />
 
       {/* Partners Grid */}
-      <section className="section-surface-partners py-12 sm:py-16">
+      <section id="home-partners-section" className="section-surface-partners border-y border-secondary/10 py-10 sm:py-12">
         <div className="container">
-          <div className="mb-12 text-center">
-            <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.partners.title')}</h2>
-            <p className="text-muted-foreground">{t('home.partners.subtitle')}</p>
+          <div className="mx-auto mb-7 max-w-2xl text-center sm:mb-8">
+            <h2 className="mb-1.5 text-2xl font-bold text-foreground sm:text-3xl">{t('home.partners.title')}</h2>
+            <p className="text-sm text-muted-foreground sm:text-base">{t('home.partners.subtitle')}</p>
           </div>
           
           <QueryState
@@ -361,15 +361,18 @@ export default function Home() {
             empty={partners.length === 0}
             emptyMessage={t('home.partners.empty')}
           >
-          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:grid-cols-3 lg:grid-cols-6">
-            {partners.slice(0, 12).map((partner: Partner) => (
-                <Card key={partner.id} className="card-hover flex h-28 items-center justify-center p-4 sm:h-32 sm:p-6">
-                  <div className="text-center">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
+              {partners.slice(0, 12).map((partner: Partner) => (
+                <Card
+                  key={partner.id}
+                  className="card-hover flex h-20 items-center justify-center border-border/70 bg-card/90 p-3 shadow-none sm:h-24 sm:p-4"
+                >
+                  <div className="flex w-full items-center justify-center text-center">
                     {partner.logo ? (
-                      <img 
+                      <img
                         src={partner.logo}
                         alt={partner.name}
-                        className="h-12 w-auto mx-auto object-contain"
+                        className="mx-auto h-10 w-auto max-w-[140px] object-contain sm:h-11"
                         width={160}
                         height={48}
                         loading="lazy"
@@ -382,27 +385,31 @@ export default function Home() {
                     ) : null}
                     {!partner.logo && (
                       <div className="flex flex-col items-center">
-                        <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{partner.name}</span>
+                        <Briefcase className="mb-1.5 h-6 w-6 text-muted-foreground" />
+                        <span className="line-clamp-2 text-[11px] font-medium leading-tight text-muted-foreground">
+                          {partner.name}
+                        </span>
                       </div>
                     )}
                     {partner.logo && (
                       <div className="hidden flex-col items-center">
-                        <Briefcase className="h-8 w-8 text-muted-foreground mb-2" />
-                        <span className="text-xs text-muted-foreground font-medium text-center line-clamp-2">{partner.name}</span>
+                        <Briefcase className="mb-1.5 h-6 w-6 text-muted-foreground" />
+                        <span className="line-clamp-2 text-[11px] font-medium leading-tight text-muted-foreground">
+                          {partner.name}
+                        </span>
                       </div>
                     )}
                   </div>
                 </Card>
               ))}
-          </div>
+            </div>
           </QueryState>
           
-          <div className="mt-10 text-center">
+          <div className="mt-7 text-center sm:mt-8">
             <Link href="/partners">
-              <Button data-testid="link-partner-directory">
+              <Button variant="outline" size="sm" className="bg-card/70" data-testid="link-partner-directory">
                 {t('home.partners.viewAll')}
-                <ArrowRight className="h-5 w-5" />
+                <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
