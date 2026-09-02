@@ -349,17 +349,22 @@ export default function Home() {
       {/* Partners Grid */}
       <section id="home-partners-section" className="section-surface-partners border-y border-secondary/10 py-10 sm:py-12">
         <div className="container">
-          <div className="mx-auto mb-7 flex max-w-5xl flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end">
-            <div>
-              <h2 className="mb-1.5 text-2xl font-bold text-foreground sm:text-3xl">{t('home.partners.title')}</h2>
-              <p className="text-sm text-muted-foreground sm:text-base">{t('home.partners.subtitle')}</p>
+          <div className="mx-auto mb-7 flex max-w-5xl flex-col items-center gap-2 text-center sm:mb-8">
+            <h2 className="text-2xl font-bold text-foreground sm:text-3xl">{t('home.partners.title')}</h2>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <p className="text-sm leading-8 text-muted-foreground sm:text-base">{t('home.partners.subtitle')}</p>
+              <Link href="/partners" className="shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2.5 text-xs bg-card/70"
+                  data-testid="link-partner-directory"
+                >
+                  {t('home.partners.viewAll')}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
-            <Link href="/partners" className="shrink-0 self-start sm:self-auto">
-              <Button variant="outline" size="sm" className="bg-card/70" data-testid="link-partner-directory">
-                {t('home.partners.viewAll')}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
           </div>
           
           <QueryState
