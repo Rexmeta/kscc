@@ -287,7 +287,7 @@ export default function Home() {
 
       {/* Active Member Surveys */}
       {surveys.length > 0 && (
-        <section className="bg-background dark:bg-background py-12 sm:py-16" data-testid="home-surveys-section">
+        <section className="section-surface-survey py-12 sm:py-16" data-testid="home-surveys-section">
           <div className="container">
             <div className="mb-8 text-center">
               <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.surveys.title')}</h2>
@@ -347,7 +347,7 @@ export default function Home() {
       />
 
       {/* Partners Grid */}
-      <section className="bg-background dark:bg-background py-12 sm:py-16">
+      <section className="section-surface-partners py-12 sm:py-16">
         <div className="container">
           <div className="mb-12 text-center">
             <h2 className="mb-2 text-3xl font-bold text-foreground">{t('home.partners.title')}</h2>

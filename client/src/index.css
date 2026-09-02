@@ -131,6 +131,14 @@
     @apply hover:shadow-lg hover:-translate-y-1;
   }
 
+  .section-surface-survey {
+    background-color: hsl(225 35% 96%);
+  }
+
+  .section-surface-partners {
+    background-color: hsl(42 35% 95%);
+  }
+
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
@@ -194,6 +202,14 @@
 
   .page-filter-label {
     @apply mb-1 block text-xs font-medium;
+  }
+
+  .dark .section-surface-survey {
+    background-color: hsl(225 25% 12%);
+  }
+
+  .dark .section-surface-partners {
+    background-color: hsl(42 20% 12%);
   }
 
   @media (min-width: 640px) {
