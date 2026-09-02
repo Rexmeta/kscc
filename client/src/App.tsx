@@ -1,10 +1,10 @@
-import { lazy, Suspense } from "react";
-import { Switch, Route } from "wouter";
+import { lazy, Suspense, type ComponentType } from "react";
+import { Redirect, Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -40,6 +40,20 @@ function PageLoading() {
   );
 }
 
+function AuthenticatedRoute({ component: Component }: { component: ComponentType }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return <PageLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  return <Component />;
+}
+
 function Router() {
   return (
     <div className="min-h-screen flex flex-col">
@@ -54,8 +68,8 @@ function Router() {
             <Route path="/events/:id" component={EventDetail} />
             <Route path="/events" component={Events} />
             <Route path="/partners" component={Partners} />
-            <Route path="/members" component={Members} />
-            <Route path="/resources" component={Resources} />
+            <Route path="/members" component={() => <AuthenticatedRoute component={Members} />} />
+            <Route path="/resources" component={() => <AuthenticatedRoute component={Resources} />} />
             <Route path="/contact" component={Contact} />
             <Route path="/login" component={Login} />
             <Route path="/register" component={Register} />

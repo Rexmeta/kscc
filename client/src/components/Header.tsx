@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -6,6 +6,7 @@ import { Menu, User, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import LanguageSwitcher from './LanguageSwitcher';
 import { t } from '@/lib/i18n';
+import LoginRequiredDialog from './LoginRequiredDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,9 +15,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export default function Header() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
   const canAccessAdmin = isAdmin || hasAnyPermission([
     'news.read',
     'event.read',
@@ -33,8 +35,8 @@ export default function Header() {
     { name: t('nav.organization'), href: '/organization' },
     { name: t('nav.news'), href: '/news' },
     { name: t('nav.events'), href: '/events' },
-    { name: t('nav.members'), href: '/members' },
-    { name: t('nav.resources'), href: '/resources' },
+    { name: t('nav.members'), href: '/members', requiresAuth: true },
+    { name: t('nav.resources'), href: '/resources', requiresAuth: true },
     { name: t('nav.contact'), href: '/contact' },
   ];
 
@@ -50,10 +52,27 @@ export default function Header() {
     setMobileOpen(false);
   };
 
+  const handleNavigation = (event: MouseEvent, item: { requiresAuth?: boolean }) => {
+    if (item.requiresAuth && !isAuthenticated) {
+      event.preventDefault();
+      setLoginRequiredOpen(true);
+      return;
+    }
+
+    setMobileOpen(false);
+  };
+
+  const goToLogin = () => {
+    setLoginRequiredOpen(false);
+    setMobileOpen(false);
+    setLocation('/login');
+  };
+
   return (
-    <header className="sticky top-0 z-50 w-full nav-shadow">
-      <div className="container">
-        <div className="flex h-16 items-center justify-between md:h-20">
+    <>
+      <header className="sticky top-0 z-50 w-full nav-shadow">
+        <div className="container">
+          <div className="flex h-16 items-center justify-between md:h-20">
           {/* Logo — text mark used consistently across all pages */}
           <Link href="/">
             <div className="flex items-center gap-3">
@@ -74,7 +93,7 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden lg:flex items-center space-x-1">
             {navigation.map((item) => (
-              <Link key={item.href} href={item.href}>
+              <Link key={item.href} href={item.href} onClick={(event) => handleNavigation(event, item)}>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -153,7 +172,7 @@ export default function Header() {
                     <Link
                       key={item.href}
                       href={item.href}
-                      onClick={() => setMobileOpen(false)}
+                      onClick={(event) => handleNavigation(event, item)}
                     >
                       <Button
                         variant="ghost"
@@ -222,8 +241,15 @@ export default function Header() {
               </SheetContent>
             </Sheet>
           </div>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <LoginRequiredDialog
+        open={loginRequiredOpen}
+        onOpenChange={setLoginRequiredOpen}
+        onLogin={goToLogin}
+      />
+    </>
   );
 }

@@ -1,6 +1,9 @@
-import { Link } from 'wouter';
+import { useState, type MouseEvent } from 'react';
+import { Link, useLocation } from 'wouter';
 import { t } from '@/lib/i18n';
 import { Building2, Phone, Mail, MessageSquare, Youtube, Linkedin } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import LoginRequiredDialog from './LoginRequiredDialog';
 
 const SNS_LINKS = {
   kakao: import.meta.env.VITE_SNS_KAKAO || '',
@@ -10,9 +13,26 @@ const SNS_LINKS = {
 };
 
 export default function Footer() {
+  const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
+
+  const handleProtectedNavigation = (event: MouseEvent) => {
+    if (!isAuthenticated) {
+      event.preventDefault();
+      setLoginRequiredOpen(true);
+    }
+  };
+
+  const goToLogin = () => {
+    setLoginRequiredOpen(false);
+    setLocation('/login');
+  };
+
   return (
-    <footer className="bg-foreground text-white py-12">
-      <div className="container">
+    <>
+      <footer className="bg-foreground text-white py-12">
+        <div className="container">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           {/* Brand */}
           <div>
@@ -44,10 +64,18 @@ export default function Footer() {
               <Link href="/events" className="block opacity-75 hover:opacity-100 transition-opacity">
                 {t('nav.events')}
               </Link>
-              <Link href="/members" className="block opacity-75 hover:opacity-100 transition-opacity">
+              <Link
+                href="/members"
+                onClick={handleProtectedNavigation}
+                className="block opacity-75 hover:opacity-100 transition-opacity"
+              >
                 {t('nav.members')}
               </Link>
-              <Link href="/resources" className="block opacity-75 hover:opacity-100 transition-opacity">
+              <Link
+                href="/resources"
+                onClick={handleProtectedNavigation}
+                className="block opacity-75 hover:opacity-100 transition-opacity"
+              >
                 {t('nav.resources')}
               </Link>
             </nav>
@@ -158,7 +186,13 @@ export default function Footer() {
             </div>
           </div>
         </div>
-      </div>
-    </footer>
+        </div>
+      </footer>
+      <LoginRequiredDialog
+        open={loginRequiredOpen}
+        onOpenChange={setLoginRequiredOpen}
+        onLogin={goToLogin}
+      />
+    </>
   );
 }
