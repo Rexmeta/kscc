@@ -16,6 +16,7 @@ const News = lazy(() => import("@/pages/News"));
 const NewsDetail = lazy(() => import("@/pages/NewsDetail"));
 const Events = lazy(() => import("@/pages/Events"));
 const EventDetail = lazy(() => import("@/pages/EventDetail"));
+const Partners = lazy(() => import("@/pages/Partners"));
 const Members = lazy(() => import("@/pages/Members"));
 const Resources = lazy(() => import("@/pages/Resources"));
 const Contact = lazy(() => import("@/pages/Contact"));
@@ -52,6 +53,7 @@ function Router() {
             <Route path="/news" component={News} />
             <Route path="/events/:id" component={EventDetail} />
             <Route path="/events" component={Events} />
+            <Route path="/partners" component={Partners} />
             <Route path="/members" component={Members} />
             <Route path="/resources" component={Resources} />
             <Route path="/contact" component={Contact} />

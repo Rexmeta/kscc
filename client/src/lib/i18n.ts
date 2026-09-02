@@ -157,6 +157,21 @@ export interface TranslationKeys {
   'members.contact': string;
   'members.viewProfile': string;
 
+  // Partners
+  'partners.eyebrow': string;
+  'partners.title': string;
+  'partners.subtitle': string;
+  'partners.trustNote': string;
+  'partners.directoryCount': string;
+  'partners.category.sponsor': string;
+  'partners.category.partner': string;
+  'partners.category.government': string;
+  'partners.visitWebsite': string;
+  'partners.websiteUnavailable': string;
+  'partners.loading': string;
+  'partners.empty': string;
+  'partners.fallbackDescription': string;
+
   // Resources
   'resources.title': string;
   'resources.categories.reports': string;
@@ -427,6 +442,21 @@ const translations: Record<Language, TranslationKeys> = {
     'members.contact': '연락하기',
     'members.viewProfile': '프로필 보기',
 
+    // Partners
+    'partners.eyebrow': '공식 파트너 네트워크',
+    'partners.title': '함께 만드는 신뢰의 네트워크',
+    'partners.subtitle': '한국 사천-충칭 총상회가 엄선한 협력 기관을 만나보세요. 각 파트너의 역할과 공식 채널을 확인하고 새로운 협력의 문을 열 수 있습니다.',
+    'partners.trustNote': '상회가 확인한 활동 파트너',
+    'partners.directoryCount': '개 파트너',
+    'partners.category.sponsor': '후원사',
+    'partners.category.partner': '협력 파트너',
+    'partners.category.government': '공공기관',
+    'partners.visitWebsite': '공식 웹사이트 방문',
+    'partners.websiteUnavailable': '공식 웹사이트 정보 없음',
+    'partners.loading': '파트너 정보를 불러오는 중입니다.',
+    'partners.empty': '현재 공개된 파트너 정보가 없습니다.',
+    'partners.fallbackDescription': '상회와 함께 한국 및 사천·충칭 간 교류와 협력을 이어가는 파트너입니다.',
+
     // Resources
     'resources.title': '자료센터',
     'resources.categories.reports': '보고서',
@@ -512,7 +542,7 @@ const translations: Record<Language, TranslationKeys> = {
     'home.partners.title': '협력 파트너',
     'home.partners.subtitle': '함께 성장하는 회원사 및 협력 파트너',
     'home.partners.empty': '협력 파트너를 준비 중입니다.',
-    'home.partners.viewAll': '전체 회원사 디렉토리 보기',
+    'home.partners.viewAll': '전체 파트너 디렉토리 보기',
     'home.about.heading': '한국과 중국을 잇는 신뢰의 비즈니스 플랫폼',
     'home.about.benefit1.title': '경제·무역 교류 활성화',
     'home.about.benefit1.description': '양국 기업 간 효율적인 파트너 발굴과 협력 기회 창출',
@@ -695,6 +725,21 @@ const translations: Record<Language, TranslationKeys> = {
     'members.contact': 'Contact',
     'members.viewProfile': 'View Profile',
 
+    // Partners
+    'partners.eyebrow': 'Official Partner Network',
+    'partners.title': 'A trusted network, open to connection',
+    'partners.subtitle': 'Meet the organizations curated by the Korea Sichuan-Chongqing Chamber. Learn what each partner does and follow a safe path to its official website.',
+    'partners.trustNote': 'Active partners curated by the Chamber',
+    'partners.directoryCount': 'partners',
+    'partners.category.sponsor': 'Sponsor',
+    'partners.category.partner': 'Partner',
+    'partners.category.government': 'Public Institution',
+    'partners.visitWebsite': 'Visit official website',
+    'partners.websiteUnavailable': 'Official website not listed',
+    'partners.loading': 'Loading partner information.',
+    'partners.empty': 'No public partners are available right now.',
+    'partners.fallbackDescription': 'A partner helping strengthen exchange and cooperation between Korea and Sichuan-Chongqing.',
+
     // Resources
     'resources.title': 'Resource Center',
     'resources.categories.reports': 'Reports',
@@ -780,7 +825,7 @@ const translations: Record<Language, TranslationKeys> = {
     'home.partners.title': 'Partner Members',
     'home.partners.subtitle': 'Member companies and partners growing together',
     'home.partners.empty': 'Partner information coming soon.',
-    'home.partners.viewAll': 'View Full Member Directory',
+    'home.partners.viewAll': 'View Full Partner Directory',
     'home.about.heading': 'A Trusted Business Platform Bridging Korea and China',
     'home.about.benefit1.title': 'Economic & Trade Exchange',
     'home.about.benefit1.description': 'Efficient partner discovery and cooperation opportunities between companies of both countries',
@@ -963,6 +1008,21 @@ const translations: Record<Language, TranslationKeys> = {
     'members.contact': '联系',
     'members.viewProfile': '查看资料',
 
+    // Partners
+    'partners.eyebrow': '官方合作伙伴网络',
+    'partners.title': '连接值得信赖的合作伙伴',
+    'partners.subtitle': '认识韩国川渝总商会甄选的合作机构，了解各机构的服务领域，并安全访问其官方网站。',
+    'partners.trustNote': '商会甄选的活跃合作伙伴',
+    'partners.directoryCount': '个合作伙伴',
+    'partners.category.sponsor': '赞助商',
+    'partners.category.partner': '合作伙伴',
+    'partners.category.government': '公共机构',
+    'partners.visitWebsite': '访问官方网站',
+    'partners.websiteUnavailable': '暂无官方网站信息',
+    'partners.loading': '正在加载合作伙伴信息。',
+    'partners.empty': '目前没有可公开的合作伙伴信息。',
+    'partners.fallbackDescription': '与商会共同推动韩国与川渝地区交流合作的伙伴机构。',
+
     // Resources
     'resources.title': '资料中心',
     'resources.categories.reports': '报告',
@@ -1048,7 +1108,7 @@ const translations: Record<Language, TranslationKeys> = {
     'home.partners.title': '合作伙伴',
     'home.partners.subtitle': '共同成长的会员企业和合作伙伴',
     'home.partners.empty': '合作伙伴信息即将上线。',
-    'home.partners.viewAll': '查看完整会员目录',
+    'home.partners.viewAll': '查看完整合作伙伴目录',
     'home.about.heading': '连接韩中两国的可信赖商务平台',
     'home.about.benefit1.title': '经济贸易交流促进',
     'home.about.benefit1.description': '高效发掘两国企业合作伙伴，创造合作机会',

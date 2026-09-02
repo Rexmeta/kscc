@@ -369,8 +369,8 @@ export default function Home() {
           </QueryState>
           
           <div className="mt-10 text-center">
-            <Link href="/members">
-              <Button data-testid="link-member-directory">
+            <Link href="/partners">
+              <Button data-testid="link-partner-directory">
                 {t('home.partners.viewAll')}
                 <ArrowRight className="h-5 w-5" />
               </Button>
