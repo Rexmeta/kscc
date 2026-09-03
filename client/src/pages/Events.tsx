@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, Filter, RefreshCw, Plus } from 'lucide-react';
+import { Filter, RefreshCw, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
 import { PostWithTranslations } from '@shared/schema';
 import EventCard from '@/components/EventCard';
@@ -14,15 +14,20 @@ import { queryKeys } from '@/lib/queryClient';
 import { fetchJson } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
 import { PagePagination } from '@/components/PagePagination';
+import LoginRequiredDialog from '@/components/LoginRequiredDialog';
+import SurveyCard from '@/components/SurveyCard';
+import type { HomeSurvey } from '@/lib/homeParticipation';
 
 export default function EventsPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, isAuthenticated } = useAuth();
   const { language } = useLanguage();
+  const [, setLocation] = useLocation();
   const [page, setPage] = useState(1);
   const [categoryInput, setCategoryInput] = useState('');
   const [upcomingInput, setUpcomingInput] = useState('');
   const [category, setCategory] = useState('');
   const [upcoming, setUpcoming] = useState('');
+  const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
   const limit = 9;
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -44,8 +49,37 @@ export default function EventsPage() {
     staleTime: 2 * 60 * 1000,
   });
 
+  const {
+    data: surveysData,
+    isLoading: surveysLoading,
+    isError: surveysError,
+    refetch: refetchSurveys,
+  } = useQuery<HomeSurvey[]>({
+    queryKey: ['/api/surveys', isAuthenticated ? 'authenticated' : 'public'],
+    queryFn: async ({ signal }) => {
+      try {
+        return await fetchJson<HomeSurvey[]>('/api/surveys', { signal });
+      } catch (error: any) {
+        if (error?.status === 401 || error?.status === 403) return [];
+        throw error;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const events = data?.posts || [];
+  const surveys = surveysData || [];
   const totalPages = Math.ceil((data?.total || 0) / limit) || 1;
+
+  const handleSurveyLoginRequired = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setLoginRequiredOpen(true);
+  };
+
+  const goToLogin = () => {
+    setLoginRequiredOpen(false);
+    setLocation('/login');
+  };
 
   const handleFilter = () => {
     setPage(1);
@@ -127,6 +161,43 @@ export default function EventsPage() {
         </div>
       </section>
 
+      {(surveysLoading || surveysError || surveys.length > 0) && (
+        <section className="section-surface-survey border-b border-border/60 py-8 sm:py-12" data-testid="events-surveys-section">
+          <div className="container">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-foreground sm:text-3xl">{t('home.surveys.title')}</h2>
+              <p className="mt-2 text-muted-foreground">{t('home.surveys.subtitle')}</p>
+            </div>
+            <QueryState
+              isLoading={surveysLoading}
+              isError={surveysError}
+              onRetry={() => refetchSurveys()}
+              empty={surveys.length === 0}
+              emptyMessage={t('common.empty')}
+            >
+              <div className="grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {surveys.map((survey) => (
+                  <SurveyCard
+                    key={survey.id}
+                    survey={survey}
+                    isAuthenticated={isAuthenticated}
+                    content={{
+                      title: t('home.surveys.title'),
+                      subtitle: t('home.surveys.subtitle'),
+                      period: t('home.surveys.period'),
+                      participate: t('home.surveys.participate'),
+                    }}
+                    onLoginRequired={handleSurveyLoginRequired}
+                    trackingLocation="events_survey_section"
+                    testIdPrefix="button-events-survey"
+                  />
+                ))}
+              </div>
+            </QueryState>
+          </div>
+        </section>
+      )}
+
       {/* Events Grid */}
        <section className="py-8 sm:py-16">
           <div className="container min-w-0">
@@ -150,6 +221,13 @@ export default function EventsPage() {
            </QueryState>
         </div>
       </section>
+      <LoginRequiredDialog
+        open={loginRequiredOpen}
+        onOpenChange={setLoginRequiredOpen}
+        onLogin={goToLogin}
+        title="로그인이 필요한 서비스입니다"
+        description="설문 참여는 로그인 후에 사용할 수 있습니다."
+      />
     </div>
   );
 }

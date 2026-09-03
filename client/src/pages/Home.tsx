@@ -1,10 +1,10 @@
-import { useState, type MouseEvent } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp, ClipboardList } from 'lucide-react';
+import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { formatLocalizedDate } from '@/lib/i18n';
 import { Partner, PostWithTranslations } from '@shared/schema';
 import { parseHomeTranslation, type HomeLocale } from '@shared/homeContent';
@@ -13,12 +13,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { getEventMeta, getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys, fetchJson } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
-import { trackEvent } from '@/lib/analytics';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 import { fetchPublicPartners } from '@/lib/publicPartners';
 import { shouldRenderUpcomingEvents } from '@/lib/homeUpcomingEvents';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
+import SurveyCard from '@/components/SurveyCard';
 import {
   getHomeParticipationTimestamp,
   sortHomeParticipationItems,
@@ -59,19 +59,6 @@ export default function Home() {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    });
-  };
-
-  const formatDateTime = (date?: string | Date | null) => {
-    if (!date) return '';
-    const value = typeof date === 'string' ? new Date(date) : date;
-    if (Number.isNaN(value.getTime())) return '';
-    return formatLocalizedDate(value, language, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
@@ -174,8 +161,7 @@ export default function Home() {
   const latestNewsSummary = latestNewsTranslation?.excerpt || latestNewsTranslation?.subtitle || '';
   const latestNewsDate = latestNews?.publishedAt || latestNews?.createdAt;
 
-  const handleSurveyLoginRequired = (event: MouseEvent) => {
-    event.preventDefault();
+  const handleSurveyLoginRequired = () => {
     setLoginRequiredOpen(true);
   };
 
@@ -310,43 +296,14 @@ export default function Home() {
                     {item.kind === 'event' ? (
                       <EventCard post={item.post} />
                     ) : (
-                      <Card className="card-hover flex h-full min-h-0 flex-col">
-                        <CardContent className="flex h-full min-h-0 flex-1 flex-col p-6">
-                          <div className="mb-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <ClipboardList className="h-6 w-6" />
-                          </div>
-                          <h3 className="text-xl font-semibold text-foreground">{item.survey.title}</h3>
-                          <p className="mt-3 flex-1 text-muted-foreground">{item.survey.description}</p>
-                          {(item.survey.startsAt || item.survey.endsAt) && (
-                            <p className="mt-4 text-sm text-muted-foreground">
-                              {homeContent.surveys.period}: {formatDateTime(item.survey.startsAt)} ~ {formatDateTime(item.survey.endsAt)}
-                            </p>
-                          )}
-                          {isAuthenticated && item.survey.externalUrl ? (
-                            <Button asChild className="btn-accent mt-6 w-full">
-                              <a
-                                href={item.survey.externalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                data-testid={`button-home-survey-${item.survey.id}`}
-                                onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_section' })}
-                              >
-                                {homeContent.surveys.participate}
-                                <ArrowRight className="h-4 w-4" />
-                              </a>
-                            </Button>
-                          ) : (
-                            <Button
-                              className="btn-accent mt-6 w-full"
-                              data-testid={`button-home-survey-${item.survey.id}`}
-                              onClick={handleSurveyLoginRequired}
-                            >
-                              {homeContent.surveys.participate}
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
+                      <SurveyCard
+                        survey={item.survey}
+                        isAuthenticated={isAuthenticated}
+                        content={homeContent.surveys}
+                        onLoginRequired={handleSurveyLoginRequired}
+                        trackingLocation="home_survey_section"
+                        testIdPrefix="button-home-survey"
+                      />
                     )}
                   </div>
                 ))}
