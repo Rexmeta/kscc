@@ -2303,6 +2303,7 @@ export class DatabaseStorage implements IStorage {
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
+    includeUndated?: boolean;
     locale?: string;
     compact?: boolean;
     limit?: number;
