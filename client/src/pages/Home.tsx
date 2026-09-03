@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, ArrowRight, Building, Briefcase, Globe, TrendingUp } from 'lucide-react';
 import { formatLocalizedDate } from '@/lib/i18n';
 import { Partner, PostWithTranslations } from '@shared/schema';
-import { parseHomeTranslation, type HomeLocale } from '@shared/homeContent';
+import { parseHomeTranslation, type HomeContent, type HomeLocale } from '@shared/homeContent';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
 import { getEventMeta, getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
@@ -25,8 +25,15 @@ import {
   type HomeSurvey,
 } from '@/lib/homeParticipation';
 
-export default function Home() {
-  const { language } = useLanguage();
+interface HomeProps {
+  previewContent?: HomeContent;
+  previewLocale?: HomeLocale;
+  params?: Record<string, string | undefined>;
+}
+
+export default function Home({ previewContent, previewLocale }: HomeProps = {}) {
+  const { language: currentLanguage } = useLanguage();
+  const language = previewLocale ?? currentLanguage;
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
@@ -38,6 +45,7 @@ export default function Home() {
       { signal },
     ),
     staleTime: 60 * 1000,
+    enabled: !previewContent,
   });
 
   // The API returns the requested locale and its fallback translations. Keep
@@ -46,7 +54,7 @@ export default function Home() {
   const homeTranslation = homePage?.translations?.find((translation) => translation.locale === language)
     || homePage?.translations?.find((translation) => translation.locale === 'ko')
     || homePage?.translations?.[0];
-  const homeContent = parseHomeTranslation(
+  const homeContent = previewContent ?? parseHomeTranslation(
     homeTranslation,
     language as HomeLocale,
   );

@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Loader2, Save, X } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, Pencil, Save, X } from 'lucide-react';
 import type { PostWithTranslations } from '@shared/schema';
-import { getDefaultHomeTranslation } from '@shared/homeContent';
+import Home from '@/pages/Home';
+import { getDefaultHomeTranslation, parseHomeTranslation } from '@shared/homeContent';
 
 interface PageEditModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeLocale, setActiveLocale] = useState<'ko' | 'en' | 'zh'>('ko');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const getTranslation = (locale: string) => {
     return page.translations.find(t => t.locale === locale);
@@ -67,6 +69,10 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
       setFormData(newFormData);
     }
   }, [page]);
+
+  useEffect(() => {
+    if (!isOpen) setIsPreviewOpen(false);
+  }, [isOpen]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { locale: string; translationData: TranslationFormData }) => {
@@ -133,6 +139,18 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
     }
   };
 
+  const previewContent = page.slug === 'home'
+    ? parseHomeTranslation(
+        {
+          title: formData[activeLocale]?.title,
+          subtitle: formData[activeLocale]?.subtitle,
+          excerpt: formData[activeLocale]?.excerpt,
+          content: formData[activeLocale]?.content,
+        },
+        activeLocale,
+      )
+    : undefined;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -149,8 +167,34 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
             <TabsTrigger value="zh">中文</TabsTrigger>
           </TabsList>
 
-          {(['ko', 'en', 'zh'] as const).map((locale) => (
-            <TabsContent key={locale} value={locale} className="space-y-4 mt-4">
+          {isPreviewOpen && page.slug === 'home' ? (
+            <div className="mt-4 space-y-3" data-testid="home-content-preview">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                <p className="text-sm text-blue-900 dark:text-blue-200">
+                  {activeLocale === 'ko' ? '한국어' : activeLocale === 'en' ? 'English' : '中文'} 공개 홈 미리보기
+                  <span className="ml-2 text-xs text-blue-700 dark:text-blue-300">
+                    저장되지 않은 입력값을 표시합니다.
+                  </span>
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsPreviewOpen(false)}
+                  data-testid="button-home-preview-edit"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  편집으로 돌아가기
+                </Button>
+              </div>
+              <div className="overflow-hidden rounded-lg border bg-background shadow-sm">
+                <div className="pointer-events-none max-h-[calc(90vh-15rem)] overflow-y-auto">
+                  <Home previewContent={previewContent} previewLocale={activeLocale} />
+                </div>
+              </div>
+            </div>
+          ) : (['ko', 'en', 'zh'] as const).map((locale) => (
+            <TabsContent key={locale} value={locale} className="mt-4 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor={`title-${locale}`}>제목</Label>
                 <Input
@@ -225,6 +269,26 @@ export default function PageEditModal({ isOpen, onClose, page }: PageEditModalPr
             <X className="h-4 w-4 mr-2" />
             취소
           </Button>
+          {page.slug === 'home' && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsPreviewOpen((open) => !open)}
+              data-testid="button-home-preview"
+            >
+              {isPreviewOpen ? (
+                <>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  편집
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-2 h-4 w-4" />
+                  공개 화면 미리보기
+                </>
+              )}
+            </Button>
+          )}
           <Button 
             onClick={handleSave} 
             disabled={updateMutation.isPending}
