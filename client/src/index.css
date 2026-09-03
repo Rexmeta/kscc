@@ -131,6 +131,10 @@
     @apply hover:shadow-lg hover:-translate-y-1;
   }
 
+  .home-participation-grid {
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
   .section-surface-survey {
     background-color: hsl(225 35% 96%);
   }

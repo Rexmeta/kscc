@@ -10,16 +10,20 @@ import { Partner, PostWithTranslations } from '@shared/schema';
 import { parseHomeTranslation, type HomeLocale } from '@shared/homeContent';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/hooks/useAuth';
-import { getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
+import { getEventMeta, getTranslationSafe, getMetaValue } from '@/lib/postHelpers';
 import { queryKeys, fetchJson } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
 import { trackEvent } from '@/lib/analytics';
-import type { SurveySettings } from '@shared/schema';
 import EventCard from '@/components/EventCard';
 import NewsCard from '@/components/NewsCard';
 import { fetchPublicPartners } from '@/lib/publicPartners';
 import { shouldRenderUpcomingEvents } from '@/lib/homeUpcomingEvents';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
+import {
+  getHomeParticipationTimestamp,
+  sortHomeParticipationItems,
+  type HomeSurvey,
+} from '@/lib/homeParticipation';
 
 export default function Home() {
   const { language } = useLanguage();
@@ -104,11 +108,16 @@ export default function Home() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: surveysData } = useQuery<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>({
+  const {
+    data: surveysData,
+    isLoading: surveysLoading,
+    isError: surveysError,
+    refetch: refetchSurveys,
+  } = useQuery<HomeSurvey[]>({
     queryKey: ['/api/surveys', isAuthenticated ? 'authenticated' : 'public'],
     queryFn: async ({ signal }) => {
       try {
-        return await fetchJson<Array<Pick<SurveySettings, 'id' | 'title' | 'description' | 'externalUrl' | 'isActive' | 'startsAt' | 'endsAt'>>>('/api/surveys', { signal });
+        return await fetchJson<HomeSurvey[]>('/api/surveys', { signal });
       } catch (error: any) {
         if (error?.status === 401 || error?.status === 403) return [];
         throw error;
@@ -129,6 +138,31 @@ export default function Home() {
   const news = newsData?.posts || [];
   const partners = partnersData || [];
   const surveys = surveysData || [];
+  const participationItems = sortHomeParticipationItems([
+    ...events.map((post: PostWithTranslations, stableIndex) => ({
+      kind: 'event' as const,
+      id: `event-${post.id}`,
+      post,
+      sortTimestamp: getHomeParticipationTimestamp(getEventMeta(post).eventDate),
+      stableIndex,
+    })),
+    ...surveys.map((survey, index) => ({
+      kind: 'survey' as const,
+      id: `survey-${survey.id}`,
+      survey,
+      sortTimestamp: getHomeParticipationTimestamp(survey.startsAt),
+      stableIndex: events.length + index,
+    })),
+  ]);
+  const showParticipationSection = showUpcomingEvents
+    || surveysLoading
+    || surveysError
+    || surveys.length > 0;
+  const participationLoading = participationItems.length === 0
+    && (eventsLoading || surveysLoading);
+  const participationError = participationItems.length === 0
+    && !participationLoading
+    && (eventsError || surveysError);
   const memberCount = membersData?.total || 0;
   const latestNews = news[0];
   const latestNewsTranslation = latestNews ? getTranslationSafe(latestNews, language) : null;
@@ -244,34 +278,93 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming Events */}
-      {showUpcomingEvents && (
-        <section className="bg-background dark:bg-background py-12 sm:py-16">
+      {/* Upcoming Events and Active Member Surveys */}
+      {showParticipationSection && (
+        <section
+          className="section-surface-survey py-12 sm:py-16"
+          data-testid="home-surveys-section"
+          data-section="home-events-surveys"
+        >
           <div className="container">
             <div className="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">{homeContent.events.title}</h2>
-                <p className="text-muted-foreground">{homeContent.events.subtitle}</p>
+                <h2 className="mb-2 text-2xl font-bold text-foreground sm:text-3xl">
+                  {homeContent.events.title} · {homeContent.surveys.title}
+                </h2>
+                <p className="text-muted-foreground">
+                  {homeContent.events.subtitle} · {homeContent.surveys.subtitle}
+                </p>
               </div>
               <Link href="/events">
-              <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-events">
+                <Button variant="outline" className="w-full sm:w-auto" data-testid="link-all-events">
                   {homeContent.events.viewAll}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </div>
 
-            <QueryState
-              isLoading={eventsLoading}
-              isError={eventsError}
-              onRetry={() => refetchEvents()}
-              empty={events.length === 0}
-               emptyMessage={homeContent.events.empty}
-            >
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {events.map((post: PostWithTranslations) => <EventCard key={post.id} post={post} />)}
+            {participationItems.length > 0 ? (
+              <div className="home-participation-grid grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {participationItems.map((item) => (
+                  <div key={item.id} className="min-h-0 h-full">
+                    {item.kind === 'event' ? (
+                      <EventCard post={item.post} />
+                    ) : (
+                      <Card className="card-hover flex h-full min-h-0 flex-col">
+                        <CardContent className="flex h-full min-h-0 flex-1 flex-col p-6">
+                          <div className="mb-4 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <ClipboardList className="h-6 w-6" />
+                          </div>
+                          <h3 className="text-xl font-semibold text-foreground">{item.survey.title}</h3>
+                          <p className="mt-3 flex-1 text-muted-foreground">{item.survey.description}</p>
+                          {(item.survey.startsAt || item.survey.endsAt) && (
+                            <p className="mt-4 text-sm text-muted-foreground">
+                              {homeContent.surveys.period}: {formatDateTime(item.survey.startsAt)} ~ {formatDateTime(item.survey.endsAt)}
+                            </p>
+                          )}
+                          {isAuthenticated && item.survey.externalUrl ? (
+                            <Button asChild className="btn-accent mt-6 w-full">
+                              <a
+                                href={item.survey.externalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                data-testid={`button-home-survey-${item.survey.id}`}
+                                onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_section' })}
+                              >
+                                {homeContent.surveys.participate}
+                                <ArrowRight className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          ) : (
+                            <Button
+                              className="btn-accent mt-6 w-full"
+                              data-testid={`button-home-survey-${item.survey.id}`}
+                              onClick={handleSurveyLoginRequired}
+                            >
+                              {homeContent.surveys.participate}
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                ))}
               </div>
-            </QueryState>
+            ) : (
+              <QueryState
+                isLoading={participationLoading}
+                isError={participationError}
+                onRetry={() => {
+                  if (eventsError) void refetchEvents();
+                  if (surveysError) void refetchSurveys();
+                }}
+                empty
+                emptyMessage={homeContent.events.empty}
+              >
+                <div />
+              </QueryState>
+            )}
           </div>
         </section>
       )}
@@ -305,59 +398,6 @@ export default function Home() {
           </QueryState>
         </div>
       </section>
-
-      {/* Active Member Surveys */}
-      {surveys.length > 0 && (
-        <section className="section-surface-survey py-12 sm:py-16" data-testid="home-surveys-section">
-          <div className="container">
-            <div className="mb-8 text-center">
-               <h2 className="mb-2 text-3xl font-bold text-foreground">{homeContent.surveys.title}</h2>
-               <p className="text-muted-foreground">{homeContent.surveys.subtitle}</p>
-            </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {surveys.map((survey) => (
-                <Card key={survey.id} className="card-hover h-full">
-                  <CardContent className="flex h-full flex-col p-6">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <ClipboardList className="h-6 w-6" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-foreground">{survey.title}</h3>
-                    <p className="mt-3 flex-1 text-muted-foreground">{survey.description}</p>
-                    {(survey.startsAt || survey.endsAt) && (
-                      <p className="mt-4 text-sm text-muted-foreground">
-                         {homeContent.surveys.period}: {formatDateTime(survey.startsAt)} ~ {formatDateTime(survey.endsAt)}
-                      </p>
-                    )}
-                    {isAuthenticated && survey.externalUrl ? (
-                      <Button asChild className="btn-accent mt-6 w-full">
-                        <a
-                          href={survey.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          data-testid={`button-home-survey-${survey.id}`}
-                          onClick={() => trackEvent('survey_link_clicked', { location: 'home_survey_section' })}
-                        >
-                           {homeContent.surveys.participate}
-                          <ArrowRight className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    ) : (
-                      <Button
-                        className="btn-accent mt-6 w-full"
-                        data-testid={`button-home-survey-${survey.id}`}
-                        onClick={handleSurveyLoginRequired}
-                      >
-                         {homeContent.surveys.participate}
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       <LoginRequiredDialog
         open={loginRequiredOpen}

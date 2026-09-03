@@ -78,7 +78,7 @@ export default function EventCard({ post }: EventCardProps) {
     : post.coverImage;
 
   return (
-    <Card className="card-hover min-w-0 max-w-full overflow-hidden border border-border" data-testid={`event-card-${post.id}`}>
+    <Card className="card-hover flex h-full min-w-0 max-w-full flex-col overflow-hidden border border-border" data-testid={`event-card-${post.id}`}>
       {featuredImage ? (
         <img
           src={featuredImage}
@@ -94,7 +94,7 @@ export default function EventCard({ post }: EventCardProps) {
         </div>
       )}
       
-       <CardContent className="min-w-0 p-3 sm:p-6">
+        <CardContent className="flex min-w-0 flex-1 flex-col p-3 sm:p-6">
         {/* Event Badges */}
          <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
            <div className="flex min-w-0 flex-wrap gap-1.5">
@@ -178,7 +178,7 @@ export default function EventCard({ post }: EventCardProps) {
         
         {/* Action Button */}
         <Button
-          className="w-full min-w-0 btn-primary"
+          className="mt-auto w-full min-w-0 btn-primary"
           onClick={() => navigate(`/events/${post.id}`)}
           data-testid={`button-view-event-${post.id}`}
         >
