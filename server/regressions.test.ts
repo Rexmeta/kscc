@@ -2853,6 +2853,18 @@ test(
       new Date(now + 2 * 60 * 60 * 1000),
       new Date(now + 3 * 60 * 60 * 1000),
     );
+    const [undatedEvent] = await db
+      .insert(posts)
+      .values({
+        postType: "event",
+        status: "published",
+        visibility: "public",
+        slug: `event-list-undated-${randomUUID()}`,
+        primaryLocale: "ko",
+        publishedAt: new Date(now - 60_000),
+      })
+      .returning();
+    eventIds.push(undatedEvent.id);
 
     try {
       const allEvents = await storage.getPosts({
@@ -2877,6 +2889,22 @@ test(
       assert.equal(currentAndUpcomingIds.has(pastEvent.id), false);
       assert.equal(currentAndUpcomingIds.has(currentEvent.id), true);
       assert.equal(currentAndUpcomingIds.has(futureEvent.id), true);
+      assert.equal(currentAndUpcomingIds.has(undatedEvent.id), false);
+
+      const homepageEvents = await storage.getPosts({
+        postType: "event",
+        status: "published",
+        upcoming: true,
+        includeUndated: true,
+        compact: true,
+        limit: 100,
+      });
+      const homepageEventIds = homepageEvents.posts.map(({ id }) => id);
+      assert.equal(homepageEventIds.includes(pastEvent.id), false);
+      assert.equal(homepageEventIds.includes(currentEvent.id), true);
+      assert.equal(homepageEventIds.includes(futureEvent.id), true);
+      assert.equal(homepageEventIds.includes(undatedEvent.id), true);
+      assert.ok(homepageEventIds.indexOf(undatedEvent.id) > homepageEventIds.indexOf(futureEvent.id));
     } finally {
       await db.delete(posts).where(inArray(posts.id, eventIds));
     }

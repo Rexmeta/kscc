@@ -77,9 +77,9 @@ export default function Home() {
 
   // Fetch upcoming events
   const { data: eventsData, isLoading: eventsLoading, isError: eventsError, refetch: refetchEvents } = useQuery({
-    queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, limit: 3, language }),
+    queryKey: queryKeys.posts.list({ postType: 'event', upcoming: true, includeUndated: true, limit: 3, language }),
     queryFn: async ({ signal }) => {
-      return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=event&status=published&upcoming=true&limit=3&locale=${language}&compact=true`, { signal });
+      return fetchJson<{ posts: PostWithTranslations[] }>(`/api/posts?postType=event&status=published&upcoming=true&includeUndated=true&limit=3&locale=${language}&compact=true`, { signal });
     },
     staleTime: 2 * 60 * 1000,
   });

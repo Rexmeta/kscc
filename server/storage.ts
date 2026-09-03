@@ -344,6 +344,7 @@ export interface IStorage {
     publishedAfter?: Date;
     publishedBefore?: Date;
     upcoming?: boolean;
+    includeUndated?: boolean;
     locale?: string;
     compact?: boolean;
     limit?: number;
@@ -2350,6 +2351,9 @@ export class DatabaseStorage implements IStorage {
     const upcomingEventDate = eventStartDate && eventEndDate
       ? sql<Date | null>`COALESCE(${eventEndDate}, ${eventStartDate})`
       : undefined;
+    const includeUndatedUpcomingEvents = filters?.includeUndated === true
+      && filters?.upcoming === true
+      && filters?.postType === "event";
 
     if (filters?.postType) {
       conditions.push(eq(posts.postType, filters.postType as any));
@@ -2479,7 +2483,9 @@ export class DatabaseStorage implements IStorage {
     // Current and upcoming events filtering (SQL-level for correct pagination).
     // Use the end date when present so an event in progress remains visible.
     if (upcomingEventDate) {
-      conditions.push(sql`${upcomingEventDate} >= CURRENT_TIMESTAMP`);
+      conditions.push(includeUndatedUpcomingEvents
+        ? sql`(${eventStartDate} IS NULL OR ${upcomingEventDate} >= CURRENT_TIMESTAMP)`
+        : sql`${upcomingEventDate} >= CURRENT_TIMESTAMP`);
     }
 
     if (conditions.length > 0) {
@@ -2495,7 +2501,9 @@ export class DatabaseStorage implements IStorage {
     const postsQuery = query
       .orderBy(
         ...(upcomingEventDate
-          ? [asc(eventStartDate!), asc(posts.id)]
+          ? includeUndatedUpcomingEvents
+            ? [sql`${eventStartDate} IS NULL`, asc(eventStartDate!), asc(posts.id)]
+            : [asc(eventStartDate!), asc(posts.id)]
           : [desc(posts.publishedAt), desc(posts.id)]),
       )
       .limit(boundedPageSize(filters?.limit, MAX_POST_PAGE_SIZE))

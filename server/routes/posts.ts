@@ -74,6 +74,7 @@ const postQuerySchema = z.object({
   search: z.string().trim().max(100).optional(), // Search term for title/content/excerpt/slug
   category: z.string().trim().max(100).optional(),
   upcoming: z.enum(['true', 'false']).optional(), // Filter for current and upcoming events
+  includeUndated: z.enum(['true', 'false']).optional(), // Home can also show published events without a scheduled date
   compact: z.enum(['true', 'false']).optional(),
   admin: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().min(1).max(10000).optional(),
@@ -165,6 +166,7 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
     
     // Parse upcoming filter for events
     const upcoming = query.upcoming === 'true' ? true : undefined;
+    const includeUndated = query.includeUndated === 'true' ? true : undefined;
     
     const page = adminMode ? (query.page || 1) : 1;
     const offset = adminMode
@@ -180,6 +182,7 @@ router.get("/", optionalAuthenticateToken, async (req: Request, res: Response) =
       search: query.search,
       category: query.category,
       upcoming,
+      includeUndated,
       compact: query.compact === 'true',
       limit: query.limit,
       offset,
