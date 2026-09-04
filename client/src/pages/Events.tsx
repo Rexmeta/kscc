@@ -16,7 +16,12 @@ import { QueryState } from '@/components/QueryState';
 import { PagePagination } from '@/components/PagePagination';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import SurveyCard from '@/components/SurveyCard';
-import type { HomeSurvey } from '@/lib/homeParticipation';
+import {
+  getHomeParticipationTimestamp,
+  sortHomeParticipationItems,
+  type HomeSurvey,
+} from '@/lib/homeParticipation';
+import { getEventMeta } from '@/lib/postHelpers';
 
 export default function EventsPage() {
   const { hasPermission, isAuthenticated } = useAuth();
@@ -64,6 +69,27 @@ export default function EventsPage() {
   const events = data?.posts || [];
   const surveys = surveysData || [];
   const totalPages = Math.ceil((data?.total || 0) / limit) || 1;
+  const participationItems = sortHomeParticipationItems([
+    ...events.map((post: PostWithTranslations, stableIndex) => ({
+      kind: 'event' as const,
+      id: `event-${post.id}`,
+      post,
+      sortTimestamp: getHomeParticipationTimestamp(getEventMeta(post).eventDate),
+      stableIndex,
+    })),
+    ...surveys.map((survey, index) => ({
+      kind: 'survey' as const,
+      id: `survey-${survey.id}`,
+      survey,
+      sortTimestamp: getHomeParticipationTimestamp(survey.startsAt),
+      stableIndex: events.length + index,
+    })),
+  ]);
+  const participationLoading = participationItems.length === 0
+    && (isLoading || surveysLoading);
+  const participationError = participationItems.length === 0
+    && !participationLoading
+    && (isError || surveysError);
 
   const handleSurveyLoginRequired = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -155,64 +181,60 @@ export default function EventsPage() {
         </div>
       </section>
 
-      {(surveysLoading || surveysError || surveys.length > 0) && (
-        <section className="section-surface-survey border-b border-border/60 py-8 sm:py-12" data-testid="events-surveys-section">
-          <div className="container">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-foreground sm:text-3xl">{t('home.surveys.title')}</h2>
-              <p className="mt-2 text-muted-foreground">{t('home.surveys.subtitle')}</p>
-            </div>
-            <QueryState
-              isLoading={surveysLoading}
-              isError={surveysError}
-              onRetry={() => refetchSurveys()}
-              empty={surveys.length === 0}
-              emptyMessage={t('common.empty')}
-            >
-              <div className="grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {surveys.map((survey) => (
-                  <SurveyCard
-                    key={survey.id}
-                    survey={survey}
-                    isAuthenticated={isAuthenticated}
-                    content={{
-                      title: t('home.surveys.title'),
-                      subtitle: t('home.surveys.subtitle'),
-                      period: t('home.surveys.period'),
-                      participate: t('home.surveys.participate'),
-                    }}
-                    onLoginRequired={handleSurveyLoginRequired}
-                    trackingLocation="events_survey_section"
-                    testIdPrefix="button-events-survey"
-                  />
-                ))}
-              </div>
-            </QueryState>
+      {/* Events and surveys */}
+      <section
+        className="section-surface-survey border-b border-border/60 py-8 sm:py-12"
+        data-testid="events-surveys-section"
+        data-section="events-surveys"
+      >
+        <div className="container min-w-0">
+          <div className="mb-8 flex flex-col items-start gap-2">
+            <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
+              {t('events.title')} · {t('home.surveys.title')}
+            </h2>
+            <p className="text-muted-foreground">
+              {t('events.subtitle')} · {t('home.surveys.subtitle')}
+            </p>
           </div>
-        </section>
-      )}
-
-      {/* Events Grid */}
-       <section className="py-8 sm:py-16">
-          <div className="container min-w-0">
-           <QueryState
-             isLoading={isLoading}
-             isError={isError}
-             onRetry={() => refetch()}
-             empty={events.length === 0}
-             emptyMessage={t('home.events.empty')}
-           >
+          <QueryState
+            isLoading={participationLoading}
+            isError={participationError}
+            onRetry={() => {
+              if (isError) void refetch();
+              if (surveysError) void refetchSurveys();
+            }}
+            empty={participationItems.length === 0}
+            emptyMessage={t('home.events.empty')}
+          >
             <>
-               <div className="grid min-w-0 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {events.map((post: PostWithTranslations) => (
-                  <EventCard key={post.id} post={post} />
+              <div className="home-participation-grid grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {participationItems.map((item) => (
+                  <div key={item.id} className="min-h-0 h-full">
+                    {item.kind === 'event' ? (
+                      <EventCard post={item.post} />
+                    ) : (
+                      <SurveyCard
+                        survey={item.survey}
+                        isAuthenticated={isAuthenticated}
+                        content={{
+                          title: t('home.surveys.title'),
+                          subtitle: t('home.surveys.subtitle'),
+                          period: t('home.surveys.period'),
+                          participate: t('home.surveys.participate'),
+                        }}
+                        onLoginRequired={handleSurveyLoginRequired}
+                        trackingLocation="events_survey_section"
+                        testIdPrefix="button-events-survey"
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
-              
-              {/* Pagination */}
-               <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
+
+              {/* Pagination applies to events; survey cards remain in the shared section. */}
+              <PagePagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </>
-           </QueryState>
+          </QueryState>
         </div>
       </section>
       <LoginRequiredDialog
