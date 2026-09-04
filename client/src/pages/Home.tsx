@@ -110,14 +110,7 @@ export default function Home({ previewContent, previewLocale }: HomeProps = {}) 
     refetch: refetchSurveys,
   } = useQuery<HomeSurvey[]>({
     queryKey: ['/api/surveys', isAuthenticated ? 'authenticated' : 'public'],
-    queryFn: async ({ signal }) => {
-      try {
-        return await fetchJson<HomeSurvey[]>('/api/surveys', { signal });
-      } catch (error: any) {
-        if (error?.status === 401 || error?.status === 403) return [];
-        throw error;
-      }
-    },
+    queryFn: ({ signal }) => fetchJson<HomeSurvey[]>('/api/surveys', { signal }),
     // Survey settings change infrequently and are not a live participation
     // counter. Avoid a background request every 30 seconds for every member
     // who leaves the homepage open.

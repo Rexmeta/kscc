@@ -55,16 +55,10 @@ export default function EventsPage() {
     isError: surveysError,
     refetch: refetchSurveys,
   } = useQuery<HomeSurvey[]>({
-    queryKey: ['/api/surveys', isAuthenticated ? 'authenticated' : 'public'],
-    queryFn: async ({ signal }) => {
-      try {
-        return await fetchJson<HomeSurvey[]>('/api/surveys', { signal });
-      } catch (error: any) {
-        if (error?.status === 401 || error?.status === 403) return [];
-        throw error;
-      }
-    },
+    queryKey: ['/api/surveys', 'events-page', isAuthenticated ? 'authenticated' : 'public'],
+    queryFn: ({ signal }) => fetchJson<HomeSurvey[]>('/api/surveys', { signal }),
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
   });
 
   const events = data?.posts || [];
