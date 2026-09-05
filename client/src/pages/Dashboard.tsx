@@ -697,6 +697,11 @@ export default function Dashboard() {
                         data-testid="input-profile-email"
                       />
                     </FormControl>
+                    {!user?.email && (
+                      <p className="text-sm text-muted-foreground">
+                        {t('dashboard.emailRequired')}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -706,7 +711,7 @@ export default function Dashboard() {
                 name="weixin"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>WeChat ID</FormLabel>
+                    <FormLabel>{t('dashboard.wechatIdManual')}</FormLabel>
                     <FormControl>
                       <Input 
                         placeholder={user?.weixin || 'WeChat ID'} 

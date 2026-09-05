@@ -23,6 +23,8 @@ interface AuthContextType {
   permissions: Set<string>;
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
+  startWechatLogin: () => void;
+  completeWechatLogin: (code: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,6 +98,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchUser();
   };
 
+  const startWechatLogin = () => {
+    window.location.assign('/api/auth/wechat/start');
+  };
+
+  const completeWechatLogin = async (code: string) => {
+    await apiRequest('POST', '/api/auth/wechat/exchange', { code });
+    queryClient.clear();
+    await fetchUser();
+  };
+
   const logout = async () => {
     try {
       await apiRequest('POST', '/api/auth/logout');
@@ -143,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     permissions,
     hasPermission,
     hasAnyPermission,
+    startWechatLogin,
+    completeWechatLogin,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

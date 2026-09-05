@@ -338,7 +338,6 @@ router.get("/:id", optionalAuthenticateToken, async (req: Request, res: Response
 router.post("/:id/register", authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = postIdSchema.parse(req.params);
-    const attendee = eventRegistrationRequestSchema.parse(req.body);
     const access = await storage.getPostAccessContext(
       req.user?.id,
       req.user?.role === "admin",
@@ -358,6 +357,13 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
     if (!user) {
       return res.status(401).json({ message: "Authentication required" });
     }
+    if (!user.email) {
+      return res.status(409).json({
+        message: "Please add an email address to your profile before registering for an event.",
+        code: "EMAIL_REQUIRED",
+      });
+    }
+    const attendee = eventRegistrationRequestSchema.parse(req.body);
     const existingRegistration = await storage.getEventRegistration(id, user.id);
     const registration = await storage.registerForEvent({
       eventId: id,

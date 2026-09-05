@@ -36,6 +36,13 @@
       "when": 1788531070497,
       "tag": "0004_consent_evidence_access_log",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788362192007,
+      "tag": "0003_wechat_oauth",
+      "breakpoints": true
     }
   ]
 }

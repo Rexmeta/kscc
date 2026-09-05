@@ -13,8 +13,10 @@ export const localeEnum = pgEnum("locale", ["ko", "en", "zh"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
+  // Social-only accounts may add these credentials later from their profile.
+  // Email/password registration still validates both fields at the API boundary.
+  email: text("email").unique(),
+  password: text("password"),
   name: text("name").notNull(),
   role: text("role").notNull().default("user"), // admin, operator, user
   userType: text("user_type").notNull().default("user"), // admin, operator, company, user
@@ -26,6 +28,35 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const wechatIdentities = pgTable("wechat_identities", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("wechat"),
+  appId: text("app_id").notNull(),
+  openId: text("open_id").notNull(),
+  unionId: text("union_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userProviderUnique: uniqueIndex("wechat_identities_user_provider_unique")
+    .on(table.userId, table.provider),
+  appOpenIdUnique: uniqueIndex("wechat_identities_app_open_id_unique")
+    .on(table.provider, table.appId, table.openId),
+  unionIdUnique: uniqueIndex("wechat_identities_union_id_unique")
+    .on(table.provider, table.unionId),
+}));
+
+export const authHandoffs = pgTable("auth_handoffs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  activeExpiryIdx: index("auth_handoffs_expires_at_idx").on(table.expiresAt),
+}));
 
 export const members = pgTable("members", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -337,8 +368,23 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   memberships: many(userMemberships),
   postsCreated: many(posts),
   consentEvidence: many(consentEvidence),
+  wechatIdentities: many(wechatIdentities),
+  authHandoffs: many(authHandoffs),
 }));
 
+export const wechatIdentitiesRelations = relations(wechatIdentities, ({ one }) => ({
+  user: one(users, {
+    fields: [wechatIdentities.userId],
+    references: [users.id],
+  }),
+}));
+
+export const authHandoffsRelations = relations(authHandoffs, ({ one }) => ({
+  user: one(users, {
+    fields: [authHandoffs.userId],
+    references: [users.id],
+  }),
+}));
 export const tiersRelations = relations(tiers, ({ many }) => ({
   memberships: many(userMemberships),
 }));
@@ -664,6 +710,8 @@ export const insertPostMetaSchema = createInsertSchema(postMeta).omit({
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
+export type WechatIdentity = typeof wechatIdentities.$inferSelect;
+
 export type UserProfileDto = Pick<
   User,
   "id" | "email" | "name" | "role" | "userType" | "weixin" | "createdAt"
@@ -878,3 +926,5 @@ export type AdminMembershipDto = {
   tierName: string;
   isActive: boolean;
 };
+
+export type AuthHandoff = typeof authHandoffs.$inferSelect;

@@ -8,7 +8,7 @@ import { ApiRequestError, apiRequest } from '@/lib/queryClient';
 import { KeyRound, Loader2, X } from 'lucide-react';
 
 interface AdminPasswordResetDialogProps {
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string | null };
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -89,7 +89,7 @@ export default function AdminPasswordResetDialog({
             비밀번호 리셋
           </DialogTitle>
           <DialogDescription>
-            {user.name} ({user.email})의 새 비밀번호를 설정합니다.
+            {user.name} ({user.email || '이메일 없음'})의 새 비밀번호를 설정합니다.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

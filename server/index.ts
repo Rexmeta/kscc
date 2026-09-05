@@ -62,6 +62,7 @@ const authLimiter = rateLimit({
 
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/wechat", authLimiter);
 app.use("/api", apiLimiter);
 
 // Uploads use signed object-storage URLs, so API requests should stay bounded.

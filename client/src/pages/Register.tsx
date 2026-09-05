@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Eye, EyeOff, User, Mail, Lock, Building, Briefcase, Phone, MessageCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -19,13 +18,13 @@ import {
   CURRENT_TERMS_VERSION,
   POLICY_EFFECTIVE_DATE,
 } from '@shared/policies';
+import { Eye, EyeOff, User, Mail, Lock, Building, Briefcase, Phone } from 'lucide-react';
 
 const companySchema = z.object({
   name: z.string().min(2, '이름은 2자 이상이어야 합니다'),
   email: z.string().email('올바른 이메일을 입력해주세요'),
   password: z.string().min(8, '비밀번호는 8자 이상이어야 합니다').max(72, '비밀번호는 72자 이내여야 합니다'),
   confirmPassword: z.string(),
-  weixin: z.string().optional(),
   companyName: z.string().optional(),
   business: z.string().optional(),
   contactEmail: z.string().email('올바른 이메일을 입력해주세요').optional().or(z.literal('')),
@@ -44,7 +43,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [, setLocation] = useLocation();
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, startWechatLogin } = useAuth();
   const { toast } = useToast();
 
   const { register, handleSubmit, setError, setValue, watch, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
@@ -54,7 +53,6 @@ export default function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
-      weixin: '',
       companyName: '',
       business: '',
       contactEmail: '',
@@ -190,20 +188,6 @@ export default function RegisterPage() {
                   )}
                 </div>
 
-                <div>
-                  <Label htmlFor="weixin">WeChat ID (선택)</Label>
-                  <div className="relative">
-                    <MessageCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="weixin"
-                      placeholder="WeChat ID"
-                      className="pl-10"
-                      {...register('weixin')}
-                      data-testid="input-weixin"
-                    />
-                  </div>
-                </div>
-
                 {userType === 'company' && (
                   <>
                     <div>
@@ -321,6 +305,24 @@ export default function RegisterPage() {
                   {isSubmitting ? '가입 중...' : t('auth.register.submit')}
                 </Button>
               </form>
+
+               <div className="relative my-5">
+                 <div className="absolute inset-0 flex items-center">
+                   <span className="w-full border-t" />
+                 </div>
+                 <div className="relative flex justify-center text-xs uppercase">
+                   <span className="bg-card px-2 text-muted-foreground">또는</span>
+                 </div>
+               </div>
+               <Button
+                 type="button"
+                 variant="outline"
+                 className="w-full"
+                 onClick={startWechatLogin}
+                 data-testid="button-wechat-login"
+               >
+                 {t('auth.wechat.register')}
+               </Button>
               
                <div className="mt-4 text-center sm:mt-6">
                 <p className="text-sm text-muted-foreground dark:text-muted-foreground">

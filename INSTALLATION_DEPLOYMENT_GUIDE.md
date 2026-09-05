@@ -793,11 +793,42 @@ SMOKE_BASE_URL=https://<deployed-host> npm run smoke:api
 | `PUBLIC_OBJECT_SEARCH_PATHS` | 공개 리소스 사용 시 필수 | 쉼표로 구분한 공개 객체 검색 경로 |
 | `RESEND_API_KEY` | 문의 답변 메일 발송 시 필수 | Resend API 인증 비밀값 |
 | `EMAIL_FROM` | 프로덕션 메일 발송 시 필수 | Resend에서 검증한 발신 주소 |
+| `WECHAT_APP_ID` | WeChat 로그인 사용 시 필수 | WeChat 웹/QR 앱 ID |
+| `WECHAT_APP_SECRET` | WeChat 로그인 사용 시 필수 | WeChat 웹/QR 앱 Secret. 로그나 저장소에 기록하지 않음 |
+| `WECHAT_REDIRECT_URI` | WeChat 로그인 사용 시 필수 | WeChat에 등록한 콜백 전체 URL |
 
 Object Storage 경로가 없으면 해당 객체 작업이 실패합니다. `EMAIL_FROM`을
 지정하지 않으면 코드의 개발용 기본 발신 주소가 사용되므로, 프로덕션에서는
 반드시 검증된 주소를 설정합니다. `RESEND_API_KEY`가 없으면 메일은 발송되지
 않고 응답의 `emailSent`가 `false`가 됩니다.
+
+#### WeChat 웹/QR 로그인
+
+WeChat 로그인은 `snsapi_login` 웹 QR OAuth만 사용합니다. 다음 세 값을
+개발 환경과 프로덕션 환경에 각각 별도의 Secret으로 설정합니다.
+
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+- `WECHAT_REDIRECT_URI`
+
+`WECHAT_REDIRECT_URI`는 임의의 경로, 쿼리 문자열, 해시를 사용할 수 없으며
+아래 경로와 정확히 일치해야 합니다.
+
+| 환경 | WeChat 개발자 콘솔에 등록할 콜백 URL |
+| --- | --- |
+| 개발 | `https://<development-domain>/api/auth/wechat/callback` |
+| 프로덕션 | `https://<published-domain>/api/auth/wechat/callback` |
+
+개발 환경의 `<development-domain>`은 Replit의 현재 개발 도메인이고,
+프로덕션의 `<published-domain>`은 배포 후 발급된 공개 도메인입니다. 각 환경의
+`WECHAT_REDIRECT_URI`에도 같은 전체 URL을 그대로 사용합니다. 콘솔의 URL과
+환경 변수 값이 한 글자라도 다르면 로그인은 안전하게 거부됩니다. 브라우저로
+돌아오는 내부 경로는 고정된 `/auth/wechat/callback`이며, 외부 redirect
+파라미터를 받지 않습니다.
+
+값이 누락되거나 잘못된 경우 로그인 버튼은 내부 오류를 노출하지 않고
+설정되지 않은 기능이라는 안내를 반환합니다. WeChat Secret과 provider access
+token은 브라우저 URL, 응답, 운영 로그에 포함되지 않습니다.
 
 ### 런타임·데이터베이스 pool 설정
 
@@ -836,6 +867,10 @@ PUBLIC_OBJECT_SEARCH_PATHS=<development-public-object-paths>
 # 메일이 필요한 개발 환경에서만 설정
 # RESEND_API_KEY=<development-resend-key>
 # EMAIL_FROM=<verified-development-sender>
+# WeChat 웹/QR 로그인 사용 시에만 설정 (값은 저장소에 기록하지 않음)
+# WECHAT_APP_ID=<development-wechat-app-id>
+# WECHAT_APP_SECRET=<development-wechat-app-secret>
+# WECHAT_REDIRECT_URI=https://<development-domain>/api/auth/wechat/callback
 # DB_POOL_MAX=10
 # DB_IDLE_TIMEOUT_MS=30000
 # DB_CONNECTION_TIMEOUT_MS=10000

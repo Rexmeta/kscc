@@ -3,6 +3,7 @@ import {
   posts, postTranslations, postTranslationHistory, postMeta, organizationMembers,
   tiers, roles, userMemberships, surveySettings, surveySettingsHistory, consentEvidence,
   consentEvidenceAccessLog,
+  wechatIdentities, authHandoffs,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
@@ -17,7 +18,7 @@ import {
   type OrganizationMember, type InsertOrganizationMember,
    type SurveySettings, type SurveySettingsInput, type SurveySettingsHistory,
 } from "@shared/schema";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { db } from "./db";
 import { eq, desc, asc, and, or, like, ilike, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
 import {
@@ -115,7 +116,7 @@ export interface PersonalDataExport {
   exportedAt: string;
   account: {
     name: string;
-    email: string;
+    email: string | null;
     weixin: string | null;
     userType: string;
     membershipTier: string;
@@ -224,6 +225,7 @@ export interface IStorage {
 
   getConsentEvidence(
     subject: { userId?: string; inquiryId?: string },
+
   ): Promise<Array<Pick<ConsentEvidence, "id" | "purpose" | "policyVersion" | "consentedAt">>>;
 
   recordConsentEvidenceAccess(
@@ -231,6 +233,7 @@ export interface IStorage {
     subjectType: "account" | "inquiry",
     subjectId: string,
     action: "view" | "export",
+
   ): Promise<void>;
 
   getConsentEvidenceAccessLog(filters?: {
@@ -239,6 +242,7 @@ export interface IStorage {
     action?: "view" | "export";
     limit?: number;
     offset?: number;
+
   }): Promise<{ entries: ConsentEvidenceAccessLogEntry[]; total: number }>;
 
   getUserCount(): Promise<number>;
@@ -246,6 +250,7 @@ export interface IStorage {
   getAdminDashboardSnapshot(
     access: PostAccessContext,
     now?: Date,
+
   ): Promise<AdminDashboardSnapshot>;
 
   getUsers(filters?: {
@@ -254,6 +259,7 @@ export interface IStorage {
     search?: string;
     role?: AccountRole;
     isActive?: boolean;
+
   }): Promise<{ users: User[]; total: number }>;
 
   createUser(user: InsertUser & { role?: string; userType?: string }): Promise<User>;
@@ -263,12 +269,14 @@ export interface IStorage {
   createUserForRegistration(
     userData: InsertUser & { userType?: string },
     consents?: readonly ConsentEvidenceInput[],
+
   ): Promise<User>;
 
   createUserWithMemberForRegistration(
     userData: InsertUser & { userType?: string },
     memberData: Omit<InsertMember, 'userId'>,
     consents?: readonly ConsentEvidenceInput[],
+
   ): Promise<{ user: User; member: Member }>;
 
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
@@ -385,31 +393,36 @@ export interface IStorage {
   // Survey settings
 
   getSurveySettings(): Promise<SurveySettings | undefined>;
+
   getSurveySettingsById(id: string): Promise<SurveySettings | undefined>;
+
   getSurveySettingsList(filters?: {
     limit?: number;
     offset?: number;
     search?: string;
     status?: "inactive" | "upcoming" | "active" | "ended";
+
   }): Promise<{ surveys: SurveySettings[]; total: number }>;
+
   getActiveSurveySettings(now?: Date, limit?: number): Promise<SurveySettings[]>;
+
   createSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
+
   updateSurveySettings(id: string, settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings | undefined>;
+
   deactivateSurveySettings(id: string, updatedBy: string): Promise<SurveySettings | undefined>;
+
   upsertSurveySettings(settings: SurveySettingsInput, updatedBy: string): Promise<SurveySettings>;
+
   getSurveySettingsHistory(filters?: {
     surveySettingsId?: string;
     limit?: number;
     offset?: number;
     snapshotVersion?: number;
+
   }): Promise<{ history: SurveySettingsHistoryEntry[]; total: number; snapshotVersion: number }>;
 
-  // Unified Posts System
-  /**
-   * Build a post access context from current account and ACL state.
-   * managementRequested only enables the editor path; it never makes a caller
-   * an administrator.
-   */
+  // Post Meta
 
   getPostAccessContext(userId?: string, managementRequested?: boolean): Promise<PostAccessContext>;
   // Posts
@@ -456,6 +469,7 @@ export interface IStorage {
   updatePost(
     id: string,
     updates: Partial<Omit<Post, "authorId">> & { authorId?: never },
+
   ): Promise<Post | undefined>;
 
   updatePostComplete(
@@ -465,7 +479,6 @@ export interface IStorage {
     metadata: Array<{ key: string; value?: any }>,
     changedBy?: string,
   ): Promise<Post | undefined>;
-
   deletePost(id: string): Promise<void>;
 
   // Post Translations
@@ -485,8 +498,6 @@ export interface IStorage {
     limit?: number;
     offset?: number;
   }): Promise<{ history: PageTranslationHistoryEntry[]; total: number }>;
-
-  // Post Meta
 
   getPostMeta(postId: string, key: string, access?: PostAccessContext): Promise<PostMeta | undefined>;
 
@@ -520,6 +531,17 @@ export interface IStorage {
   reorderOrganizationMembers(category: string, memberIds: string[]): Promise<OrganizationMember[]>;
 
   deleteOrganizationMember(id: string): Promise<void>;
+
+  resolveWechatUser(identity: {
+    appId: string;
+    openId: string;
+    unionId?: string;
+
+  }): Promise<User>;
+
+  createAuthHandoffCode(userId: string, code: string, expiresAt: Date): Promise<void>;
+
+  consumeAuthHandoffCode(code: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -623,6 +645,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {
+    if (typeof insertUser.email !== "string" || typeof insertUser.password !== "string") {
+      throw new Error("Email and password are required for password accounts");
+    }
     const hashedPassword = await hashPassword(insertUser.password);
     const [user] = await db
       .insert(users)
@@ -640,7 +665,9 @@ export class DatabaseStorage implements IStorage {
     memberData: Omit<InsertMember, 'userId'>
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
-      // Create user
+      if (typeof userData.email !== "string" || typeof userData.password !== "string") {
+        throw new Error("Email and password are required for password accounts");
+      }
       const hashedPassword = await hashPassword(userData.password);
       const [user] = await tx
         .insert(users)
@@ -670,6 +697,9 @@ export class DatabaseStorage implements IStorage {
     consents?: readonly ConsentEvidenceInput[],
   ): Promise<User> {
     return await db.transaction(async (tx) => {
+      if (typeof userData.email !== "string" || typeof userData.password !== "string") {
+        throw new Error("Email and password are required for password accounts");
+      }
       const hashedPassword = await hashPassword(userData.password);
 
       const [user] = await tx
@@ -702,6 +732,9 @@ export class DatabaseStorage implements IStorage {
     consents?: readonly ConsentEvidenceInput[],
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
+      if (typeof userData.email !== "string" || typeof userData.password !== "string") {
+        throw new Error("Email and password are required for password accounts");
+      }
       const hashedPassword = await hashPassword(userData.password);
 
       const [user] = await tx
@@ -762,7 +795,9 @@ export class DatabaseStorage implements IStorage {
       const activeStateChanged = updates.isActive !== undefined
         && updates.isActive !== currentUser.isActive;
       const emailChanged = updates.email !== undefined
-        && normalizeEmail(updates.email) !== normalizeEmail(currentUser.email);
+        && (updates.email === null
+          ? currentUser.email !== null
+          : normalizeEmail(updates.email) !== normalizeEmail(currentUser.email || ""));
       const securityChanged = roleChanged
         || activeStateChanged
         || emailChanged
@@ -822,7 +857,9 @@ export class DatabaseStorage implements IStorage {
 
       const safeUpdates = {
         ...updates,
-        ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) } : {}),
+        ...(updates.email !== undefined
+          ? { email: updates.email === null ? null : normalizeEmail(updates.email) }
+          : {}),
       };
       const [updatedUser] = await tx
         .update(users)
@@ -1033,7 +1070,9 @@ export class DatabaseStorage implements IStorage {
     const securityChanged = updates.email !== undefined || updates.password !== undefined;
     const safeUpdates = {
       ...updates,
-      ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) } : {}),
+      ...(updates.email !== undefined
+        ? { email: updates.email === null ? null : normalizeEmail(updates.email) }
+        : {}),
       ...(securityChanged ? { sessionVersion: sql`${users.sessionVersion} + 1` } : {}),
     };
     const [user] = await db
@@ -1060,7 +1099,7 @@ export class DatabaseStorage implements IStorage {
 
   async validateUser(email: string, password: string): Promise<User | undefined> {
     const user = await this.getUserByEmail(normalizeEmail(email));
-    if (!user || !user.isActive) return undefined;
+    if (!user || !user.isActive || !user.password) return undefined;
     
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) return undefined;
@@ -1251,7 +1290,7 @@ export class DatabaseStorage implements IStorage {
       const [user] = await tx.select().from(users).where(eq(users.id, id));
       if (!user) return false;
 
-      if (!(await verifyPassword(currentPassword, user.password))) {
+      if (!user.password || !(await verifyPassword(currentPassword, user.password))) {
         throw new AccountClosureError("INVALID_REAUTH", "Current password is incorrect");
       }
 
@@ -3696,6 +3735,104 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOrganizationMember(id: string): Promise<void> {
     await db.delete(organizationMembers).where(eq(organizationMembers.id, id));
+  }
+
+  async resolveWechatUser(identity: {
+    appId: string;
+    openId: string;
+    unionId?: string;
+  }): Promise<User> {
+    return await db.transaction(async (tx) => {
+      // Lock on the app-scoped identity first so callbacks that differ only in
+      // whether WeChat returned unionid still serialize to one account.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`wechat:${identity.appId}:${identity.openId}`}))`);
+      if (identity.unionId) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`wechat-union:${identity.unionId}`}))`);
+      }
+
+      let match: { user: User; identity: typeof wechatIdentities.$inferSelect } | undefined;
+      if (identity.unionId) {
+        const [unionMatch] = await tx
+          .select({ user: users, identity: wechatIdentities })
+          .from(wechatIdentities)
+          .innerJoin(users, eq(wechatIdentities.userId, users.id))
+          .where(and(
+            eq(wechatIdentities.provider, "wechat"),
+            eq(wechatIdentities.unionId, identity.unionId),
+          ))
+          .limit(1);
+        match = unionMatch;
+      }
+
+      if (!match) {
+        const [openIdMatch] = await tx
+          .select({ user: users, identity: wechatIdentities })
+          .from(wechatIdentities)
+          .innerJoin(users, eq(wechatIdentities.userId, users.id))
+          .where(and(
+            eq(wechatIdentities.provider, "wechat"),
+            eq(wechatIdentities.appId, identity.appId),
+            eq(wechatIdentities.openId, identity.openId),
+          ))
+          .limit(1);
+        match = openIdMatch;
+      }
+
+      if (match) {
+        // Backfill a newly available provider-stable identifier, but never
+        // infer ownership from email, display name, or the manual WeChat ID.
+        if (identity.unionId && !match.identity.unionId) {
+          await tx
+            .update(wechatIdentities)
+            .set({ unionId: identity.unionId, updatedAt: new Date() })
+            .where(eq(wechatIdentities.id, match.identity.id));
+        }
+        return match.user;
+      }
+
+      const [user] = await tx
+        .insert(users)
+        .values({
+          email: null,
+          password: null,
+          name: "WeChat user",
+          role: "user",
+          userType: "user",
+        })
+        .returning();
+      await tx.insert(wechatIdentities).values({
+        userId: user.id,
+        provider: "wechat",
+        appId: identity.appId,
+        openId: identity.openId,
+        unionId: identity.unionId ?? null,
+      });
+      return user;
+    });
+  }
+
+  async createAuthHandoffCode(userId: string, code: string, expiresAt: Date): Promise<void> {
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    await db.insert(authHandoffs).values({ userId, codeHash, expiresAt });
+  }
+
+  async consumeAuthHandoffCode(code: string): Promise<User | undefined> {
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    return await db.transaction(async (tx) => {
+      const now = new Date();
+      const [handoff] = await tx
+        .update(authHandoffs)
+        .set({ consumedAt: now })
+        .where(and(
+          eq(authHandoffs.codeHash, codeHash),
+          isNull(authHandoffs.consumedAt),
+          gt(authHandoffs.expiresAt, now),
+        ))
+        .returning({ userId: authHandoffs.userId });
+      if (!handoff) return undefined;
+      const [user] = await tx.select().from(users).where(eq(users.id, handoff.userId)).limit(1);
+      return user || undefined;
+    });
   }
 }
 

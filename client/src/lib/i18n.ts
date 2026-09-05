@@ -220,6 +220,8 @@ export interface TranslationKeys {
   'auth.login.password': string;
   'auth.login.submit': string;
   'auth.login.register': string;
+  'auth.wechat.login': string;
+  'auth.wechat.register': string;
   'auth.register.title': string;
   'auth.register.name': string;
   'auth.register.email': string;
@@ -232,6 +234,8 @@ export interface TranslationKeys {
   // Dashboard
   'dashboard.title': string;
   'dashboard.profile': string;
+  'dashboard.emailRequired': string;
+  'dashboard.wechatIdManual': string;
   'dashboard.membership': string;
   'dashboard.events': string;
   'dashboard.resources': string;
@@ -505,6 +509,8 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.login.password': '비밀번호',
     'auth.login.submit': '로그인',
     'auth.login.register': '회원가입',
+    'auth.wechat.login': 'WeChat으로 로그인 / 가입',
+    'auth.wechat.register': 'WeChat으로 가입 / 로그인',
     'auth.register.title': '회원가입',
     'auth.register.name': '이름',
     'auth.register.email': '이메일',
@@ -517,6 +523,8 @@ const translations: Record<Language, TranslationKeys> = {
     // Dashboard
     'dashboard.title': 'My Page',
     'dashboard.profile': '프로필',
+    'dashboard.emailRequired': '행사 신청과 이메일 안내를 이용하려면 이메일을 등록해주세요.',
+    'dashboard.wechatIdManual': 'WeChat ID (프로필 메모, 로그인 인증 아님)',
     'dashboard.membership': '멤버십',
     'dashboard.events': '내 행사',
     'dashboard.resources': '리소스',
@@ -788,6 +796,8 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.login.password': 'Password',
     'auth.login.submit': 'Login',
     'auth.login.register': 'Register',
+    'auth.wechat.login': 'Sign in / sign up with WeChat',
+    'auth.wechat.register': 'Sign up / sign in with WeChat',
     'auth.register.title': 'Register',
     'auth.register.name': 'Name',
     'auth.register.email': 'Email',
@@ -800,6 +810,8 @@ const translations: Record<Language, TranslationKeys> = {
     // Dashboard
     'dashboard.title': 'My Page',
     'dashboard.profile': 'Profile',
+    'dashboard.emailRequired': 'Add an email to register for events and receive email notices.',
+    'dashboard.wechatIdManual': 'WeChat ID (profile note, not used for sign-in)',
     'dashboard.membership': 'Membership',
     'dashboard.events': 'My Events',
     'dashboard.resources': 'Resources',
@@ -1071,6 +1083,8 @@ const translations: Record<Language, TranslationKeys> = {
     'auth.login.password': '密码',
     'auth.login.submit': '登录',
     'auth.login.register': '注册',
+    'auth.wechat.login': '使用微信登录 / 注册',
+    'auth.wechat.register': '使用微信注册 / 登录',
     'auth.register.title': '注册',
     'auth.register.name': '姓名',
     'auth.register.email': '邮箱',
@@ -1083,6 +1097,8 @@ const translations: Record<Language, TranslationKeys> = {
     // Dashboard
     'dashboard.title': 'My Page',
     'dashboard.profile': '个人资料',
+    'dashboard.emailRequired': '请添加邮箱，以便报名活动并接收邮件通知。',
+    'dashboard.wechatIdManual': '微信号（仅个人资料备注，不用于登录验证）',
     'dashboard.membership': '会员资格',
     'dashboard.events': '我的活动',
     'dashboard.resources': '资源',

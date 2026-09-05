@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { randomBytes } from "node:crypto";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { canReadPost, publicPostAccess } from "./postAccess";
 import {
@@ -79,6 +80,19 @@ import {
   verifyAuthToken,
 } from "./auth";
 import { emitOperationalEvent, getCorrelationId } from "./telemetry";
+import {
+  clearStateCookieHeader,
+  createSignedState,
+  exchangeWechatCode,
+  getClientCallbackLocation,
+  getCookieValue,
+  getWechatAuthorizeUrl,
+  getWechatConfig,
+  stateCookieHeader,
+  verifySignedState,
+  WECHAT_HANDOFF_TTL_MS,
+  WECHAT_STATE_COOKIE,
+} from "./wechatOAuth";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
@@ -359,6 +373,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/posts", postsRouter);
   
   // Auth routes
+  app.get("/api/auth/wechat/start", (req, res) => {
+    const config = getWechatConfig();
+    if (!config) {
+      return res.status(503).json({ message: "WeChat login is not configured." });
+    }
+
+    const state = createSignedState(JWT_SECRET!);
+    res.setHeader("Set-Cookie", stateCookieHeader(state));
+    return res.redirect(302, getWechatAuthorizeUrl(config, state));
+  });
+
+  app.get("/api/auth/wechat/callback", async (req, res) => {
+    const config = getWechatConfig();
+    if (!config) {
+      return res.status(503).json({ message: "WeChat login is not configured." });
+    }
+
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const expectedState = getCookieValue(req.headers.cookie, WECHAT_STATE_COOKIE);
+    if (!verifySignedState(state, expectedState, JWT_SECRET!)) {
+      res.setHeader("Set-Cookie", clearStateCookieHeader());
+      emitOperationalEvent("auth.failure", "warn", {
+        correlationId: getCorrelationId(req),
+        operation: "wechat_callback",
+        reason: "invalid_state",
+      });
+      return res.status(400).json({ message: "WeChat authorization could not be verified." });
+    }
+    res.setHeader("Set-Cookie", clearStateCookieHeader());
+
+    if (typeof req.query.errcode === "string" || typeof req.query.error === "string") {
+      return res.redirect(303, getClientCallbackLocation({ error: "cancelled" }));
+    }
+    const providerCode = typeof req.query.code === "string" ? req.query.code : "";
+    if (!providerCode || providerCode.length > 512) {
+      return res.redirect(303, getClientCallbackLocation({ error: "invalid_callback" }));
+    }
+
+    try {
+      const verifiedIdentity = await exchangeWechatCode(config, providerCode);
+      const user = await storage.resolveWechatUser({
+        appId: config.appId,
+        ...verifiedIdentity,
+      });
+      const handoffCode = randomBytes(32).toString("base64url");
+      await storage.createAuthHandoffCode(
+        user.id,
+        handoffCode,
+        new Date(Date.now() + WECHAT_HANDOFF_TTL_MS),
+      );
+      return res.redirect(303, getClientCallbackLocation({ code: handoffCode }));
+    } catch (error) {
+      emitOperationalEvent("auth.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "wechat_callback",
+        reason: "provider_or_account_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.redirect(303, getClientCallbackLocation({ error: "provider_unavailable" }));
+    }
+  });
+
+  app.post("/api/auth/wechat/exchange", async (req, res) => {
+    try {
+      const { code } = z.object({
+        code: z.string().trim().min(1).max(256),
+      }).strict().parse(req.body);
+      const user = await storage.consumeAuthHandoffCode(code);
+      if (!user || !user.isActive) {
+        return res.status(400).json({ message: "This WeChat sign-in has expired. Please try again." });
+      }
+      const token = issueAuthToken(user, JWT_SECRET!);
+      return res.json({ user: toSafeUser(user), token });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid WeChat sign-in code." });
+      }
+      emitOperationalEvent("auth.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "wechat_exchange",
+        reason: "handoff_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "WeChat sign-in could not be completed." });
+    }
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
       const requestBody = req.body && typeof req.body === "object" && !Array.isArray(req.body)
@@ -759,7 +860,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify current password if changing password
       if (updates.newPassword && updates.currentPassword) {
-        const validUser = await storage.validateUser(user.email, updates.currentPassword);
+        const validUser = user.email && user.password
+          ? await storage.validateUser(user.email, updates.currentPassword)
+          : undefined;
         if (!validUser) {
           return res.status(401).json({ message: "Current password is incorrect" });
         }

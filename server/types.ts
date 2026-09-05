@@ -3,7 +3,7 @@ declare global {
     interface Request {
       user?: {
         id: string;
-        email: string;
+          email: string | null;
         role: string;
       };
       correlationId?: string;

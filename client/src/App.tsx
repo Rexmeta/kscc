@@ -22,6 +22,8 @@ const Resources = lazy(() => import("@/pages/Resources"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
+
+const WechatCallback = lazy(() => import("@/pages/WechatCallback"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Organization = lazy(() => import("@/pages/Organization"));
@@ -73,6 +75,7 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/login" component={Login} />
             <Route path="/register" component={Register} />
+            <Route path="/auth/wechat/callback" component={WechatCallback} />
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/admin" component={Admin} />
             <Route path="/organization" component={Organization} />

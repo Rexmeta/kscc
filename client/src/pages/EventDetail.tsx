@@ -125,6 +125,15 @@ export default function EventDetailPage() {
       });
       return;
     }
+    if (!user?.email) {
+      toast({
+        title: "이메일 등록 필요",
+        description: "행사 신청 전 대시보드의 프로필 수정에서 이메일을 등록해주세요.",
+        variant: "destructive",
+      });
+      navigate('/dashboard');
+      return;
+    }
     registerMutation.mutate();
   };
 
@@ -502,7 +511,9 @@ export default function EventDetailPage() {
                   <div>
                     <h3 className="text-xl font-semibold mb-2">{t('events.joinQuestion')}</h3>
                     <p className="text-muted-foreground">
-                      {isAuthenticated ? t('events.clickToRegister') : t('events.loginRequired')}
+                       {isAuthenticated && !user?.email
+                         ? "행사 신청 전 프로필에 이메일을 등록해주세요."
+                         : isAuthenticated ? t('events.clickToRegister') : t('events.loginRequired')}
                     </p>
                   </div>
                   <Button

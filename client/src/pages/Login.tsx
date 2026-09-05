@@ -29,7 +29,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [, setLocation] = useLocation();
-  const { login } = useAuth();
+  const { login, startWechatLogin } = useAuth();
   const { toast } = useToast();
   
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>({
@@ -127,6 +127,24 @@ export default function LoginPage() {
                   {isSubmitting ? '로그인 중...' : t('auth.login.submit')}
                 </Button>
               </form>
+
+               <div className="relative my-5">
+                 <div className="absolute inset-0 flex items-center">
+                   <span className="w-full border-t" />
+                 </div>
+                 <div className="relative flex justify-center text-xs uppercase">
+                   <span className="bg-card px-2 text-muted-foreground">또는</span>
+                 </div>
+               </div>
+               <Button
+                 type="button"
+                 variant="outline"
+                 className="w-full"
+                 onClick={startWechatLogin}
+                 data-testid="button-wechat-login"
+               >
+                 {t('auth.wechat.login')}
+               </Button>
               
                <div className="mt-4 text-center sm:mt-6">
                 <p className="text-sm text-muted-foreground dark:text-muted-foreground">
