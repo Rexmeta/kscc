@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Edit, KeyRound, Power, RotateCcw, Search, Trash2 } from 'lucide-react';
 import UserEditDialog from '@/components/UserEditDialog';
 import { useEffect, useState } from 'react';
-import type { User } from '@shared/schema';
+import type { AdminUserDto } from '@shared/schema';
 import { useAdminUsers } from '@/hooks/useAdminData';
 import { useToast } from '@/hooks/use-toast';
 import { ApiRequestError, apiRequest } from '@/lib/queryClient';
@@ -34,8 +34,8 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [passwordResetUser, setPasswordResetUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUserDto | null>(null);
+  const [passwordResetUser, setPasswordResetUser] = useState<AdminUserDto | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -77,7 +77,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
     setPage(1);
   };
 
-  const handleActiveToggle = async (managedUser: User) => {
+  const handleActiveToggle = async (managedUser: AdminUserDto) => {
     setPendingUserId(managedUser.id);
     try {
       await apiRequest('PUT', `/api/users/${managedUser.id}`, {
@@ -98,7 +98,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
     }
   };
 
-  const handleDelete = async (managedUser: User) => {
+  const handleDelete = async (managedUser: AdminUserDto) => {
     const confirmed = window.confirm(
       '사용자 계정을 영구 삭제합니다. 연결된 회원 프로필과 행사 신청 정보도 삭제되며 복구할 수 없습니다. 계속하시겠습니까?',
     );
@@ -187,7 +187,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
         emptyMessage="사용자가 없습니다."
       >
         <div className="space-y-2">
-          {usersData?.users.map((user: User) => (
+          {usersData?.users.map((user: AdminUserDto) => (
           <div key={user.id} className={`flex flex-wrap justify-between items-center gap-3 p-4 border rounded ${
             user.isActive ? '' : 'bg-muted/50 opacity-75'
           }`}>

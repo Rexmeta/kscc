@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import type { User } from "@shared/schema";
+import type { User, UserProfileDto } from "@shared/schema";
 
 export const AUTH_TOKEN_TTL = "7d";
 
@@ -50,9 +50,16 @@ export function getTokenSessionVersion(payload: jwt.JwtPayload): number | undefi
     : undefined;
 }
 
-export function toSafeUser(user: User): Omit<User, "password"> {
-  const { password: _password, ...safeUser } = user;
-  return safeUser;
+export function toSafeUser(user: User): UserProfileDto {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    userType: user.userType,
+    weixin: user.weixin,
+    createdAt: user.createdAt,
+  };
 }
 
 export function isUniqueViolation(error: unknown): boolean {

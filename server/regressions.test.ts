@@ -1101,7 +1101,10 @@ test(
         "/objects/uploads/acl-route-unlinked",
         { token: crossUserToken },
       );
-      assert.deepEqual(crossUserRead, { status: 403, cacheControl: null });
+      assert.deepEqual(crossUserRead, {
+        status: 403,
+        cacheControl: "private, no-store",
+      });
 
       const linkedEditorRead = await request(
         "/objects/uploads/acl-route-linked",
@@ -1131,7 +1134,10 @@ test(
           uploadIntent: ownerIntent,
         },
       });
-      assert.deepEqual(crossUserTakeover, { status: 403, cacheControl: null });
+      assert.deepEqual(crossUserTakeover, {
+        status: 403,
+        cacheControl: "private, no-store",
+      });
 
       const linkedEditorUpdate = await request("/api/images", {
         token: operatorToken,
@@ -1141,7 +1147,10 @@ test(
           visibility: "public",
         },
       });
-      assert.deepEqual(linkedEditorUpdate, { status: 200, cacheControl: null });
+      assert.deepEqual(linkedEditorUpdate, {
+        status: 200,
+        cacheControl: "private, no-store",
+      });
       assert.equal(appliedPolicy.owner, ownerId);
       assert.equal(appliedPolicy.visibility, "public");
 
@@ -1164,7 +1173,10 @@ test(
           uploadIntent: expiredIntent,
         },
       });
-      assert.deepEqual(expiredIntentUpdate, { status: 403, cacheControl: null });
+      assert.deepEqual(expiredIntentUpdate, {
+        status: 403,
+        cacheControl: "private, no-store",
+      });
 
       const invalidNamespaceUpdate = await request("/api/images", {
         token: operatorToken,
@@ -1174,7 +1186,10 @@ test(
           visibility: "public",
         },
       });
-      assert.deepEqual(invalidNamespaceUpdate, { status: 400, cacheControl: null });
+      assert.deepEqual(invalidNamespaceUpdate, {
+        status: 400,
+        cacheControl: "private, no-store",
+      });
     } finally {
       if (server) {
         await new Promise<void>((resolve) => server!.close(() => resolve()));
@@ -4588,9 +4603,9 @@ test(
         body: newProfile,
       });
       assert.equal(acceptedCreate.status, 201);
-      assert.equal(acceptedCreate.body.userId, otherOwner.id);
+      assert.equal("userId" in acceptedCreate.body, false);
       assert.equal(acceptedCreate.body.membershipStatus, "pending");
-      assert.equal(acceptedCreate.body.isPublic, false);
+      assert.equal("isPublic" in acceptedCreate.body, false);
       createdMemberIds.push(acceptedCreate.body.id);
 
       const rejectedCreate = await request("/api/members", {
@@ -4663,7 +4678,7 @@ test(
         },
       });
       assert.equal(operatorCreate.status, 201);
-      assert.equal(operatorCreate.body.userId, null);
+      assert.equal("userId" in operatorCreate.body, false);
       assert.equal(operatorCreate.body.membershipStatus, "active");
       createdMemberIds.push(operatorCreate.body.id);
 

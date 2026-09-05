@@ -6,6 +6,7 @@ import { emitOperationalEvent, getCorrelationId } from "../telemetry";
 import type { Post } from "@shared/schema";
 import { z } from "zod";
 import { authenticateToken, optionalAuthenticateToken } from "../routes";
+import { toAdminEventRegistration, toOwnEventRegistration } from "../dtos";
 import { hasPermission } from "../permissions";
 import {
   getPostPermissionKey,
@@ -366,7 +367,8 @@ router.post("/:id/register", authenticateToken, async (req: Request, res: Respon
       attendeePhone: attendee.attendeePhone,
       companyName: attendee.companyName,
     });
-    res.status(existingRegistration?.status === "cancelled" ? 200 : 201).json(registration);
+    res.status(existingRegistration?.status === "cancelled" ? 200 : 201)
+      .json(toOwnEventRegistration(registration));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid registration data", errors: error.errors });
@@ -409,7 +411,7 @@ router.get("/:id/registrations", authenticateToken, async (req: Request, res: Re
     
     // Get all registrations for this event
     const registrations = await storage.getEventRegistrations(id);
-    res.json(registrations);
+    res.json(registrations.map(toAdminEventRegistration));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: "Invalid post ID", errors: error.errors });

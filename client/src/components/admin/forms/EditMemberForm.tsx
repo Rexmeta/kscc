@@ -7,11 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { memberSchema, type MemberFormValues } from '../adminSchemas';
-import type { Member } from '@shared/schema';
+import type { AdminMemberDto } from '@shared/schema';
 import { useUpdateMember } from '@/hooks/useAdminMutations';
 
 interface EditMemberFormProps {
-  member: Member;
+  member: AdminMemberDto;
   onSuccess: () => void;
 }
 

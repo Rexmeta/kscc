@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { User, Building, Calendar, FileText, Settings, Edit, MapPin, X, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
-import { UserRegistrationWithEvent, Member, PostWithTranslations } from '@shared/schema';
 import { Link } from 'wouter';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -35,32 +34,13 @@ import { QueryState } from '@/components/QueryState';
 import { formatLocalizedDate } from '@/lib/i18n';
 
 // Helper to safely get translation
-function getTranslationSafe(post: PostWithTranslations, locale: string) {
-  return post.translations.find(t => t.locale === locale) || post.translations[0];
+import { OwnEventRegistrationDto, OwnMemberDto } from '@shared/schema';
+function getTranslationSafe(
+  event: NonNullable<OwnEventRegistrationDto["event"]>,
+  locale: string,
+) {
+  return event.translations.find(t => t.locale === locale) || event.translations[0];
 }
-
-// Helper to extract event meta safely
-function getEventMeta(post: PostWithTranslations) {
-  const getValue = (key: string) => 
-    post.meta.find(m => m.key === key)?.valueText || null;
-  
-  const getMetaTimestamp = (key: string): Date | null => {
-    const meta = post.meta.find(m => m.key === key);
-    return meta?.valueTimestamp || null;
-  };
-
-  return {
-    eventDate: getMetaTimestamp('eventDate'),
-    endDate: getMetaTimestamp('endDate'),
-    location: getValue('location'),
-    capacity: post.meta.find(m => m.key === 'capacity')?.valueNumber || null,
-    fee: getValue('fee'),
-    registrationDeadline: getMetaTimestamp('registrationDeadline'),
-    contactEmail: getValue('contactEmail'),
-    contactPhone: getValue('contactPhone'),
-  };
-}
-
 const profileUpdateSchema = z.object({
   name: z.string().optional().refine(val => !val || val.length >= 1, '이름을 입력해주세요'),
   email: z.string().optional().refine(
@@ -110,10 +90,10 @@ export default function Dashboard() {
     'organization.executives.read',
   ]);
 
-  const { data: registrations, isLoading: registrationsLoading, isError: registrationsError, refetch: refetchRegistrations } = useQuery<UserRegistrationWithEvent[]>({
+  const { data: registrations, isLoading: registrationsLoading, isError: registrationsError, refetch: refetchRegistrations } = useQuery<OwnEventRegistrationDto[]>({
     queryKey: ['/api/auth/registrations'],
     queryFn: async () => {
-      return fetchJson<UserRegistrationWithEvent[]>('/api/auth/registrations');
+      return fetchJson<OwnEventRegistrationDto[]>('/api/auth/registrations');
     },
     enabled: isAuthenticated,
   });
@@ -122,7 +102,7 @@ export default function Dashboard() {
     queryKey: ['/api/members/me'],
     queryFn: async () => {
       try {
-        return await fetchJson<Member>('/api/members/me');
+        return await fetchJson<OwnMemberDto>('/api/members/me');
       } catch (error: any) {
         if (error?.status === 404) return null;
         throw error;
@@ -543,7 +523,7 @@ export default function Dashboard() {
                     emptyMessage={t('home.events.empty')}
                   >
                     <div className="space-y-4">
-                       {(registrations || []).map((registration: UserRegistrationWithEvent) => (
+                      {(registrations || []).map((registration: OwnEventRegistrationDto) => (
                         <div
                           key={registration.id}
                           className="flex items-start justify-between rounded-lg border p-4"
@@ -560,7 +540,7 @@ export default function Dashboard() {
                                   : '행사 정보 없음'}
                               </h4>
                               {registration.event && (() => {
-                                const eventMeta = getEventMeta(registration.event);
+                                const eventMeta = registration.event;
                                 return (
                                   <div className="space-y-1">
                                     {eventMeta.eventDate && (
@@ -605,7 +585,7 @@ export default function Dashboard() {
                                registration.status === 'attended' ? '참석함' : registration.status}
                             </Badge>
                             <p className="text-xs text-muted-foreground">
-                               {t('common.date')}: {formatLocalizedDate(registration.createdAt, language)}
+                              {t('common.date')}: {formatLocalizedDate(registration.createdAt, language)}
                             </p>
                             {registration.status !== 'cancelled' && registration.status !== 'attended' && (
                               <Button

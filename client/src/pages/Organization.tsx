@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { OrganizationMember } from '@shared/schema';
+import type { PublicOrganizationMemberDto } from '@shared/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Users } from 'lucide-react';
@@ -19,7 +19,7 @@ import { QueryState } from '@/components/QueryState';
 
 const CATEGORY_CONFIG = ORGANIZATION_CATEGORY_DISPLAY;
 
-function MemberCard({ member, language }: { member: OrganizationMember; language: string }) {
+function MemberCard({ member, language }: { member: PublicOrganizationMemberDto; language: string }) {
   const name = getMemberName(member, language);
   const position = getMemberPosition(member, language);
   const description = getMemberDescription(member, language);
@@ -60,7 +60,7 @@ function CategorySection({
   language 
 }: { 
   category: (typeof CATEGORY_CONFIG)[number];
-  members: OrganizationMember[];
+  members: PublicOrganizationMemberDto[];
   language: string;
 }) {
   const Icon = category.icon;
@@ -89,7 +89,7 @@ export default function Organization() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, refetch } = useQuery<{
-    members: OrganizationMember[];
+    members: PublicOrganizationMemberDto[];
     total: number;
     page: number;
     totalPages: number;
@@ -113,7 +113,7 @@ export default function Organization() {
       .filter(m => m.category === cat.value)
        .sort(compareOrganizationMembers);
     return acc;
-  }, {} as Record<string, OrganizationMember[]>);
+  }, {} as Record<string, PublicOrganizationMemberDto[]>);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

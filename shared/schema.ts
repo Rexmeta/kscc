@@ -642,11 +642,34 @@ export const insertPostMetaSchema = createInsertSchema(postMeta).omit({
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type UserProfileDto = Pick<
+  User,
+  "id" | "email" | "name" | "role" | "userType" | "weixin" | "createdAt"
+>;
 export type ConsentEvidence = typeof consentEvidence.$inferSelect;
 
 export type Member = typeof members.$inferSelect;
 export type InsertMember = z.infer<typeof insertMemberSchema>;
 
+export type PublicMemberDto = Pick<
+  Member,
+  | "id"
+  | "companyName"
+  | "companyNameEn"
+  | "companyNameZh"
+  | "industry"
+  | "country"
+  | "city"
+  | "website"
+  | "description"
+  | "descriptionEn"
+  | "descriptionZh"
+  | "logo"
+  | "membershipLevel"
+  | "isPublic"
+  | "createdAt"
+>;
 export type MemberProfile = z.infer<typeof memberProfileSchema>;
 export type EventRegistration = typeof eventRegistrations.$inferSelect;
 export type InsertEventRegistration = z.infer<typeof insertEventRegistrationSchema>;
@@ -692,7 +715,18 @@ export type PostTranslationHistory = typeof postTranslationHistory.$inferSelect;
 export type PostMeta = typeof postMeta.$inferSelect;
 export type InsertPostMeta = z.infer<typeof insertPostMetaSchema>;
 
-// Combined types for joined queries
+export type OwnEventRegistrationDto = Pick<
+  EventRegistration,
+  "id" | "eventId" | "status" | "createdAt"
+> & {
+  event: {
+    id: Post["id"];
+    slug: Post["slug"];
+    translations: Array<Pick<PostTranslation, "locale" | "title">>;
+    eventDate: Date | string | null;
+    location: string | null;
+  } | null;
+};
 export type UserRegistrationWithEvent = EventRegistration & {
   event: PostWithTranslations | null;
 };
@@ -740,6 +774,22 @@ export const insertOrganizationMemberSchema = createInsertSchema(organizationMem
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
 
+export type PublicOrganizationMemberDto = Pick<
+  OrganizationMember,
+  | "id"
+  | "name"
+  | "nameEn"
+  | "nameZh"
+  | "position"
+  | "positionEn"
+  | "positionZh"
+  | "category"
+  | "photo"
+  | "description"
+  | "descriptionEn"
+  | "descriptionZh"
+  | "sortOrder"
+>;
 export const memberAdminSchema = memberProfileSchema.extend({
   membershipLevel: z.enum(["regular", "premium", "sponsor"]),
   membershipStatus: z.enum(["pending", "active", "inactive"]),
@@ -747,3 +797,59 @@ export const memberAdminSchema = memberProfileSchema.extend({
 }).strict();
 
 export type MemberAdminUpdate = z.infer<typeof memberAdminSchema>;
+
+export type AdminUserDto = Pick<
+  User,
+  "id" | "email" | "name" | "role" | "userType" | "membershipTier" | "isActive"
+>;
+
+export type AdminEventRegistrationDto = Pick<
+  EventRegistration,
+  | "id"
+  | "attendeeName"
+  | "attendeeEmail"
+  | "attendeePhone"
+  | "companyName"
+  | "status"
+  | "createdAt"
+>;
+
+export type OwnMemberDto = Pick<
+  Member,
+  "id" | "companyName" | "industry" | "membershipLevel" | "membershipStatus"
+>;
+
+export type AdminMemberDto = Pick<
+  Member,
+  | "id"
+  | "companyName"
+  | "companyNameEn"
+  | "companyNameZh"
+  | "industry"
+  | "country"
+  | "city"
+  | "address"
+  | "phone"
+  | "website"
+  | "description"
+  | "descriptionEn"
+  | "descriptionZh"
+  | "logo"
+  | "membershipLevel"
+  | "membershipStatus"
+  | "contactPerson"
+  | "contactEmail"
+  | "contactPhone"
+  | "isPublic"
+>;
+
+export type AdminOrganizationMemberDto = PublicOrganizationMemberDto & Pick<
+  OrganizationMember,
+  "isActive"
+>;
+
+export type AdminMembershipDto = {
+  tierCode: string;
+  tierName: string;
+  isActive: boolean;
+};

@@ -3,9 +3,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { queryKeys, fetchJson } from '@/lib/queryClient';
 import type {
   PostWithTranslations,
-  Member,
-  OrganizationMember,
-  User,
+  AdminMemberDto,
+  AdminOrganizationMemberDto,
+  AdminUserDto,
   Partner,
   InquiryWithReplies,
   SurveySettings,
@@ -65,7 +65,7 @@ export type AdminMemberFilters = {
   membershipLevel?: string;
   membershipStatus?: string;
 };
-type MembersResponse = { members: Member[]; total: number; page: number; totalPages: number };
+type MembersResponse = { members: AdminMemberDto[]; total: number; page: number; totalPages: number };
 
 export function useAdminMembers(activeTab: string, page = 1, filters: AdminMemberFilters = {}) {
   const { isAdmin, hasPermission } = useAuth();
@@ -86,7 +86,7 @@ export function useAdminMembers(activeTab: string, page = 1, filters: AdminMembe
   });
 }
 
-type UsersResponse = { users: User[]; total: number; page: number; totalPages: number };
+type UsersResponse = { users: AdminUserDto[]; total: number; page: number; totalPages: number };
 
 export function useAdminUsers(
   activeTab: string,
@@ -224,7 +224,7 @@ export function useAdminOrganizationMembers(
   const canRead = isAdmin
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const category = isAdmin ? categoryFilter : 'all';
-  return useQuery<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>({
+  return useQuery<{ members: AdminOrganizationMemberDto[]; total: number; page: number; totalPages: number }>({
     queryKey: ['/api/organization-members', { category, admin: true, page, limit: 50, ...filters }],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -235,7 +235,7 @@ export function useAdminOrganizationMembers(
         params.append('category', category);
       }
       if (filters.search) params.append('search', filters.search);
-      return fetchJson<{ members: OrganizationMember[]; total: number; page: number; totalPages: number }>(
+      return fetchJson<{ members: AdminOrganizationMemberDto[]; total: number; page: number; totalPages: number }>(
         `/api/organization-members?${params.toString()}`
       );
     },

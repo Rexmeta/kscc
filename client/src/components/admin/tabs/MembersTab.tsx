@@ -7,7 +7,7 @@ import { Eye, Edit, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import type { Member } from '@shared/schema';
+import type { AdminMemberDto } from '@shared/schema';
 import { EditMemberForm } from '../forms/EditMemberForm';
 import { useAdminMembers } from '@/hooks/useAdminData';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +20,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin, hasPermission } = useAuth();
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedMember, setSelectedMember] = useState<AdminMemberDto | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -84,7 +84,7 @@ export function MembersTab({ activeTab }: { activeTab: string }) {
         emptyMessage="회원사가 없습니다."
       >
       <div className="space-y-2">
-        {membersData?.members?.map((member: Member) => (
+        {membersData?.members?.map((member: AdminMemberDto) => (
           <div key={member.id} className="flex justify-between items-center p-4 border rounded">
             <div className="flex-1">
               <div className="flex items-center gap-2">

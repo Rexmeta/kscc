@@ -2,13 +2,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Building, Mail, Phone, Globe, Info, MapPin } from 'lucide-react';
-import { Member } from '@shared/schema';
+import type { PublicMemberDto } from '@shared/schema';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
 
 interface MemberCardProps {
-  member: Member;
+  member: PublicMemberDto;
 }
 
 export default function MemberCard({ member }: MemberCardProps) {

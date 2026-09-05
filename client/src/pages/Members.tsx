@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, RefreshCw, Users, Plus } from 'lucide-react';
 import { t } from '@/lib/i18n';
-import { Member } from '@shared/schema';
+import type { PublicMemberDto } from '@shared/schema';
 import MemberCard from '@/components/MemberCard';
 import { useAuth } from '@/hooks/useAuth';
 import { queryKeys } from '@/lib/queryClient';
@@ -45,7 +45,7 @@ export default function MembersPage() {
         ...(industry && { industry }),
         ...(membershipLevel && { membershipLevel }),
       });
-       return fetchJson<{ members: Member[]; totalPages: number }>(`/api/members?${params}`, { signal });
+       return fetchJson<{ members: PublicMemberDto[]; totalPages: number }>(`/api/members?${params}`, { signal });
     },
   });
 
@@ -174,7 +174,7 @@ export default function MembersPage() {
           >
             <>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {members.map((member: Member) => (
+                {members.map((member: PublicMemberDto) => (
                   <MemberCard key={member.id} member={member} />
                 ))}
               </div>

@@ -15,9 +15,10 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { Loader2, Save, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import type { AdminUserDto } from '@shared/schema';
 
 interface UserEditDialogProps {
-  user: any;
+  user: AdminUserDto;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;

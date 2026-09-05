@@ -1,21 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import type { PostWithTranslations } from '@shared/schema';
+import type { AdminEventRegistrationDto, PostWithTranslations } from '@shared/schema';
 import { getMetaValue } from '@/lib/postHelpers';
-
-interface Registration {
-  id: string;
-  status: string;
-  createdAt: string;
-  attendeeName?: string;
-  attendeeEmail?: string;
-  attendeePhone?: string;
-  user?: {
-    name: string;
-    email: string;
-  };
-}
+import { fetchJson } from '@/lib/queryClient';
 
 export function EventRegistrationsDialog({
   open,
@@ -26,15 +14,10 @@ export function EventRegistrationsDialog({
   onOpenChange: (open: boolean) => void;
   event: PostWithTranslations;
 }) {
-  const { data: registrations, isLoading } = useQuery<Registration[]>({
+  const { data: registrations, isLoading } = useQuery<AdminEventRegistrationDto[]>({
     queryKey: ['/api/posts', event?.id, 'registrations'],
     queryFn: async () => {
-      const response = await fetch(`/api/posts/${event.id}/registrations`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      return response.json();
+      return fetchJson<AdminEventRegistrationDto[]>(`/api/posts/${event.id}/registrations`);
     },
     enabled: !!event?.id && open,
   });
@@ -73,10 +56,10 @@ export function EventRegistrationsDialog({
                   >
                     <div>
                       <div className="font-medium" data-testid={`registration-name-${index}`}>
-                        {registration.user?.name || registration.attendeeName || '이름 없음'}
+                        {registration.attendeeName || '이름 없음'}
                       </div>
                       <div className="text-sm text-muted-foreground" data-testid={`registration-email-${index}`}>
-                        {registration.user?.email || registration.attendeeEmail || '이메일 없음'}
+                        {registration.attendeeEmail || '이메일 없음'}
                       </div>
                       {registration.attendeePhone && (
                         <div className="text-sm text-muted-foreground">

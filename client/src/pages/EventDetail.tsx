@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { t, formatLocalizedDate, formatLocalizedNumber } from '@/lib/i18n';
 import { PostWithTranslations } from '@shared/schema';
-import type { UserRegistrationWithEvent } from '@shared/schema';
+import type { OwnEventRegistrationDto } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslationSafe, getEventMeta } from '@/lib/postHelpers';
 import { deletePost } from '@/lib/adminPostApi';
@@ -41,9 +41,9 @@ export default function EventDetailPage() {
   });
 
   const { data: registrations, isLoading: registrationsLoading, isError: registrationsError } =
-    useQuery<UserRegistrationWithEvent[]>({
+    useQuery<OwnEventRegistrationDto[]>({
       queryKey: registrationsQueryKey,
-      queryFn: () => fetchJson<UserRegistrationWithEvent[]>('/api/auth/registrations'),
+       queryFn: () => fetchJson<OwnEventRegistrationDto[]>('/api/auth/registrations'),
       enabled: isAuthenticated,
     });
 

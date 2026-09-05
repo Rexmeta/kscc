@@ -1,4 +1,4 @@
-import type { OrganizationMember } from '@shared/schema';
+import type { PublicOrganizationMemberDto } from '@shared/schema';
 import {
   ORGANIZATION_CATEGORY_LABELS,
   ORGANIZATION_CATEGORY_ORDER,
@@ -58,19 +58,19 @@ export function getOrganizationCategoryDisplay(category: string) {
   return ORGANIZATION_CATEGORY_DISPLAY.find((item) => item.value === category);
 }
 
-export function getMemberName(member: OrganizationMember, language: string): string {
+export function getMemberName(member: PublicOrganizationMemberDto, language: string): string {
   if (language === 'en' && member.nameEn) return member.nameEn;
   if (language === 'zh' && member.nameZh) return member.nameZh;
   return member.name;
 }
 
-export function getMemberPosition(member: OrganizationMember, language: string): string {
+export function getMemberPosition(member: PublicOrganizationMemberDto, language: string): string {
   if (language === 'en' && member.positionEn) return member.positionEn;
   if (language === 'zh' && member.positionZh) return member.positionZh;
   return member.position;
 }
 
-export function getMemberDescription(member: OrganizationMember, language: string): string | null {
+export function getMemberDescription(member: PublicOrganizationMemberDto, language: string): string | null {
   if (language === 'en' && member.descriptionEn) return member.descriptionEn;
   if (language === 'zh' && member.descriptionZh) return member.descriptionZh;
   return member.description;

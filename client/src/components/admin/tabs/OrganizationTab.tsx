@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { OrganizationMember } from '@shared/schema';
+import type { AdminOrganizationMemberDto } from '@shared/schema';
 import {
   isExecutiveManagementCategory,
   sortOrganizationMembers,
@@ -29,10 +29,10 @@ import {
 import { QueryState } from '@/components/QueryState';
 import { AdminFilterBar } from '../AdminFilterBar';
 
-type MembersByCategory = Record<string, OrganizationMember[]>;
+type MembersByCategory = Record<string, AdminOrganizationMemberDto[]>;
 
 function groupMembers(
-  members: OrganizationMember[],
+  members: AdminOrganizationMemberDto[],
   categoryFilter: string,
   executiveScope: boolean,
 ): MembersByCategory {
@@ -58,7 +58,7 @@ export function OrganizationTab({
   const [orgCategoryFilter, setOrgCategoryFilter] = useState<string>(
     executiveScope ? 'executives' : 'all',
   );
-  const [selectedOrgMember, setSelectedOrgMember] = useState<OrganizationMember | null>(null);
+  const [selectedOrgMember, setSelectedOrgMember] = useState<AdminOrganizationMemberDto | null>(null);
   const [orderedMembers, setOrderedMembers] = useState<MembersByCategory>({});
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [page, setPage] = useState(1);

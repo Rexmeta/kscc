@@ -13,7 +13,7 @@ import { Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
-import type { OrganizationMember } from '@shared/schema';
+import type { AdminOrganizationMemberDto } from '@shared/schema';
 import { isExecutiveManagementCategory } from '@shared/organization';
 import {
   organizationMemberSchema,
@@ -28,7 +28,7 @@ export function EditOrganizationMemberDialog({
   onClose,
   executivesOnly = false,
 }: {
-  member: OrganizationMember;
+  member: AdminOrganizationMemberDto;
   onSuccess: () => void;
   onClose: () => void;
   executivesOnly?: boolean;

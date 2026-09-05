@@ -89,6 +89,25 @@ test('shared JSON fetch handling rejects HTTP failures instead of returning empt
   (globalThis as any).localStorage = previousStorage;
 });
 
+test('authenticated JSON requests opt out of browser HTTP caching', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousStorage = (globalThis as any).localStorage;
+  const requests: RequestInit[] = [];
+  (globalThis as any).localStorage = { getItem: () => 'token-for-test' };
+  globalThis.fetch = async (_input, init) => {
+    requests.push(init || {});
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    await fetchJson('/api/private');
+    assert.equal(requests[0]?.cache, 'no-store');
+  } finally {
+    globalThis.fetch = previousFetch;
+    (globalThis as any).localStorage = previousStorage;
+  }
+});
+
 test('language switching updates the active locale used by presentation helpers', () => {
   const previousStorage = (globalThis as any).localStorage;
   const previousDocument = (globalThis as any).document;

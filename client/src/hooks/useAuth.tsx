@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useLocation } from 'wouter';
-import { User } from '@shared/schema';
-import { apiRequest } from '@/lib/queryClient';
 import type { RegistrationConsentInput } from '@shared/policies';
+import { UserProfileDto } from '@shared/schema';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 interface CompanyData {
   companyName: string;
@@ -12,7 +12,7 @@ interface CompanyData {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: UserProfileDto | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData, weixin?: string, consents?: RegistrationConsentInput) => Promise<void>;
@@ -29,7 +29,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfileDto | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        cache: 'no-store',
       });
       
       if (response.ok) {
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Token is invalid
         localStorage.removeItem('token');
+        queryClient.clear();
         setToken(null);
         setUser(null);
         setPermissions(new Set());
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error fetching user:', error);
       localStorage.removeItem('token');
+      queryClient.clear();
       setToken(null);
       setUser(null);
       setPermissions(new Set());
@@ -75,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await apiRequest('POST', '/api/auth/login', { email, password });
     const data = await response.json();
     
+    queryClient.clear();
     setUser(data.user);
     setToken(data.token);
     localStorage.setItem('token', data.token);
@@ -95,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await apiRequest('POST', '/api/auth/register', payload);
     const data = await response.json();
     
+    queryClient.clear();
     setUser(data.user);
     setToken(data.token);
     localStorage.setItem('token', data.token);
@@ -107,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await fetch('/api/auth/logout', {
           method: 'POST',
           headers: { Authorization: `Bearer ${currentToken}` },
+          cache: 'no-store',
         });
       }
     } catch {
@@ -116,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setToken(null);
       setPermissions(new Set());
+      queryClient.clear();
       localStorage.removeItem('token');
       setLocation('/');
     }

@@ -34,6 +34,7 @@ export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise
   }
   const res = await fetch(url, {
     ...init,
+    ...(token ? { cache: "no-store" as const } : {}),
     headers,
     credentials: "include",
   });
@@ -60,6 +61,7 @@ export async function apiRequest(
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
+    ...(token ? { cache: "no-store" as const } : {}),
     credentials: "include",
   });
 
@@ -83,6 +85,7 @@ export const getQueryFn: <T>(options: {
     const url = typeof queryKey[0] === "string" ? queryKey[0] : String(queryKey[0]);
     const res = await fetch(url, {
       headers,
+      ...(token ? { cache: "no-store" as const } : {}),
       credentials: "include",
       signal,
     });
