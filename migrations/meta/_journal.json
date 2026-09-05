@@ -29,6 +29,13 @@
       "when": 1788531070496,
       "tag": "0003_add_consent_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788531070497,
+      "tag": "0004_consent_evidence_access_log",
+      "breakpoints": true
     }
   ]
 }

@@ -2,10 +2,12 @@ import {
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postTranslationHistory, postMeta, organizationMembers,
   tiers, roles, userMemberships, surveySettings, surveySettingsHistory, consentEvidence,
+  consentEvidenceAccessLog,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
   type InquiryWithReplies,
+  type ConsentEvidence,
   type SafeUser,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
@@ -218,6 +220,17 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
 
   getUserByEmail(email: string): Promise<User | undefined>;
+
+  getConsentEvidence(
+    subject: { userId?: string; inquiryId?: string },
+  ): Promise<Array<Pick<ConsentEvidence, "id" | "purpose" | "policyVersion" | "consentedAt">>>;
+
+  recordConsentEvidenceAccess(
+    adminUserId: string,
+    subjectType: "account" | "inquiry",
+    subjectId: string,
+    action: "view" | "export",
+  ): Promise<void>;
 
   getUserCount(): Promise<number>;
 
@@ -510,6 +523,42 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, normalizeEmail(email)));
     return user || undefined;
+  }
+
+  async getConsentEvidence(
+    subject: { userId?: string; inquiryId?: string },
+  ): Promise<Array<Pick<ConsentEvidence, "id" | "purpose" | "policyVersion" | "consentedAt">>> {
+    const subjectCondition = subject.userId
+      ? eq(consentEvidence.userId, subject.userId)
+      : subject.inquiryId
+        ? eq(consentEvidence.inquiryId, subject.inquiryId)
+        : undefined;
+    if (!subjectCondition) return [];
+
+    return db
+      .select({
+        id: consentEvidence.id,
+        purpose: consentEvidence.purpose,
+        policyVersion: consentEvidence.policyVersion,
+        consentedAt: consentEvidence.consentedAt,
+      })
+      .from(consentEvidence)
+      .where(subjectCondition)
+      .orderBy(asc(consentEvidence.consentedAt), asc(consentEvidence.id));
+  }
+
+  async recordConsentEvidenceAccess(
+    adminUserId: string,
+    subjectType: "account" | "inquiry",
+    subjectId: string,
+    action: "view" | "export",
+  ): Promise<void> {
+    await db.insert(consentEvidenceAccessLog).values({
+      adminUserId,
+      subjectType,
+      subjectId,
+      action,
+    });
   }
 
   async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {

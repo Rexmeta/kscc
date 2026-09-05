@@ -131,6 +131,14 @@ const partnerQuerySchema = paginatedCollectionQuerySchema.extend({
 }).strict();
 
 const inquiryIdSchema = z.string().uuid();
+
+const consentEvidenceSubjectQuerySchema = z.object({
+  userId: z.string().uuid().optional(),
+  inquiryId: z.string().uuid().optional(),
+}).strict().refine(
+  (data) => Boolean(data.userId) !== Boolean(data.inquiryId),
+  { message: "Exactly one of userId or inquiryId is required" },
+);
 const inquiryUpdateSchema = z.object({
   status: inquiryStatusSchema.optional(),
   category: inquiryCategorySchema.optional(),
@@ -1025,6 +1033,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
+  const consentEvidenceSubject = async (
+    subject: { type: "account" | "inquiry"; id: string },
+    action: "view" | "export",
+    req: Request,
+    res: Response,
+  ): Promise<{
+    subject: { type: "account" | "inquiry"; id: string };
+    evidence: Array<{
+      id: string;
+      purpose: string;
+      policyVersion: string;
+      consentedAt: Date;
+    }>;
+  } | undefined> => {
+    const exists = subject.type === "account"
+      ? await storage.getUser(subject.id)
+      : await storage.getInquiry(subject.id);
+    if (!exists) {
+      res.status(404).json({
+        message: subject.type === "account" ? "Account not found" : "Inquiry not found",
+      });
+      return undefined;
+    }
+
+    const evidence = await storage.getConsentEvidence(
+      subject.type === "account" ? { userId: subject.id } : { inquiryId: subject.id },
+    );
+    await storage.recordConsentEvidenceAccess(req.user!.id, subject.type, subject.id, action);
+
+    return { subject, evidence };
+  };
+
+  const parseConsentEvidenceSubject = (req: Request) => {
+    const parsed = consentEvidenceSubjectQuerySchema.parse(req.query);
+    return parsed.userId
+      ? { type: "account" as const, id: parsed.userId }
+      : { type: "inquiry" as const, id: parsed.inquiryId! };
+  };
+
+  const toConsentEvidenceResponse = (result: {
+    subject: { type: "account" | "inquiry"; id: string };
+    evidence: Array<{
+      id: string;
+      purpose: string;
+      policyVersion: string;
+      consentedAt: Date;
+    }>;
+  }) => ({
+    subject: result.subject,
+    evidence: result.evidence.map((entry) => ({
+      id: entry.id,
+      purpose: entry.purpose,
+      policyVersion: entry.policyVersion,
+      consentedAt: entry.consentedAt.toISOString(),
+    })),
+  });
+
+  const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const consentEvidenceCsv = (result: ReturnType<typeof toConsentEvidenceResponse>) => [
+    ["subject_type", "subject_id", "purpose", "policy_version", "consented_at"].join(","),
+    ...result.evidence.map((entry) => [
+      result.subject.type,
+      result.subject.id,
+      entry.purpose,
+      entry.policyVersion,
+      entry.consentedAt,
+    ].map(escapeCsv).join(",")),
+  ].join("\r\n");
+
+  app.get(
+    [
+      "/api/admin/consent-evidence",
+      "/api/admin/users/:id/consent-evidence",
+      "/api/admin/inquiries/:id/consent-evidence",
+    ],
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const subject = req.params.id
+          ? {
+              type: req.path.includes("/inquiries/") ? "inquiry" as const : "account" as const,
+              id: z.string().uuid().parse(req.params.id),
+            }
+          : parseConsentEvidenceSubject(req);
+        const result = await consentEvidenceSubject(subject, "view", req, res);
+        if (!result || res.headersSent) return;
+        res.json(toConsentEvidenceResponse(result));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0]?.message || "Invalid consent evidence subject" });
+        }
+        emitOperationalEvent("consent_evidence.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "view",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Unable to read consent evidence" });
+      }
+    },
+  );
+
+  app.get(
+    [
+      "/api/admin/consent-evidence/export",
+      "/api/admin/users/:id/consent-evidence/export",
+      "/api/admin/inquiries/:id/consent-evidence/export",
+    ],
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const subject = req.params.id
+          ? {
+              type: req.path.includes("/inquiries/") ? "inquiry" as const : "account" as const,
+              id: z.string().uuid().parse(req.params.id),
+            }
+          : parseConsentEvidenceSubject(req);
+        const result = await consentEvidenceSubject(subject, "export", req, res);
+        if (!result || res.headersSent) return;
+        const response = toConsentEvidenceResponse(result);
+        res
+          .status(200)
+          .set({
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="consent-evidence-${subject.type}-${subject.id}.csv"`,
+          })
+          .send(`\uFEFF${consentEvidenceCsv(response)}`);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: error.errors[0]?.message || "Invalid consent evidence subject" });
+        }
+        emitOperationalEvent("consent_evidence.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "export",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Unable to export consent evidence" });
+      }
+    },
+  );
 
   app.put("/api/users/:id/membership", authenticateToken, requireAdmin, async (req, res) => {
     try {

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Eye, Trash2 } from 'lucide-react';
+import { Eye, FileCheck, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,12 +13,14 @@ import { useAdminInquiries } from '@/hooks/useAdminData';
 import { QueryState } from '@/components/QueryState';
 import { AdminFilterBar } from '../AdminFilterBar';
 import { AdminListPagination } from '../AdminListPagination';
+import { ConsentEvidenceDialog } from '../ConsentEvidenceDialog';
 
 export function InquiriesTab({ activeTab }: { activeTab: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
   const [selectedInquiry, setSelectedInquiry] = useState<InquiryWithReplies | null>(null);
+  const [consentEvidenceInquiry, setConsentEvidenceInquiry] = useState<InquiryWithReplies | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
@@ -85,6 +87,16 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
               >
                 <Eye className="h-4 w-4" />
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConsentEvidenceInquiry(inquiry)}
+                aria-label="문의 동의 증적 보기"
+                title="동의 증적 보기"
+                data-testid={`button-view-consent-evidence-inquiry-${inquiry.id}`}
+              >
+                <FileCheck className="h-4 w-4" />
+              </Button>
               {isAdmin && (
                 <Button
                   size="sm"
@@ -119,6 +131,17 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <InquiryDetailView inquiryId={selectedInquiry.id} onClose={() => setViewDialogOpen(false)} />
         </Dialog>
+      )}
+      {consentEvidenceInquiry && (
+        <ConsentEvidenceDialog
+          subjectType="inquiry"
+          subjectId={consentEvidenceInquiry.id}
+          title={consentEvidenceInquiry.subject}
+          open={Boolean(consentEvidenceInquiry)}
+          onOpenChange={(open) => {
+            if (!open) setConsentEvidenceInquiry(null);
+          }}
+        />
       )}
     </TabsContent>
   );

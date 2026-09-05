@@ -113,6 +113,27 @@ export const consentEvidence = pgTable("consent_evidence", {
     .on(table.userId, table.inquiryId, table.consentedAt),
 }));
 
+export const consentEvidenceAccessLog = pgTable("consent_evidence_access_log", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: uuid("admin_user_id").references(() => users.id, { onDelete: "set null" }),
+  subjectType: text("subject_type").notNull(),
+  subjectId: uuid("subject_id").notNull(),
+  action: text("action").notNull(),
+  accessedAt: timestamp("accessed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  subjectAccessIdx: index("consent_evidence_access_log_subject_access_idx")
+    .on(table.subjectType, table.subjectId, table.accessedAt.desc()),
+  actionAccessIdx: index("consent_evidence_access_log_action_access_idx")
+    .on(table.action, table.accessedAt.desc()),
+  subjectTypeCheck: check(
+    "consent_evidence_access_log_subject_type_check",
+    sql`"subject_type" IN ('account', 'inquiry')`,
+  ),
+  actionCheck: check(
+    "consent_evidence_access_log_action_check",
+    sql`"action" IN ('view', 'export')`,
+  ),
+}));
 export const inquiryReplies = pgTable("inquiry_replies", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   inquiryId: uuid("inquiry_id").notNull().references(() => inquiries.id, { onDelete: 'cascade' }),

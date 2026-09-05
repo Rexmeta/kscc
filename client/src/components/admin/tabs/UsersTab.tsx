@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit, KeyRound, Power, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Edit, FileCheck, KeyRound, Power, RotateCcw, Search, Trash2 } from 'lucide-react';
 import UserEditDialog from '@/components/UserEditDialog';
 import { useEffect, useState } from 'react';
 import type { AdminUserDto } from '@shared/schema';
@@ -16,6 +16,7 @@ import { AdminListPagination } from '../AdminListPagination';
 import { QueryState } from '@/components/QueryState';
 import AdminPasswordResetDialog from '@/components/AdminPasswordResetDialog';
 import { AdminResultCount } from '../AdminResultCount';
+import { ConsentEvidenceDialog } from '../ConsentEvidenceDialog';
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (
@@ -36,6 +37,7 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
   const { user: currentUser } = useAuth();
   const [selectedUser, setSelectedUser] = useState<AdminUserDto | null>(null);
   const [passwordResetUser, setPasswordResetUser] = useState<AdminUserDto | null>(null);
+  const [consentEvidenceUser, setConsentEvidenceUser] = useState<AdminUserDto | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -208,6 +210,16 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
               >
                 {user.isActive ? '활성' : '비활성'}
               </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConsentEvidenceUser(user)}
+                aria-label={`${user.name} 동의 증적 보기`}
+                title="동의 증적 보기"
+                data-testid={`button-view-consent-evidence-account-${user.id}`}
+              >
+                <FileCheck className="h-4 w-4" />
+              </Button>
                 <Button
                 size="sm"
                 variant="outline"
@@ -282,6 +294,17 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
           isOpen={Boolean(passwordResetUser)}
           onOpenChange={(open) => {
             if (!open) setPasswordResetUser(null);
+          }}
+        />
+      )}
+      {consentEvidenceUser && (
+        <ConsentEvidenceDialog
+          subjectType="account"
+          subjectId={consentEvidenceUser.id}
+          title={consentEvidenceUser.name}
+          open={Boolean(consentEvidenceUser)}
+          onOpenChange={(open) => {
+            if (!open) setConsentEvidenceUser(null);
           }}
         />
       )}
