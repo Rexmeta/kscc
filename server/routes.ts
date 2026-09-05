@@ -41,6 +41,7 @@ import {
   requireAnyPermission,
 } from "./permissions";
 import {
+  AccountClosureError,
   AuthorizationStateError,
   DuplicateInquiryError,
   EventRegistrationError,
@@ -705,6 +706,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     { message: "Current password is required to change password" }
   );
+  const accountClosureSchema = z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    confirmation: z.enum(["계정을 폐쇄합니다", "DELETE MY ACCOUNT"], {
+      errorMap: () => ({ message: "The account closure confirmation does not match" }),
+    }),
+  }).strict();
 
   app.patch("/api/auth/profile", authenticateToken, async (req, res) => {
     try {
@@ -758,6 +765,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
+  const personalDataExportHandler = async (req: Request, res: Response) => {
+    try {
+      const exportData = await storage.getPersonalDataExport(req.user!.id);
+      if (!exportData) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      // Keep this an explicit allow-list contract. User and registration rows
+      // contain security fields or other participants' information.
+      return res.json(exportData);
+    } catch (error) {
+      emitOperationalEvent("auth.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "personal_data_export",
+        reason: "export_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Unable to export personal data" });
+    }
+  };
+
+  app.get(
+    ["/api/auth/data-export", "/api/auth/export"],
+    authenticateToken,
+    personalDataExportHandler,
+  );
+
+  const closeAccountHandler = async (req: Request, res: Response) => {
+    try {
+      const { currentPassword } = accountClosureSchema.parse(req.body);
+      // Confirmation is validated on the server; the dialog is not a security
+      // control and cannot be bypassed by changing the client.
+      await storage.closeUserAccount(req.user!.id, currentPassword);
+      return res.json({ message: "Account closed successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0].message });
+      }
+      if (error instanceof AccountClosureError) {
+        if (error.code === "INVALID_REAUTH") {
+          return res.status(401).json({ message: error.message, code: error.code });
+        }
+        return res.status(409).json({ message: error.message, code: error.code });
+      }
+      emitOperationalEvent("auth.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "account_closure",
+        reason: "closure_error",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Unable to close account" });
+    }
+  };
+
+  app.post(
+    ["/api/auth/close-account", "/api/auth/close"],
+    authenticateToken,
+    closeAccountHandler,
+  );
+  app.delete("/api/auth/account", authenticateToken, closeAccountHandler);
 
   app.get("/api/auth/registrations", authenticateToken, async (req, res) => {
     try {

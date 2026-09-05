@@ -2,7 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, Calendar, FileText, Settings, Edit, MapPin, X } from 'lucide-react';
+import { User, Building, Calendar, FileText, Settings, Edit, MapPin, X, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { t } from '@/lib/i18n';
 import { UserRegistrationWithEvent, Member, PostWithTranslations } from '@shared/schema';
@@ -85,11 +85,22 @@ const profileUpdateSchema = z.object({
 
 type ProfileUpdateFormData = z.infer<typeof profileUpdateSchema>;
 
+const accountClosureSchema = z.object({
+  currentPassword: z.string().min(1, '현재 비밀번호를 입력해주세요'),
+  confirmation: z.string().refine(
+    (value): boolean => value === '계정을 폐쇄합니다',
+    '확인 문구를 정확히 입력해주세요',
+  ),
+});
+
+type AccountClosureFormData = z.infer<typeof accountClosureSchema>;
+
 export default function Dashboard() {
   const { user, isAuthenticated, isAdmin, hasAnyPermission, logout } = useAuth();
   const { toast } = useToast();
   const { language } = useLanguage();
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [isCloseAccountDialogOpen, setIsCloseAccountDialogOpen] = useState(false);
   const canAccessAdmin = isAdmin || hasAnyPermission([
     'news.read',
     'event.read',
@@ -187,6 +198,72 @@ export default function Dashboard() {
       toast({
         title: '프로필 업데이트 실패',
         description: error.message || '프로필 업데이트에 실패했습니다.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const accountClosureForm = useForm<AccountClosureFormData>({
+    resolver: zodResolver(accountClosureSchema),
+    defaultValues: {
+      currentPassword: '',
+      confirmation: '',
+    },
+  });
+
+  useEffect(() => {
+    if (isCloseAccountDialogOpen) {
+      accountClosureForm.reset({ currentPassword: '', confirmation: '' });
+    }
+  }, [isCloseAccountDialogOpen, accountClosureForm]);
+
+  const exportDataMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('GET', '/api/auth/data-export');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `my-personal-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast({
+        title: '내 데이터 다운로드 완료',
+        description: '계정, 회원사, 본인 행사 등록의 최소 정보만 포함되어 있습니다.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: '데이터 다운로드 실패',
+        description: error.message || '데이터를 다운로드하지 못했습니다.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const closeAccountMutation = useMutation({
+    mutationFn: async (data: AccountClosureFormData) => {
+      return apiRequest('POST', '/api/auth/close-account', data);
+    },
+    onSuccess: async () => {
+      setIsCloseAccountDialogOpen(false);
+      toast({
+        title: '계정 폐쇄 완료',
+        description: '개인정보를 정리하고 계정에서 로그아웃했습니다.',
+      });
+      await logout();
+    },
+    onError: (error: any) => {
+      toast({
+        title: '계정 폐쇄 실패',
+        description: error.message || '현재 비밀번호를 확인하고 다시 시도해주세요.',
         variant: 'destructive',
       });
     },
@@ -404,6 +481,46 @@ export default function Dashboard() {
                       문의하기
                     </Button>
                   </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Privacy Controls */}
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  개인정보 관리
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col justify-between gap-4 rounded-lg border p-4 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 className="font-medium text-foreground">내 데이터와 계정 관리</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      본인 계정, 회원사 프로필, 행사 등록의 최소 정보를 내려받거나 계정을 폐쇄할 수 있습니다.
+                      계정 폐쇄 후에는 로그인할 수 없으며, 업무상 필요한 기록은 익명으로 보존됩니다.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                    <Button
+                      variant="outline"
+                      onClick={() => exportDataMutation.mutate()}
+                      disabled={exportDataMutation.isPending}
+                      data-testid="button-export-personal-data"
+                    >
+                      <Download className="h-4 w-4" />
+                      {exportDataMutation.isPending ? '준비 중...' : '내 데이터 다운로드'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setIsCloseAccountDialogOpen(true)}
+                      data-testid="button-close-account"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      계정 폐쇄
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -677,6 +794,79 @@ export default function Dashboard() {
                   data-testid="button-save-profile"
                 >
                   {profileUpdateMutation.isPending ? '저장 중...' : '저장'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Account Closure Dialog */}
+      <Dialog open={isCloseAccountDialogOpen} onOpenChange={setIsCloseAccountDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>계정을 폐쇄하시겠습니까?</DialogTitle>
+            <DialogDescription>
+              계정 폐쇄는 되돌릴 수 없습니다. 회원사 프로필은 삭제되고 행사 등록의 연락처는 익명화됩니다.
+              게시물과 업무상 필요한 변경·답변 이력은 익명 감사 정보로 보존됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...accountClosureForm}>
+            <form
+              onSubmit={accountClosureForm.handleSubmit((data) => closeAccountMutation.mutate(data))}
+              className="space-y-4"
+            >
+              <FormField
+                control={accountClosureForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>현재 비밀번호</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="현재 비밀번호"
+                        {...field}
+                        data-testid="input-close-account-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={accountClosureForm.control}
+                name="confirmation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>확인 문구: 계정을 폐쇄합니다</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="계정을 폐쇄합니다"
+                        {...field}
+                        data-testid="input-close-account-confirmation"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCloseAccountDialogOpen(false)}
+                  data-testid="button-cancel-close-account"
+                >
+                  취소
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={closeAccountMutation.isPending}
+                  data-testid="button-confirm-close-account"
+                >
+                  {closeAccountMutation.isPending ? '처리 중...' : '계정 폐쇄 확인'}
                 </Button>
               </div>
             </form>

@@ -40,6 +40,7 @@ import {
   PostMetaValidationError,
   validatePostMetaValue,
 } from "@shared/postMetaKeys";
+import { EVENT_META_KEYS } from "@shared/postMetaKeys";
 import type { AdminDashboardSnapshot } from "@shared/adminDashboard";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_PAGE_SIZE = 50;
@@ -88,6 +89,59 @@ export class UserDeletionError extends Error {
     super(message);
     this.name = "UserDeletionError";
   }
+}
+
+export type AccountClosureErrorCode = "INVALID_REAUTH" | "LAST_ACTIVE_ADMIN";
+
+export class AccountClosureError extends Error {
+  constructor(
+    public readonly code: AccountClosureErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AccountClosureError";
+  }
+}
+
+export interface PersonalDataExport {
+  exportVersion: 1;
+  exportedAt: string;
+  account: {
+    name: string;
+    email: string;
+    weixin: string | null;
+    userType: string;
+    membershipTier: string;
+    createdAt: string;
+  };
+  member: {
+    companyName: string;
+    companyNameEn: string | null;
+    companyNameZh: string | null;
+    industry: string;
+    country: string;
+    city: string;
+    address: string;
+    contactPerson: string;
+    contactEmail: string;
+    contactPhone: string | null;
+    membershipLevel: string;
+    membershipStatus: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  registrations: Array<{
+    registrationId: string;
+    status: string;
+    paymentStatus: string | null;
+    createdAt: string;
+    event: {
+      slug: string;
+      title: string | null;
+      eventDate: string | null;
+      location: string | null;
+    } | null;
+  }>;
 }
 
 function getPostMetaValueColumns(value: any): Pick<
@@ -205,6 +259,10 @@ export interface IStorage {
   revokeUserSessions(id: string): Promise<boolean>;
 
   deleteUserAccount(id: string): Promise<boolean>;
+
+  getPersonalDataExport(id: string): Promise<PersonalDataExport | undefined>;
+
+  closeUserAccount(id: string, currentPassword: string): Promise<boolean>;
 
   updateUserMembership(id: string, tierId: string, roleId: string): Promise<User | undefined>;
 
@@ -904,6 +962,240 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning({ id: users.id });
     return result.length > 0;
+  }
+
+  async getPersonalDataExport(id: string): Promise<PersonalDataExport | undefined> {
+    const [user] = await db
+      .select({
+        name: users.name,
+        email: users.email,
+        weixin: users.weixin,
+        userType: users.userType,
+        membershipTier: users.membershipTier,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, id));
+    if (!user) return undefined;
+
+    const [member, registrations] = await Promise.all([
+      db
+        .select({
+          companyName: members.companyName,
+          companyNameEn: members.companyNameEn,
+          companyNameZh: members.companyNameZh,
+          industry: members.industry,
+          country: members.country,
+          city: members.city,
+          address: members.address,
+          contactPerson: members.contactPerson,
+          contactEmail: members.contactEmail,
+          contactPhone: members.contactPhone,
+          membershipLevel: members.membershipLevel,
+          membershipStatus: members.membershipStatus,
+          createdAt: members.createdAt,
+          updatedAt: members.updatedAt,
+        })
+        .from(members)
+        .where(eq(members.userId, id))
+        .limit(1)
+        .then(([profile]) => profile || null),
+      db
+        .select({
+          registrationId: eventRegistrations.id,
+          status: eventRegistrations.status,
+          paymentStatus: eventRegistrations.paymentStatus,
+          createdAt: eventRegistrations.createdAt,
+          eventId: eventRegistrations.eventId,
+        })
+        .from(eventRegistrations)
+        .where(eq(eventRegistrations.userId, id))
+        .orderBy(desc(eventRegistrations.createdAt)),
+    ]);
+
+    const eventIds = registrations
+      .map(({ eventId }) => eventId)
+      .filter((eventId): eventId is string => Boolean(eventId));
+    const [eventPosts, translations, eventMeta] = eventIds.length > 0
+      ? await Promise.all([
+          db
+            .select({ id: posts.id, slug: posts.slug })
+            .from(posts)
+            .where(inArray(posts.id, eventIds)),
+          db
+            .select({
+              postId: postTranslations.postId,
+              locale: postTranslations.locale,
+              title: postTranslations.title,
+            })
+            .from(postTranslations)
+            .where(inArray(postTranslations.postId, eventIds)),
+          db
+            .select({
+              postId: postMeta.postId,
+              key: postMeta.key,
+              valueText: postMeta.valueText,
+              valueTimestamp: postMeta.valueTimestamp,
+            })
+            .from(postMeta)
+            .where(and(
+              inArray(postMeta.postId, eventIds),
+              or(
+                eq(postMeta.key, EVENT_META_KEYS.eventDate),
+                eq(postMeta.key, "event.date"),
+                eq(postMeta.key, EVENT_META_KEYS.location),
+              ),
+            )),
+        ])
+      : [[], [], []];
+
+    const postById = new Map(eventPosts.map((post) => [post.id, post]));
+    const titlesByPost = new Map<string, Array<{ locale: string; title: string }>>();
+    for (const translation of translations) {
+      const current = titlesByPost.get(translation.postId) || [];
+      current.push({ locale: translation.locale, title: translation.title });
+      titlesByPost.set(translation.postId, current);
+    }
+    const dateByPost = new Map(
+      eventMeta
+        .filter((meta) => meta.key === EVENT_META_KEYS.eventDate || meta.key === "event.date")
+        .map((meta) => [meta.postId, meta.valueTimestamp]),
+    );
+    const locationByPost = new Map(
+      eventMeta
+        .filter((meta) => meta.key === EVENT_META_KEYS.location)
+        .map((meta) => [meta.postId, meta.valueText]),
+    );
+
+    return {
+      exportVersion: 1,
+      exportedAt: new Date().toISOString(),
+      account: {
+        ...user,
+        weixin: user.weixin ?? null,
+        createdAt: user.createdAt.toISOString(),
+      },
+      member: member
+        ? {
+            ...member,
+            createdAt: member.createdAt.toISOString(),
+            updatedAt: member.updatedAt.toISOString(),
+          }
+        : null,
+      registrations: registrations.map((registration) => {
+        const eventId = registration.eventId;
+        const event = eventId ? postById.get(eventId) : undefined;
+        const titles = eventId ? titlesByPost.get(eventId) || [] : [];
+        const title = titles.find(({ locale }) => locale === "ko")?.title
+          || titles.find(({ locale }) => locale === "en")?.title
+          || titles[0]?.title
+          || null;
+        const eventDate = eventId ? dateByPost.get(eventId) : null;
+        return {
+          registrationId: registration.registrationId,
+          status: registration.status,
+          paymentStatus: registration.paymentStatus,
+          createdAt: registration.createdAt.toISOString(),
+          event: event
+            ? {
+                slug: event.slug,
+                title,
+                eventDate: eventDate ? eventDate.toISOString() : null,
+                location: eventId ? locationByPost.get(eventId) ?? null : null,
+              }
+            : null,
+        };
+      }),
+    };
+  }
+
+  async closeUserAccount(id: string, currentPassword: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      // Serialize account closure with admin authorization changes. This keeps
+      // the last-admin check and the anonymization decision atomic.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('user-account-deletion'))`);
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user-authorization:${id}`}))`);
+
+      const [user] = await tx.select().from(users).where(eq(users.id, id));
+      if (!user) return false;
+
+      if (!(await bcrypt.compare(currentPassword, user.password))) {
+        throw new AccountClosureError("INVALID_REAUTH", "Current password is incorrect");
+      }
+
+      if (user.role === "admin" && user.isActive) {
+        const [otherActiveAdmin] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(and(
+            eq(users.role, "admin"),
+            eq(users.isActive, true),
+            ne(users.id, id),
+          ))
+          .limit(1);
+        if (!otherActiveAdmin) {
+          throw new AccountClosureError(
+            "LAST_ACTIVE_ADMIN",
+            "The last active administrator cannot close their account",
+          );
+        }
+      }
+
+      const anonymizedPassword = await bcrypt.hash(randomUUID(), 10);
+      const anonymizedEmail = `closed-${randomUUID()}@invalid.local`;
+      const now = new Date();
+
+      // Content and configuration remain available for business continuity,
+      // but no longer point at the closed account or preserve its display name.
+      await tx
+        .update(posts)
+        .set({ authorId: null })
+        .where(eq(posts.authorId, id));
+      await tx
+        .update(postTranslationHistory)
+        .set({ changedBy: null, changedByName: "탈퇴한 사용자" })
+        .where(eq(postTranslationHistory.changedBy, id));
+      await tx
+        .update(surveySettingsHistory)
+        .set({ changedBy: null, changedByName: "탈퇴한 사용자" })
+        .where(eq(surveySettingsHistory.changedBy, id));
+      await tx
+        .update(surveySettings)
+        .set({ updatedBy: null })
+        .where(eq(surveySettings.updatedBy, id));
+
+      // Registrations retain only operational facts needed for attendance and
+      // settlement reporting. The linked member profile is not an operational
+      // record, so it can be removed completely.
+      await tx
+        .update(eventRegistrations)
+        .set({
+          userId: null,
+          attendeeName: "탈퇴한 회원",
+          attendeeEmail: "withdrawn@invalid.local",
+          attendeePhone: null,
+          companyName: null,
+        })
+        .where(eq(eventRegistrations.userId, id));
+      await tx.delete(members).where(eq(members.userId, id));
+      await tx.delete(userMemberships).where(eq(userMemberships.userId, id));
+
+      // Inquiry replies retain their foreign key so the preserved reply audit
+      // remains queryable, while the referenced user is now anonymous.
+      await tx
+        .update(users)
+        .set({
+          email: anonymizedEmail,
+          password: anonymizedPassword,
+          name: "탈퇴한 회원",
+          weixin: null,
+          isActive: false,
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+          updatedAt: now,
+        })
+        .where(eq(users.id, id));
+      return true;
+    });
   }
 
   async deleteUserAccount(id: string): Promise<boolean> {

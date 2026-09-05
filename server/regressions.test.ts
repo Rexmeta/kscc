@@ -19,6 +19,7 @@ import {
   permissions,
   postMeta,
   postTranslations,
+  postTranslationHistory,
   posts,
   rolePermissions,
   roles,
@@ -30,6 +31,7 @@ import {
   users,
   updatePartnerSchema,
 } from "@shared/schema";
+import { EVENT_META_KEYS } from "@shared/postMetaKeys";
 import { getPostPermissionKey } from "./postPermissions";
 import { canReadPost, publicPostAccess, type PostAccessContext } from "./postAccess";
 import {
@@ -422,6 +424,218 @@ test(
       if (consentedRegistrationUserId) {
         await db.delete(users).where(eq(users.id, consentedRegistrationUserId));
       }
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
+
+test(
+  "personal data export is scoped and account closure reauthenticates and anonymizes atomically",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `privacy-lifecycle-test-${randomUUID()}`;
+    }
+    const suffix = randomUUID();
+    const user = await storage.createUser({
+      email: `privacy-user-${suffix}@example.test`,
+      password: "privacy-password",
+      name: "Privacy User",
+      userType: "company",
+    });
+    const [member] = await db.insert(members).values({
+      userId: user.id,
+      companyName: "Private Company",
+      companyNameEn: "Private Company EN",
+      industry: "Testing",
+      country: "Korea",
+      city: "Seoul",
+      address: "Private address",
+      contactPerson: "Private Contact",
+      contactEmail: `private-contact-${suffix}@example.test`,
+      contactPhone: "010-1234-5678",
+      membershipStatus: "active",
+      membershipLevel: "regular",
+      isPublic: false,
+    }).returning();
+    const [event] = await db.insert(posts).values({
+      postType: "event",
+      status: "published",
+      visibility: "public",
+      slug: `privacy-event-${suffix}`,
+      primaryLocale: "ko",
+      authorId: user.id,
+    }).returning();
+    await db.insert(postTranslations).values({
+      postId: event.id,
+      locale: "ko",
+      title: "Private Event",
+    });
+    await db.insert(postMeta).values([
+      { postId: event.id, key: EVENT_META_KEYS.eventDate, valueTimestamp: new Date("2026-10-01T09:00:00.000Z") },
+      { postId: event.id, key: EVENT_META_KEYS.location, valueText: "Seoul" },
+    ]);
+    const [registration] = await db.insert(eventRegistrations).values({
+      eventId: event.id,
+      userId: user.id,
+      attendeeName: "Private Attendee",
+      attendeeEmail: `private-attendee-${suffix}@example.test`,
+      attendeePhone: "010-0000-0000",
+      companyName: "Private Company",
+      status: "attended",
+      paymentStatus: "paid",
+    }).returning();
+    const [history] = await db.insert(postTranslationHistory).values({
+      postId: event.id,
+      locale: "ko",
+      changedBy: user.id,
+      changedByName: user.name,
+    }).returning();
+    const surveyId = `privacy-survey-${suffix}`;
+    await db.insert(surveySettings).values({
+      id: surveyId,
+      title: "Privacy survey",
+      description: "Operational survey",
+      isActive: false,
+      updatedBy: user.id,
+    });
+    const [surveyHistory] = await db.insert(surveySettingsHistory).values({
+      surveySettingsId: surveyId,
+      version: 1,
+      title: "Privacy survey",
+      description: "Operational survey",
+      isActive: false,
+      changedBy: user.id,
+      changedByName: user.name,
+    }).returning();
+    const inquiry = await storage.createInquiry({
+      category: "event",
+      name: "Privacy inquiry",
+      email: `privacy-inquiry-${suffix}@example.test`,
+      phone: null,
+      companyName: null,
+      subject: "Privacy history",
+      message: "Keep the operational reply.",
+    });
+    await storage.createInquiryReply({
+      inquiryId: inquiry.id,
+      respondedBy: user.id,
+      message: "Operational reply",
+    });
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    const token = issueAuthToken(user, process.env.SESSION_SECRET!);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const request = async (
+        path: string,
+        options: { token?: string; method?: string; body?: unknown } = {},
+      ) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: options.method,
+          headers: {
+            ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+            ...(options.body ? { "Content-Type": "application/json" } : {}),
+          },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        const responseText = await response.text();
+        let body: unknown = responseText;
+        try {
+          body = JSON.parse(responseText);
+        } catch {
+          // Empty responses are valid for some endpoints.
+        }
+        return { status: response.status, body };
+      };
+
+      assert.equal((await request("/api/auth/data-export")).status, 401);
+      const exported = await request("/api/auth/data-export", { token });
+      assert.equal(exported.status, 200);
+      assert.equal(exported.body.account.name, "Privacy User");
+      assert.equal(exported.body.member.companyName, "Private Company");
+      assert.equal(exported.body.registrations[0].event.title, "Private Event");
+      assert.equal(exported.body.registrations[0].event.location, "Seoul");
+      assert.equal("password" in exported.body.account, false);
+      assert.equal("sessionVersion" in exported.body.account, false);
+      assert.equal("permissions" in exported.body, false);
+      assert.equal("attendeeEmail" in exported.body.registrations[0], false);
+
+      const wrongPassword = await request("/api/auth/close-account", {
+        token,
+        method: "POST",
+        body: { currentPassword: "wrong-password", confirmation: "계정을 폐쇄합니다" },
+      });
+      assert.equal(wrongPassword.status, 401);
+      const wrongConfirmation = await request("/api/auth/close-account", {
+        token,
+        method: "POST",
+        body: { currentPassword: "privacy-password", confirmation: "close" },
+      });
+      assert.equal(wrongConfirmation.status, 400);
+
+      const closed = await request("/api/auth/close-account", {
+        token,
+        method: "POST",
+        body: { currentPassword: "privacy-password", confirmation: "계정을 폐쇄합니다" },
+      });
+      assert.equal(closed.status, 200);
+      assert.equal((await request("/api/auth/me", { token })).status, 403);
+      assert.equal(
+        (await request("/api/auth/login", {
+          method: "POST",
+          body: { email: user.email, password: "privacy-password" },
+        })).status,
+        401,
+      );
+      assert.equal(await storage.getMemberByUserId(user.id), undefined);
+      const [closedRegistration] = await db
+        .select()
+        .from(eventRegistrations)
+        .where(eq(eventRegistrations.id, registration.id));
+      assert.equal(closedRegistration.userId, null);
+      assert.equal(closedRegistration.attendeeName, "탈퇴한 회원");
+      assert.equal(closedRegistration.attendeeEmail, "withdrawn@invalid.local");
+      const [closedPost] = await db.select().from(posts).where(eq(posts.id, event.id));
+      assert.equal(closedPost.authorId, null);
+      const [closedHistory] = await db
+        .select()
+        .from(postTranslationHistory)
+        .where(eq(postTranslationHistory.id, history.id));
+      assert.equal(closedHistory.changedBy, null);
+      assert.equal(closedHistory.changedByName, "탈퇴한 사용자");
+      const [closedSurveyHistory] = await db
+        .select()
+        .from(surveySettingsHistory)
+        .where(eq(surveySettingsHistory.id, surveyHistory.id));
+      assert.equal(closedSurveyHistory.changedBy, null);
+      assert.equal(closedSurveyHistory.changedByName, "탈퇴한 사용자");
+      const inquiryWithReply = await storage.getInquiryWithReplies(inquiry.id);
+      assert.equal(inquiryWithReply?.replies[0].responder?.name, "탈퇴한 회원");
+      assert.equal(inquiryWithReply?.replies[0].responder?.email, undefined);
+
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await db.delete(inquiries).where(eq(inquiries.id, inquiry.id));
+      await db.delete(eventRegistrations).where(eq(eventRegistrations.id, registration.id));
+      await db.delete(posts).where(eq(posts.id, event.id));
+      await db.delete(surveySettingsHistory).where(eq(surveySettingsHistory.id, surveyHistory.id));
+      await db.delete(surveySettings).where(eq(surveySettings.id, surveyId));
+      await db.delete(members).where(eq(members.id, member.id));
+      await db.delete(users).where(eq(users.id, user.id));
       if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
       else process.env.SESSION_SECRET = originalSessionSecret;
     }
