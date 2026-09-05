@@ -233,7 +233,7 @@ router.get("/resource/categories", optionalAuthenticateToken, async (req: Reques
 // GET /api/posts/slug/:slug - Get single post by slug with translations
 router.get("/slug/:slug", optionalAuthenticateToken, async (req: Request, res: Response) => {
   try {
-    const { slug } = req.params;
+    const slug = z.string().parse(req.params.slug);
     const locale = localeQuerySchema.parse(req.query.locale);
     const adminMode = req.query.admin === "true";
 

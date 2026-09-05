@@ -12,6 +12,19 @@ advisory entry, so a release must not silently ship a known production
 dependency finding. The command does not upgrade packages or change the
 lockfile; resolve findings in a separate reviewed dependency change.
 
+## Current resolution
+
+As of September 4, 2026, the production audit passes with no advisory entries.
+The request-parsing chain was upgraded to Express `5.2.1`, which resolves to
+body-parser `2.3.0` and qs `6.16.0` in the lockfile. This is a direct
+dependency upgrade, not an audit override or accepted exception.
+
+Express 5 requires named wildcard parameters, so the development and
+production SPA fallbacks use the `/{*splat}` form and the object-storage
+route uses `/objects{/*objectPath}`. The existing JSON and URL-encoded
+limits, rate-limit middleware, health probes, route registration, and
+object-storage ACL handling were checked against the upgraded runtime.
+
 The complete reproducible release gate is:
 
 ```sh
