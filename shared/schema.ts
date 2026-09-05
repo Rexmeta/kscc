@@ -669,6 +669,10 @@ export type UserProfileDto = Pick<
   "id" | "email" | "name" | "role" | "userType" | "weixin" | "createdAt"
 >;
 export type ConsentEvidence = typeof consentEvidence.$inferSelect;
+export type ConsentEvidenceAccessLogEntry = Pick<
+  typeof consentEvidenceAccessLog.$inferSelect,
+  "adminUserId" | "subjectType" | "subjectId" | "action" | "accessedAt"
+>;
 
 export type Member = typeof members.$inferSelect;
 export type InsertMember = z.infer<typeof insertMemberSchema>;

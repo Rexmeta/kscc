@@ -11,6 +11,7 @@ import type {
   SurveySettings,
   SurveySettingsHistory,
   PostTranslationHistory,
+  ConsentEvidenceAccessLogEntry,
 } from '@shared/schema';
 import type { AdminDashboardSnapshot } from '@shared/adminDashboard';
 
@@ -151,6 +152,40 @@ export function useAdminInquiries(activeTab: string, page = 1, filters: AdminInq
       ...(filters.status ? { status: filters.status } : {}),
     }).toString()}`),
     enabled: canRead && activeTab === 'inquiries',
+  });
+}
+
+export type AdminConsentEvidenceAccessLogFilters = {
+  subjectType?: string;
+  subjectId?: string;
+  action?: string;
+};
+
+type ConsentEvidenceAccessLogResponse = {
+  entries: ConsentEvidenceAccessLogEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+};
+
+export function useAdminConsentEvidenceAccessLog(
+  activeTab: string,
+  page = 1,
+  filters: AdminConsentEvidenceAccessLogFilters = {},
+) {
+  const { isAdmin } = useAuth();
+  return useQuery<ConsentEvidenceAccessLogResponse>({
+    queryKey: ['/api/admin/consent-evidence/access-log', { page, limit: 50, ...filters }],
+    queryFn: () => fetchJson<ConsentEvidenceAccessLogResponse>(
+      `/api/admin/consent-evidence/access-log?${new URLSearchParams({
+        page: page.toString(),
+        limit: '50',
+        ...(filters.subjectType ? { subjectType: filters.subjectType } : {}),
+        ...(filters.subjectId ? { subjectId: filters.subjectId } : {}),
+        ...(filters.action ? { action: filters.action } : {}),
+      }).toString()}`,
+    ),
+    enabled: isAdmin && activeTab === 'consent-evidence-access-log',
   });
 }
 

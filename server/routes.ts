@@ -139,6 +139,11 @@ const consentEvidenceSubjectQuerySchema = z.object({
   (data) => Boolean(data.userId) !== Boolean(data.inquiryId),
   { message: "Exactly one of userId or inquiryId is required" },
 );
+const consentEvidenceAccessLogQuerySchema = paginatedCollectionQuerySchema.extend({
+  subjectType: z.enum(["account", "inquiry"]).optional(),
+  subjectId: z.string().uuid().optional(),
+  action: z.enum(["view", "export"]).optional(),
+}).strict();
 const inquiryUpdateSchema = z.object({
   status: inquiryStatusSchema.optional(),
   category: inquiryCategorySchema.optional(),
@@ -1102,6 +1107,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       entry.consentedAt,
     ].map(escapeCsv).join(",")),
   ].join("\r\n");
+
+  app.get(
+    "/api/admin/consent-evidence/access-log",
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { page, limit, subjectType, subjectId, action } =
+          consentEvidenceAccessLogQuerySchema.parse(req.query);
+        const result = await storage.getConsentEvidenceAccessLog({
+          subjectType,
+          subjectId,
+          action,
+          limit,
+          offset: (page - 1) * limit,
+        });
+        res.json({
+          entries: result.entries.map((entry) => ({
+            adminUserId: entry.adminUserId,
+            subjectType: entry.subjectType,
+            subjectId: entry.subjectId,
+            action: entry.action,
+            accessedAt: entry.accessedAt.toISOString(),
+          })),
+          total: result.total,
+          page,
+          totalPages: Math.ceil(result.total / limit),
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid consent evidence access log query", errors: error.errors });
+        }
+        emitOperationalEvent("consent_evidence.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "access_log",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Unable to read consent evidence access history" });
+      }
+    },
+  );
 
   app.get(
     [

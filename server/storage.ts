@@ -8,6 +8,7 @@ import {
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
   type InquiryWithReplies,
   type ConsentEvidence,
+  type ConsentEvidenceAccessLogEntry,
   type SafeUser,
   type Partner, type InsertPartner, type UserRegistrationWithEvent,
   type Post, type InsertPost, type PostTranslation, type InsertPostTranslation,
@@ -231,6 +232,14 @@ export interface IStorage {
     subjectId: string,
     action: "view" | "export",
   ): Promise<void>;
+
+  getConsentEvidenceAccessLog(filters?: {
+    subjectType?: "account" | "inquiry";
+    subjectId?: string;
+    action?: "view" | "export";
+    limit?: number;
+    offset?: number;
+  }): Promise<{ entries: ConsentEvidenceAccessLogEntry[]; total: number }>;
 
   getUserCount(): Promise<number>;
 
@@ -559,6 +568,58 @@ export class DatabaseStorage implements IStorage {
       subjectId,
       action,
     });
+  }
+
+  async getConsentEvidenceAccessLog(filters: {
+    subjectType?: "account" | "inquiry";
+    subjectId?: string;
+    action?: "view" | "export";
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ entries: ConsentEvidenceAccessLogEntry[]; total: number }> {
+    const limit = boundedPageSize(filters.limit, MAX_ADMIN_COLLECTION_PAGE_SIZE);
+    const offset = boundedOffset(filters.offset);
+    const conditions = [];
+    if (filters.subjectType) {
+      conditions.push(eq(consentEvidenceAccessLog.subjectType, filters.subjectType));
+    }
+    if (filters.subjectId) {
+      conditions.push(eq(consentEvidenceAccessLog.subjectId, filters.subjectId));
+    }
+    if (filters.action) {
+      conditions.push(eq(consentEvidenceAccessLog.action, filters.action));
+    }
+    const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+    const totalQuery = whereCondition
+      ? db.select({ count: count() }).from(consentEvidenceAccessLog).where(whereCondition)
+      : db.select({ count: count() }).from(consentEvidenceAccessLog);
+    const entriesQuery = whereCondition
+      ? db.select({
+          adminUserId: consentEvidenceAccessLog.adminUserId,
+          subjectType: consentEvidenceAccessLog.subjectType,
+          subjectId: consentEvidenceAccessLog.subjectId,
+          action: consentEvidenceAccessLog.action,
+          accessedAt: consentEvidenceAccessLog.accessedAt,
+        }).from(consentEvidenceAccessLog).where(whereCondition)
+      : db.select({
+          adminUserId: consentEvidenceAccessLog.adminUserId,
+          subjectType: consentEvidenceAccessLog.subjectType,
+          subjectId: consentEvidenceAccessLog.subjectId,
+          action: consentEvidenceAccessLog.action,
+          accessedAt: consentEvidenceAccessLog.accessedAt,
+        }).from(consentEvidenceAccessLog);
+    const [[totalResult], entries] = await Promise.all([
+      totalQuery,
+      entriesQuery
+        .orderBy(desc(consentEvidenceAccessLog.accessedAt), desc(consentEvidenceAccessLog.id))
+        .limit(limit)
+        .offset(offset),
+    ]);
+
+    return {
+      entries,
+      total: Number(totalResult?.count ?? 0),
+    };
   }
 
   async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {
