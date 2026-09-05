@@ -18,6 +18,14 @@ export type SeoPageKey =
   | "privacy"
   | "terms";
 
+export const SEO_DETAIL_BREADCRUMB_LABELS: Record<
+  SeoLanguage,
+  { news: string; events: string }
+> = {
+  ko: { news: "최신 소식", events: "다가오는 행사" },
+  en: { news: "Latest News", events: "Upcoming Events" },
+  zh: { news: "最新消息", events: "即将举行的活动" },
+};
 export interface SeoPageMetadata {
   title: string;
   description: string;
@@ -267,6 +275,17 @@ export function absoluteUrl(origin: string, pathname: string): string {
   return new URL(pathname, origin.endsWith("/") ? origin : `${origin}/`).toString();
 }
 
+export function publicUrl(origin: string, value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim(), origin);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 export function escapeXml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -319,8 +338,31 @@ export function buildRobotsTxt(sitemapUrl: string): string {
   ].join("\n");
 }
 
-export function buildLlmsTxt(origin: string): string {
+export interface LlmsContentEntry {
+  kind: "news" | "event";
+  language: SeoLanguage;
+  title: string;
+  summary?: string;
+  date?: unknown;
+  url: string;
+}
+export function buildLlmsTxt(origin: string, entries: LlmsContentEntry[] = []): string {
   const link = (path: string, label: string) => `- [${label}](${absoluteUrl(origin, localizedPath(path, "en"))})`;
+  const contentSections = SEO_LANGUAGES.flatMap((language) => {
+    const languageEntries = entries.filter((entry) => entry.language === language);
+    return (["news", "event"] as const).flatMap((kind) => {
+      const kindEntries = languageEntries.filter((entry) => entry.kind === kind);
+      if (kindEntries.length === 0) return [];
+      const heading = kind === "news" ? "Latest public news" : "Current public events";
+      const lines = kindEntries.map((entry) => {
+        const date = llmsDate(entry.date);
+        const summary = entry.summary ? ` — ${llmsText(entry.summary, 320)}` : "";
+        const dateText = date ? ` (${date})` : "";
+        return `- [${llmsText(entry.title, 180)}](${entry.url})${dateText}${summary}`;
+      });
+      return [`## ${heading} (${language})`, ...lines, ""];
+    });
+  });
 
   return [
     `# ${SITE_NAME_EN}`,
@@ -335,10 +377,272 @@ export function buildLlmsTxt(origin: string): string {
     link("/events", "Events"),
     link("/partners", "Partners"),
     link("/contact", "Contact"),
+    link("/privacy", "Privacy policy"),
+    link("/terms", "Terms of use"),
     "",
+    ...contentSections,
     "## Content guidance",
     "",
     "Use the linked public pages as the source of truth for current announcements, events, member visibility, and contact information. Do not infer private member data or content behind authentication.",
     "",
   ].join("\n");
+}
+
+export function buildWebPageJsonLd(options: {
+  origin: string;
+  language: SeoLanguage;
+  canonicalUrl: string;
+  name: string;
+  description?: string;
+}): Record<string, unknown> {
+  const { origin, language, canonicalUrl, name, description } = options;
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": webpageId(canonicalUrl),
+    url: canonicalUrl,
+    name,
+    ...(description ? { description } : {}),
+    inLanguage: language,
+    isPartOf: { "@id": websiteId(origin) },
+  };
+}
+
+export function buildBreadcrumbJsonLd(
+  items: SeoBreadcrumbItem[],
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.url,
+    })),
+  };
+}
+
+function llmsDate(value: unknown): string {
+  const iso = toIsoDate(value);
+  return iso ? iso.slice(0, 10) : "";
+}
+
+export function toIsoDate(value: unknown): string | undefined {
+  const date = value instanceof Date
+    ? value
+    : typeof value === "string" || typeof value === "number"
+      ? new Date(value)
+      : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined;
+}
+
+export function webpageId(canonicalUrl: string): string {
+  return `${canonicalUrl}#webpage`;
+}
+
+export interface SeoBreadcrumbItem {
+  name: string;
+  url: string;
+}
+
+function normalizedOrigin(origin: string): string {
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return origin.replace(/\/+$/, "");
+  }
+}
+
+export function websiteId(origin: string): string {
+  return `${normalizedOrigin(origin)}/#website`;
+}
+
+export function buildArticleJsonLd(options: {
+  origin: string;
+  language: SeoLanguage;
+  canonicalUrl: string;
+  headline: string;
+  description?: string;
+  image?: string;
+  datePublished?: unknown;
+  dateModified?: unknown;
+}): Record<string, unknown> {
+  const {
+    origin,
+    language,
+    canonicalUrl,
+    headline,
+    description,
+    image,
+    datePublished,
+    dateModified,
+  } = options;
+  const organization = {
+    "@type": "Organization",
+    "@id": organizationId(origin),
+    name: SITE_NAME,
+  };
+  const published = toIsoDate(datePublished);
+  const modified = toIsoDate(dateModified);
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline,
+    ...(description ? { description } : {}),
+    url: canonicalUrl,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": webpageId(canonicalUrl),
+      url: canonicalUrl,
+    },
+    ...(image ? { image: [image] } : {}),
+    ...(published ? { datePublished: published } : {}),
+    ...(modified ? { dateModified: modified } : {}),
+    inLanguage: language,
+    author: organization,
+    publisher: organization,
+  };
+}
+
+export function buildEventJsonLd(options: {
+  origin: string;
+  language: SeoLanguage;
+  canonicalUrl: string;
+  name: string;
+  description?: string;
+  image?: string;
+  startDate: unknown;
+  endDate?: unknown;
+  eventStatus?: string;
+  eventAttendanceMode?: string;
+  location?: Record<string, unknown>;
+  price?: number;
+}): Record<string, unknown> {
+  const {
+    origin,
+    language,
+    canonicalUrl,
+    name,
+    description,
+    image,
+    startDate,
+    endDate,
+    eventStatus,
+    eventAttendanceMode,
+    location,
+    price,
+  } = options;
+  const organizer = {
+    "@type": "Organization",
+    "@id": organizationId(origin),
+    name: SITE_NAME,
+  };
+  const start = toIsoDate(startDate);
+  const end = toIsoDate(endDate);
+  return {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name,
+    ...(description ? { description } : {}),
+    url: canonicalUrl,
+    ...(image ? { image: [image] } : {}),
+    ...(start ? { startDate: start } : {}),
+    ...(end ? { endDate: end } : {}),
+    ...(eventStatus ? { eventStatus } : {}),
+    ...(eventAttendanceMode ? { eventAttendanceMode } : {}),
+    ...(location ? { location } : {}),
+    organizer,
+    ...(typeof price === "number" && Number.isFinite(price) && price >= 0
+      ? {
+          offers: {
+            "@type": "Offer",
+            price,
+            priceCurrency: "KRW",
+            url: canonicalUrl,
+          },
+        }
+      : {}),
+    inLanguage: language,
+  };
+}
+
+export function buildStaticSeoJsonLd(options: {
+  origin: string;
+  language: SeoLanguage;
+  canonicalUrl: string;
+  name: string;
+  description?: string;
+  breadcrumbs?: SeoBreadcrumbItem[];
+}): Array<Record<string, unknown>> {
+  const { origin, language, canonicalUrl, name, description, breadcrumbs = [] } = options;
+  return [
+    buildOrganizationJsonLd(origin, language),
+    buildWebSiteJsonLd(origin, language),
+    buildWebPageJsonLd({ origin, language, canonicalUrl, name, description }),
+    ...(breadcrumbs.length > 0 ? [buildBreadcrumbJsonLd(breadcrumbs)] : []),
+  ];
+}
+
+export function isPubliclyIndexablePost(
+  post: {
+    status: string;
+    visibility: string;
+    publishedAt?: unknown;
+    expiresAt?: unknown;
+  },
+  now = Date.now(),
+): boolean {
+  if (post.status !== "published" || post.visibility !== "public") return false;
+  const publishedAt = toIsoDate(post.publishedAt);
+  const expiresAt = toIsoDate(post.expiresAt);
+  return (!publishedAt || new Date(publishedAt).getTime() <= now)
+    && (!expiresAt || new Date(expiresAt).getTime() > now);
+}
+
+export function buildWebSiteJsonLd(
+  origin: string,
+  language: SeoLanguage,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": websiteId(origin),
+    name: SITE_NAME,
+    url: absoluteUrl(origin, localizedPath("/", language)),
+    inLanguage: language,
+    publisher: { "@id": organizationId(origin) },
+  };
+}
+
+export function buildOrganizationJsonLd(
+  origin: string,
+  language: SeoLanguage,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": organizationId(origin),
+    name: SITE_NAME,
+    alternateName: SITE_NAME_EN,
+    url: absoluteUrl(origin, localizedPath("/", language)),
+    logo: absoluteUrl(origin, SITE_LOGO_PATH),
+    areaServed: ["KR", "CN"],
+    knowsAbout: ["Korea-China trade", "investment", "economic exchange", "cultural exchange"],
+  };
+}
+
+export function organizationId(origin: string): string {
+  return `${normalizedOrigin(origin)}/#organization`;
+}
+
+function llmsText(value: string, maxLength: number): string {
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\\/g, "\\\\")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
+    .trim()
+    .slice(0, maxLength);
 }

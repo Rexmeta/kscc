@@ -17,7 +17,15 @@ import { fetchJson, ApiRequestError } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
 import { formatLocalizedDate } from '@/lib/i18n';
 import { Seo } from '@/components/Seo';
-import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
+import {
+  absoluteUrl,
+  buildArticleJsonLd,
+  isPubliclyIndexablePost,
+  localizedPath,
+  publicUrl,
+  SEO_DETAIL_BREADCRUMB_LABELS,
+  SITE_NAME,
+} from '@shared/seo';
 
 export default function NewsDetail() {
   // ALL HOOKS MUST BE AT THE TOP (Rules of Hooks)
@@ -109,23 +117,17 @@ export default function NewsDetail() {
   const tags = Array.isArray(post.tags) ? post.tags : [];
   const canonicalPath = `/news/${post.slug}`;
   const canonicalUrl = absoluteUrl(window.location.origin, localizedPath(canonicalPath, language));
-  const imageUrl = featuredImage
-    ? absoluteUrl(window.location.origin, featuredImage)
-    : undefined;
-  const articleJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
+  const imageUrl = publicUrl(window.location.origin, featuredImage);
+  const articleJsonLd = buildArticleJsonLd({
+    origin: window.location.origin,
+    language,
+    canonicalUrl,
     headline: translation.seoTitle || translation.title || post.slug,
     description: translation.seoDescription || translation.excerpt || "",
-    url: canonicalUrl,
-    mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
-    image: imageUrl ? [imageUrl] : undefined,
-    datePublished: post.publishedAt || post.createdAt,
+    image: imageUrl,
+    datePublished: post.publishedAt,
     dateModified: post.updatedAt,
-    inLanguage: language,
-    author: { "@type": "Organization", name: SITE_NAME },
-    publisher: { "@type": "Organization", name: SITE_NAME },
-  };
+  });
   
   // Helper to convert YouTube/Vimeo URLs to embeddable format
   const getEmbedUrl = (url: string): string | null => {
@@ -202,9 +204,9 @@ export default function NewsDetail() {
         image={featuredImage}
         type="article"
         canonicalPath={canonicalPath}
-        noIndex={post.status !== 'published' || post.visibility !== 'public'}
+        noIndex={!isPubliclyIndexablePost(post)}
         breadcrumbs={[
-          { name: t('news.title'), path: '/news' },
+          { name: SEO_DETAIL_BREADCRUMB_LABELS[language].news, path: '/news' },
           { name: translation.title || post.slug, path: canonicalPath },
         ]}
         jsonLd={articleJsonLd}

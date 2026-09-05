@@ -1,28 +1,35 @@
 import type { Express, Request, Response } from "express";
 import {
   absoluteUrl,
+  buildArticleJsonLd,
+  buildBreadcrumbJsonLd,
+  buildEventJsonLd,
   buildLlmsTxt,
   buildRobotsTxt,
   buildSitemapXml,
+  buildStaticSeoJsonLd,
   getLanguageFromUrl,
   getSeoPageKey,
   INDEXABLE_STATIC_PATHS,
   isNoIndexPath,
   localizedPath,
   normalizeSeoPathname,
+  publicUrl,
   SEO_LANGUAGES,
+  SEO_DETAIL_BREADCRUMB_LABELS,
   SEO_PAGE_METADATA,
   SITE_LOGO_PATH,
   SITE_NAME,
+  type LlmsContentEntry,
   type SeoLanguage,
   type SitemapEntry,
 } from "@shared/seo";
 import type { PostMeta, PostWithTranslations } from "@shared/schema";
 import { EVENT_META_KEYS } from "@shared/postMetaKeys";
+import { parseEventDateTime } from "@shared/eventDateTime";
 import { publicPostAccess } from "./postAccess";
 import { storage } from "./storage";
 import { emitOperationalEvent, getCorrelationId } from "./telemetry";
-
 const SITEMAP_POST_TYPES = ["news", "event"] as const;
 const SITEMAP_PAGE_SIZE = 100;
 const SEO_HEAD_START = "<!-- SEO_HEAD_START -->";
@@ -74,18 +81,8 @@ function getTranslation(post: PostWithTranslations, locale: SeoLanguage) {
     || post.translations[0]
     || null;
 }
-
-function getDateValue(value: unknown): Date | null {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function absoluteImageUrl(origin: string, image: string | null | undefined): string {
-  return image
-    ? image.startsWith("http") ? image : absoluteUrl(origin, image)
-    : absoluteUrl(origin, SITE_LOGO_PATH);
+  return publicUrl(origin, image) || absoluteUrl(origin, SITE_LOGO_PATH);
 }
 
 function getPostImage(post: PostWithTranslations): string | null {
@@ -94,13 +91,6 @@ function getPostImage(post: PostWithTranslations): string | null {
   const images = getMetaValue(post.meta || [], imageKey);
   return Array.isArray(images) && typeof images[0] === "string" ? images[0] : null;
 }
-
-const DETAIL_BREADCRUMB_LABELS: Record<SeoLanguage, { news: string; events: string }> = {
-  ko: { news: "최신 소식", events: "다가오는 행사" },
-  en: { news: "Latest News", events: "Upcoming Events" },
-  zh: { news: "最新消息", events: "即将举行的活动" },
-};
-
 function getDetailSeo(
   post: PostWithTranslations,
   postPath: "news" | "events",
@@ -120,25 +110,22 @@ function getDetailSeo(
   const canonicalPath = `/${postPath}/${post.slug}`;
   const canonicalUrl = absoluteUrl(origin, localizedPath(canonicalPath, language));
   const postImage = getPostImage(post);
-  const image = absoluteImageUrl(origin, postImage);
-  const breadcrumb = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: DETAIL_BREADCRUMB_LABELS[language][postPath],
-        item: absoluteUrl(origin, localizedPath(`/${postPath}`, language)),
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: titleText,
-        item: canonicalUrl,
-      },
-    ],
-  };
+  const postImageUrl = publicUrl(origin, postImage);
+  const image = postImageUrl || absoluteUrl(origin, SITE_LOGO_PATH);
+  const breadcrumb = buildBreadcrumbJsonLd([
+    {
+      name: SEO_DETAIL_BREADCRUMB_LABELS[language][postPath],
+      url: absoluteUrl(origin, localizedPath(`/${postPath}`, language)),
+    },
+    { name: titleText, url: canonicalUrl },
+  ]);
+  const commonJsonLd = buildStaticSeoJsonLd({
+    origin,
+    language,
+    canonicalUrl,
+    name: title,
+    description,
+  }).filter((value) => value["@type"] !== "BreadcrumbList");
 
   if (post.postType === "news") {
     return {
@@ -147,64 +134,73 @@ function getDetailSeo(
       image,
       canonicalPath,
       jsonLd: [
-        {
-          "@context": "https://schema.org",
-          "@type": "Article",
+        ...commonJsonLd,
+        buildArticleJsonLd({
+          origin,
+          language,
+          canonicalUrl,
           headline: translation?.seoTitle || titleText,
           description,
-          url: canonicalUrl,
-          mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
-          image: postImage ? [image] : undefined,
-          datePublished: post.publishedAt || post.createdAt,
+          image: postImageUrl,
+          datePublished: post.publishedAt,
           dateModified: post.updatedAt,
-          inLanguage: language,
-          author: { "@type": "Organization", name: SITE_NAME },
-          publisher: { "@type": "Organization", name: SITE_NAME },
-        },
+        }),
         breadcrumb,
       ],
     };
   }
 
   const meta = post.meta || [];
-  const eventDate = getDateValue(getMetaValue(meta, EVENT_META_KEYS.eventDate));
-  const endDate = getDateValue(getMetaValue(meta, EVENT_META_KEYS.endDate));
+  const eventDate = parseEventDateTime(getMetaValue(meta, EVENT_META_KEYS.eventDate));
+  const parsedEndDate = parseEventDateTime(getMetaValue(meta, EVENT_META_KEYS.endDate));
+  const endDate = eventDate && parsedEndDate && parsedEndDate >= eventDate
+    ? parsedEndDate
+    : null;
   const fee = getMetaValue(meta, EVENT_META_KEYS.fee);
   const eventType = getMetaValue(meta, EVENT_META_KEYS.eventType);
   const location = getMetaValue(meta, EVENT_META_KEYS.location);
+  const validEventType = eventType === "online" || eventType === "offline" || eventType === "hybrid"
+    ? eventType
+    : null;
+  const validLocation = typeof location === "string" && location.trim()
+    ? { "@type": "Place", name: location.trim() }
+    : undefined;
+  const validFee = typeof fee === "number" && Number.isFinite(fee) && fee >= 0
+    ? fee
+    : undefined;
+  const eventJsonLd = eventDate
+    ? buildEventJsonLd({
+        origin,
+        language,
+        canonicalUrl,
+        name: translation?.seoTitle || titleText,
+        description,
+        image: postImageUrl,
+        startDate: eventDate,
+        endDate,
+        eventStatus: "https://schema.org/EventScheduled",
+        eventAttendanceMode: validEventType === "online"
+          ? "https://schema.org/OnlineEventAttendanceMode"
+          : validEventType === "hybrid"
+            ? "https://schema.org/MixedEventAttendanceMode"
+            : validEventType === "offline"
+              ? "https://schema.org/OfflineEventAttendanceMode"
+              : undefined,
+        // There is no event access URL in the CMS. Do not use the article
+        // URL as a made-up virtual venue.
+        location: validEventType === "online" ? undefined : validLocation,
+        price: validFee,
+      })
+    : null;
 
   return {
     title,
     description,
     image,
     canonicalPath,
-    jsonLd: [
-      {
-        "@context": "https://schema.org",
-        "@type": "Event",
-        name: translation?.seoTitle || titleText,
-        description,
-        url: canonicalUrl,
-        image: postImage ? [image] : undefined,
-        startDate: eventDate?.toISOString(),
-        endDate: endDate?.toISOString(),
-        eventStatus: "https://schema.org/EventScheduled",
-        eventAttendanceMode: eventType === "online"
-          ? "https://schema.org/OnlineEventAttendanceMode"
-          : eventType === "hybrid"
-            ? "https://schema.org/MixedEventAttendanceMode"
-            : "https://schema.org/OfflineEventAttendanceMode",
-        location: eventType === "online"
-          ? { "@type": "VirtualLocation", url: canonicalUrl }
-          : { "@type": "Place", name: typeof location === "string" && location ? location : "KSCC event venue" },
-        organizer: { "@type": "Organization", name: SITE_NAME },
-        offers: typeof fee === "number"
-          ? { "@type": "Offer", price: fee, priceCurrency: "KRW", url: canonicalUrl }
-          : undefined,
-        inLanguage: language,
-      },
-      breadcrumb,
-    ],
+    // An event without a valid start date is still a public page, but it is
+    // not emitted as an Event entity because schema.org would be misleading.
+    jsonLd: [...commonJsonLd, ...(eventJsonLd ? [eventJsonLd] : []), breadcrumb],
   };
 }
 
@@ -261,7 +257,12 @@ function buildSeoHead(options: {
     `<meta name="twitter:image" content="${escapeHtml(image)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`,
     alternateLinks,
-    ...(!noIndex ? jsonLd.map((value) => `<script type="application/ld+json">${serializeJsonLd(value)}</script>`) : []),
+    ...(!noIndex
+      ? jsonLd.map(
+          (value) =>
+            `<script type="application/ld+json" data-seo-jsonld="true">${serializeJsonLd(value)}</script>`,
+        )
+      : []),
   ].join("\n");
 }
 
@@ -315,6 +316,28 @@ export async function getInitialSeo(req: Request): Promise<InitialSeo> {
   const detailPath = detailMatch?.[1] as "news" | "events" | undefined;
   const detailIdentifier = detailMatch?.[2];
   const metadata = page ? SEO_PAGE_METADATA[language][page] : undefined;
+  const staticCanonicalUrl = absoluteUrl(origin, localizedPath(pathname, language));
+  const staticJsonLd = page
+    ? buildStaticSeoJsonLd({
+        origin,
+        language,
+        canonicalUrl: staticCanonicalUrl,
+        name: metadata?.title || SITE_NAME,
+        description: metadata?.description,
+        breadcrumbs: page === "home"
+          ? []
+          : [
+              {
+                name: SEO_PAGE_METADATA[language].home.title,
+                url: absoluteUrl(origin, localizedPath("/", language)),
+              },
+              {
+                name: metadata?.title || SITE_NAME,
+                url: staticCanonicalUrl,
+              },
+            ],
+      })
+    : undefined;
   const fallback: InitialSeo = {
     title: metadata?.title || SITE_NAME,
     description: metadata?.description || "",
@@ -323,6 +346,7 @@ export async function getInitialSeo(req: Request): Promise<InitialSeo> {
     canonicalPath: normalizeSeoPathname(pathname),
     language,
     noIndex: !page || isNoIndexPath(pathname),
+    jsonLd: staticJsonLd,
   };
 
   if (!detailPath || !detailIdentifier) return fallback;
@@ -444,6 +468,7 @@ function getStaticEntries(origin: string): SitemapEntry[] {
   );
 }
 
+const LLMS_POST_LIMIT = 3;
 export function registerSeoRoutes(app: Express): void {
   app.get("/robots.txt", (req: Request, res: Response) => {
     const origin = getSiteOrigin(req);
@@ -453,11 +478,27 @@ export function registerSeoRoutes(app: Express): void {
       .send(buildRobotsTxt(absoluteUrl(origin, "/sitemap.xml")));
   });
 
-  app.get("/llms.txt", (req: Request, res: Response) => {
-    res
-      .type("text/plain")
-      .set("Cache-Control", "public, max-age=3600")
-      .send(buildLlmsTxt(getSiteOrigin(req)));
+  app.get("/llms.txt", async (req: Request, res: Response) => {
+    const origin = getSiteOrigin(req);
+    try {
+      const entries = await getPublicLlmsEntries(origin);
+      res
+        .type("text/plain")
+        .set("Cache-Control", "no-store")
+        .send(buildLlmsTxt(origin, entries));
+    } catch (error) {
+      // The AI guidance document remains valid and contains only official
+      // static pages when a content lookup is temporarily unavailable.
+      emitOperationalEvent("seo.operation", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "llms",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      res
+        .type("text/plain")
+        .set("Cache-Control", "no-store")
+        .send(buildLlmsTxt(origin));
+    }
   });
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
@@ -466,7 +507,7 @@ export function registerSeoRoutes(app: Express): void {
       const entries = [...getStaticEntries(origin), ...(await getPublicPostEntries(origin))];
       res
         .type("application/xml")
-        .set("Cache-Control", "public, max-age=900")
+        .set("Cache-Control", "no-store")
         .send(buildSitemapXml(entries));
     } catch (error) {
       emitOperationalEvent("seo.operation", "error", {
@@ -477,4 +518,47 @@ export function registerSeoRoutes(app: Express): void {
       res.status(503).type("text/plain").send("Sitemap temporarily unavailable");
     }
   });
+}
+
+async function getPublicLlmsEntries(origin: string): Promise<LlmsContentEntry[]> {
+  const entries: LlmsContentEntry[] = [];
+
+  for (const language of SEO_LANGUAGES) {
+    for (const postType of SITEMAP_POST_TYPES) {
+      const result = await storage.getPosts({
+        postType,
+        status: "published",
+        visibility: "public",
+        locale: language,
+        compact: true,
+        limit: LLMS_POST_LIMIT,
+        access: publicPostAccess,
+      });
+      for (const post of result.posts) {
+        if (!post.slug) continue;
+        // Do not label a fallback-language title as if it were translated.
+        // Detail pages may fall back for continuity, but llms.txt must remain
+        // explicit about which language its answer-source text represents.
+        const translation = post.translations.find(({ locale }) => locale === language);
+        if (!translation) continue;
+        const postPath = postType === "news" ? "news" : "events";
+        const eventDate = postType === "event"
+          ? parseEventDateTime(getMetaValue(post.meta || [], EVENT_META_KEYS.eventDate))
+          : null;
+        entries.push({
+          kind: postType,
+          language,
+          title: translation.seoTitle || translation.title || post.slug,
+          summary: translation.seoDescription || translation.excerpt || translation.subtitle || undefined,
+          date: postType === "event" ? eventDate || post.publishedAt : post.publishedAt,
+          url: absoluteUrl(
+            origin,
+            localizedPath(`/${postPath}/${encodeURIComponent(post.slug)}`, language),
+          ),
+        });
+      }
+    }
+  }
+
+  return entries;
 }

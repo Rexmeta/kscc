@@ -4,18 +4,18 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import ksccLogoPath from "@/assets/kscc_logo.webp";
 import {
   absoluteUrl,
+  buildStaticSeoJsonLd,
   getSeoPageKey,
   isNoIndexPath,
   localizedPath,
   normalizeSeoPathname,
+  NO_INDEX_PATH_PREFIXES,
   SEO_PAGE_METADATA,
   SEO_LANGUAGES,
   SITE_NAME,
-  SITE_NAME_EN,
   type SeoLanguage,
   type SeoPageKey,
 } from "@shared/seo";
-
 type JsonLd = Record<string, unknown> | Array<Record<string, unknown>>;
 
 export interface SeoBreadcrumb {
@@ -138,39 +138,18 @@ export function Seo({
 
     removeSeoJsonLd();
     if (!noIndex) {
-      if (page === "home") {
-        addJsonLd({
-          "@context": "https://schema.org",
-          "@type": "Organization",
-          "@id": `${origin}/#organization`,
-          name: SITE_NAME,
-          alternateName: SITE_NAME_EN,
-          url: canonicalUrl,
-          logo: resolvedImage,
-          areaServed: ["KR", "CN"],
-          knowsAbout: ["Korea-China trade", "investment", "economic exchange", "cultural exchange"],
-        });
-        addJsonLd({
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: SITE_NAME,
-          url: canonicalUrl,
-          inLanguage: language,
-          publisher: { "@id": `${origin}/#organization` },
-        });
-      }
-      if (breadcrumbs.length > 0) {
-        addJsonLd({
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          itemListElement: breadcrumbs.map((breadcrumb, index) => ({
-            "@type": "ListItem",
-            position: index + 1,
-            name: breadcrumb.name,
-            item: absoluteUrl(origin, localizedPath(breadcrumb.path, language)),
-          })),
-        });
-      }
+      const commonJsonLd = buildStaticSeoJsonLd({
+        origin,
+        language,
+        canonicalUrl,
+        name: resolvedTitle,
+        description: resolvedDescription,
+        breadcrumbs: breadcrumbs.map((breadcrumb) => ({
+          name: breadcrumb.name,
+          url: absoluteUrl(origin, localizedPath(breadcrumb.path, language)),
+        })),
+      });
+      for (const value of commonJsonLd) addJsonLd(value);
       if (jsonLd) {
         for (const value of Array.isArray(jsonLd) ? jsonLd : [jsonLd]) addJsonLd(value);
       }
@@ -198,7 +177,12 @@ export function RouteSeo() {
   const pathname = normalizeSeoPathname(location.split("?")[0] || "/");
   const page = getSeoPageKey(pathname);
   const isDetailPage = pathname.startsWith("/news/") || pathname.startsWith("/events/");
-  const noIndex = !page || isNoIndexPath(pathname);
+  const noIndex =
+    !page ||
+    isNoIndexPath(pathname) ||
+    NO_INDEX_PATH_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
 
   if (isDetailPage) return null;
 
@@ -209,7 +193,10 @@ export function RouteSeo() {
       noIndex={noIndex}
       breadcrumbs={
         page && page !== "home"
-          ? [{ name: SEO_PAGE_METADATA[language][page].title, path: pathname }]
+          ? [
+              { name: SEO_PAGE_METADATA[language].home.title, path: "/" },
+              { name: SEO_PAGE_METADATA[language][page].title, path: pathname },
+            ]
           : []
       }
     />

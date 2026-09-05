@@ -16,7 +16,15 @@ import { deletePost } from '@/lib/adminPostApi';
 import ShareButtons from '@/components/ShareButtons';
 import { queryKeys } from '@/lib/queryClient';
 import { Seo } from '@/components/Seo';
-import { absoluteUrl, localizedPath, SITE_NAME } from '@shared/seo';
+import {
+  absoluteUrl,
+  buildEventJsonLd,
+  isPubliclyIndexablePost,
+  localizedPath,
+  publicUrl,
+  SEO_DETAIL_BREADCRUMB_LABELS,
+  SITE_NAME,
+} from '@shared/seo';
 import { fetchJson } from '@/lib/queryClient';
 import { QueryState } from '@/components/QueryState';
 import { getEventRegistrationState } from '@/lib/eventRegistrationState';
@@ -158,32 +166,43 @@ export default function EventDetailPage() {
   const canonicalPath = `/events/${post.slug}`;
   const canonicalUrl = absoluteUrl(window.location.origin, localizedPath(canonicalPath, language));
   const eventImage = post.coverImage || eventMeta.images?.[0] || undefined;
-  const eventJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Event",
-    name: translation.seoTitle || translation.title || post.slug,
-    description: translation.seoDescription || translation.excerpt || "",
-    url: canonicalUrl,
-    image: eventImage
-      ? [absoluteUrl(window.location.origin, eventImage)]
-      : undefined,
-    startDate: eventMeta.eventDate?.toISOString(),
-    endDate: eventMeta.endDate?.toISOString(),
-    eventStatus: "https://schema.org/EventScheduled",
-    eventAttendanceMode: eventMeta.eventType === "online"
-      ? "https://schema.org/OnlineEventAttendanceMode"
-      : eventMeta.eventType === "hybrid"
-        ? "https://schema.org/MixedEventAttendanceMode"
-        : "https://schema.org/OfflineEventAttendanceMode",
-    location: eventMeta.eventType === "online"
-      ? { "@type": "VirtualLocation", url: canonicalUrl }
-      : { "@type": "Place", name: eventMeta.location || "KSCC event venue" },
-    organizer: { "@type": "Organization", name: SITE_NAME },
-    offers: eventMeta.fee !== null
-      ? { "@type": "Offer", price: eventMeta.fee, priceCurrency: "KRW", url: canonicalUrl }
-      : undefined,
-    inLanguage: language,
-  };
+  const validEventType = eventMeta.eventType === 'online'
+    || eventMeta.eventType === 'offline'
+    || eventMeta.eventType === 'hybrid'
+    ? eventMeta.eventType
+    : null;
+  const validEndDate = eventMeta.eventDate
+    && eventMeta.endDate
+    && eventMeta.endDate >= eventMeta.eventDate
+    ? eventMeta.endDate
+    : undefined;
+  const validLocation = eventMeta.location?.trim()
+    ? { '@type': 'Place', name: eventMeta.location.trim() }
+    : undefined;
+  const eventJsonLd = eventMeta.eventDate
+    ? buildEventJsonLd({
+        origin: window.location.origin,
+        language,
+        canonicalUrl,
+        name: translation.seoTitle || translation.title || post.slug,
+        description: translation.seoDescription || translation.excerpt || "",
+        image: publicUrl(window.location.origin, eventImage),
+        startDate: eventMeta.eventDate,
+        endDate: validEndDate,
+        eventStatus: "https://schema.org/EventScheduled",
+        eventAttendanceMode: validEventType === "online"
+          ? "https://schema.org/OnlineEventAttendanceMode"
+          : validEventType === "hybrid"
+            ? "https://schema.org/MixedEventAttendanceMode"
+            : validEventType === "offline"
+              ? "https://schema.org/OfflineEventAttendanceMode"
+              : undefined,
+        location: validEventType === 'online' ? undefined : validLocation,
+        price: typeof eventMeta.fee === 'number' && eventMeta.fee >= 0
+          ? eventMeta.fee
+          : undefined,
+      })
+    : undefined;
   
   const now = new Date();
   const isPastEvent = eventMeta.eventDate ? eventMeta.eventDate < now : false;
@@ -225,12 +244,12 @@ export default function EventDetailPage() {
         description={translation.seoDescription || translation.excerpt || ''}
         image={eventImage}
         canonicalPath={canonicalPath}
-        noIndex={post.status !== 'published' || post.visibility !== 'public'}
+        noIndex={!isPubliclyIndexablePost(post)}
         breadcrumbs={[
-          { name: t('events.title'), path: '/events' },
+          { name: SEO_DETAIL_BREADCRUMB_LABELS[language].events, path: '/events' },
           { name: translation.title || post.slug, path: canonicalPath },
         ]}
-        jsonLd={eventJsonLd}
+         jsonLd={eventJsonLd}
       />
       {/* Header */}
       <section className="bg-muted py-8">
