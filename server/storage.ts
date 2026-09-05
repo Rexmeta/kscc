@@ -17,7 +17,6 @@ import {
 import { randomUUID } from "node:crypto";
 import { db } from "./db";
 import { eq, desc, asc, and, or, like, ilike, gte, lte, gt, isNull, isNotNull, count, sql, inArray, ne } from "drizzle-orm";
-import bcrypt from "bcrypt";
 import {
   canReadPost,
   canManagePostType,
@@ -26,7 +25,12 @@ import {
 } from "./postAccess";
 import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
 import { hasPermission } from "./permissions";
-import { normalizeEmail } from "./auth";
+import {
+  hashPassword,
+  needsPasswordRehash,
+  normalizeEmail,
+  verifyPassword,
+} from "./auth";
 import type { ConsentPurpose } from "@shared/policies";
 import { parseEventDateTime } from "@shared/eventDateTime";
 import {
@@ -509,7 +513,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {
-    const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    const hashedPassword = await hashPassword(insertUser.password);
     const [user] = await db
       .insert(users)
       .values({
@@ -527,7 +531,7 @@ export class DatabaseStorage implements IStorage {
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
       // Create user
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await hashPassword(userData.password);
       const [user] = await tx
         .insert(users)
         .values({
@@ -556,7 +560,7 @@ export class DatabaseStorage implements IStorage {
     consents?: readonly ConsentEvidenceInput[],
   ): Promise<User> {
     return await db.transaction(async (tx) => {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await hashPassword(userData.password);
 
       const [user] = await tx
         .insert(users)
@@ -588,7 +592,7 @@ export class DatabaseStorage implements IStorage {
     consents?: readonly ConsentEvidenceInput[],
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = await hashPassword(userData.password);
 
       const [user] = await tx
         .insert(users)
@@ -868,7 +872,7 @@ export class DatabaseStorage implements IStorage {
           .insert(users)
           .values({
             email: normalizedEmail,
-            password: await bcrypt.hash(password, 10),
+            password: await hashPassword(password),
             name: "Administrator",
             role: "admin",
             userType: "staff",
@@ -931,7 +935,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async resetUserPassword(id: string, password: string): Promise<User | undefined> {
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const [user] = await db
       .update(users)
       .set({
@@ -948,8 +952,26 @@ export class DatabaseStorage implements IStorage {
     const user = await this.getUserByEmail(normalizeEmail(email));
     if (!user || !user.isActive) return undefined;
     
-    const isValid = await bcrypt.compare(password, user.password);
-    return isValid ? user : undefined;
+    const isValid = await verifyPassword(password, user.password);
+    if (!isValid) return undefined;
+
+    if (!needsPasswordRehash(user.password)) return user;
+
+    // Upgrade only the hash that was just verified. The conditional update is
+    // atomic, so a concurrent password change cannot be overwritten.
+    const upgradedHash = await hashPassword(password);
+    const [upgradedUser] = await db
+      .update(users)
+      .set({
+        password: upgradedHash,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(users.id, user.id),
+        eq(users.password, user.password),
+      ))
+      .returning();
+    return upgradedUser || user;
   }
 
   async revokeUserSessions(id: string): Promise<boolean> {
@@ -1119,7 +1141,7 @@ export class DatabaseStorage implements IStorage {
       const [user] = await tx.select().from(users).where(eq(users.id, id));
       if (!user) return false;
 
-      if (!(await bcrypt.compare(currentPassword, user.password))) {
+      if (!(await verifyPassword(currentPassword, user.password))) {
         throw new AccountClosureError("INVALID_REAUTH", "Current password is incorrect");
       }
 
@@ -1141,7 +1163,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      const anonymizedPassword = await bcrypt.hash(randomUUID(), 10);
+      const anonymizedPassword = await hashPassword(randomUUID());
       const anonymizedEmail = `closed-${randomUUID()}@invalid.local`;
       const now = new Date();
 

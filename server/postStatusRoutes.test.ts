@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import express from "express";
-import jwt from "jsonwebtoken";
 import { eq, inArray } from "drizzle-orm";
 import {
   permissions,
@@ -13,6 +12,7 @@ import {
   userMemberships,
   users,
 } from "@shared/schema";
+import { issueAuthToken } from "./auth";
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
@@ -118,7 +118,7 @@ test(
     app.use(express.json());
     const server = await registerRoutes(app);
 
-    const tokenFor = (id: string) => jwt.sign({ id }, process.env.SESSION_SECRET!);
+    const tokenFor = (id: string) => issueAuthToken({ id, sessionVersion: 0 }, process.env.SESSION_SECRET!);
     const request = async (
       path: string,
       userId: string,
@@ -346,7 +346,7 @@ test(
     const app = express();
     app.use(express.json());
     const server = await registerRoutes(app);
-    const tokenFor = (id: string) => jwt.sign({ id }, process.env.SESSION_SECRET!);
+    const tokenFor = (id: string) => issueAuthToken({ id, sessionVersion: 0 }, process.env.SESSION_SECRET!);
     const request = async (
       path: string,
       userId: string,

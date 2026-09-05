@@ -336,7 +336,9 @@ export class ObjectStorageService {
         payload.typ !== "managed-object-upload" ||
         payload.sub !== ownerId ||
         payload.objectPath !== objectPath ||
-        payload.purpose !== "managed-content"
+        payload.purpose !== "managed-content" ||
+        typeof payload.exp !== "number" ||
+        !Number.isSafeInteger(payload.exp)
       ) {
         return false;
       }

@@ -65,11 +65,13 @@ import {
 } from "@shared/policies";
 import {
   getTokenSessionVersion,
+  hashPassword,
   isUniqueViolation,
   issueAuthToken,
   normalizedEmailSchema,
   passwordSchema,
   toSafeUser,
+  verifyAuthToken,
 } from "./auth";
 import { emitOperationalEvent, getCorrelationId } from "./telemetry";
 const JWT_SECRET = process.env.SESSION_SECRET;
@@ -206,10 +208,14 @@ function toPublicMember(member: import("@shared/schema").Member) {
   return publicMember;
 }
 
-// Auth middleware
+function getBearerToken(req: Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader !== "string") return undefined;
+  const match = /^Bearer\s+([^\s]+)$/i.exec(authHeader);
+  return match?.[1];
+}
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = getBearerToken(req);
 
   if (!token) {
     return res.sendStatus(401);
@@ -217,7 +223,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
   let tokenPayload: string | jwt.JwtPayload;
   try {
-    tokenPayload = jwt.verify(token, JWT_SECRET!);
+    tokenPayload = verifyAuthToken(token, JWT_SECRET!);
   } catch (error: any) {
     emitOperationalEvent("auth.failure", "warn", {
       correlationId: getCorrelationId(req),
@@ -228,9 +234,6 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     return res.sendStatus(403);
   }
 
-  if (typeof tokenPayload === 'string' || typeof tokenPayload.id !== 'string') {
-    return res.sendStatus(403);
-  }
   const tokenSessionVersion = getTokenSessionVersion(tokenPayload);
   if (tokenSessionVersion === undefined) {
     return res.sendStatus(403);
@@ -261,29 +264,33 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 // Public endpoints may use a valid token for member-only content, but an
 // absent or invalid token should simply be treated as anonymous.
 export function optionalAuthenticateToken(req: Request, _res: Response, next: NextFunction) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = getBearerToken(req);
 
   if (!token) return next();
 
-  jwt.verify(token, JWT_SECRET!, async (err: any, user: any) => {
-    if (err || !user?.id || typeof user !== "object") return next();
-    const tokenSessionVersion = getTokenSessionVersion(user);
-    if (tokenSessionVersion === undefined) return next();
+  let tokenPayload: jwt.JwtPayload;
+  try {
+    tokenPayload = verifyAuthToken(token, JWT_SECRET!);
+  } catch {
+    return next();
+  }
 
-    try {
-      // Optional authentication still needs the current account state.
-      // Otherwise a demoted or deactivated account could retain access to
-      // member-only content through a stale token claim.
-      const dbUser = await storage.getUser(user.id);
+  const tokenSessionVersion = getTokenSessionVersion(tokenPayload);
+  if (tokenSessionVersion === undefined) return next();
+
+  // Optional authentication still needs the current account state.
+  // Otherwise a demoted or deactivated account could retain access to
+  // member-only content through a stale token claim.
+  void storage.getUser(tokenPayload.id)
+    .then((dbUser) => {
       if (dbUser?.isActive && (dbUser.sessionVersion ?? 0) === tokenSessionVersion) {
         req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
       }
-    } catch {
+    })
+    .catch(() => {
       // Fail closed for member content when the account cannot be loaded.
-    }
-    next();
-  });
+    })
+    .finally(() => next());
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -752,8 +759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updates.email) updateData.email = updates.email;
       if (updates.weixin !== undefined) updateData.weixin = updates.weixin;
       if (updates.newPassword) {
-        const bcrypt = await import('bcrypt');
-        updateData.password = await bcrypt.hash(updates.newPassword, 10);
+        updateData.password = await hashPassword(updates.newPassword);
       }
 
       const updatedUser = await storage.updateUser(req.user!.id, updateData);

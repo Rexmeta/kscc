@@ -4,6 +4,7 @@ import { after, test } from "node:test";
 import { PassThrough } from "node:stream";
 import express from "express";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
@@ -50,7 +51,13 @@ import {
   UserDeletionError,
 } from "./storage";
 import { EmailService } from "./email";
-import { issueAuthToken } from "./auth";
+import {
+  BCRYPT_WORK_FACTOR,
+  hashPassword,
+  issueAuthToken,
+  needsPasswordRehash,
+  verifyAuthToken,
+} from "./auth";
 import {
   isExecutiveManagementCategory,
   ORGANIZATION_CATEGORY_LABELS,
@@ -114,6 +121,50 @@ test("organization categories keep the public and admin contract in order", () =
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
 
+test("password hashing uses the target cost and identifies legacy hashes", async () => {
+  const currentHash = await hashPassword("password-policy-test");
+  assert.equal(bcrypt.getRounds(currentHash), BCRYPT_WORK_FACTOR);
+  assert.equal(needsPasswordRehash(currentHash), false);
+
+  const legacyHash = await bcrypt.hash("password-policy-test", BCRYPT_WORK_FACTOR - 2);
+  assert.equal(bcrypt.getRounds(legacyHash), BCRYPT_WORK_FACTOR - 2);
+  assert.equal(needsPasswordRehash(legacyHash), true);
+});
+
+test("account tokens require the pinned algorithm and required claims", () => {
+  const secret = `auth-token-test-${randomUUID()}`;
+  const validToken = issueAuthToken(
+    { id: randomUUID(), sessionVersion: 3 },
+    secret,
+  );
+  const validPayload = verifyAuthToken(validToken, secret);
+  assert.equal(validPayload.sv, 3);
+
+  const alternateAlgorithm = jwt.sign(
+    { id: validPayload.id, sv: 3 },
+    secret,
+    { algorithm: "HS384", expiresIn: "1h" },
+  );
+  assert.throws(() => verifyAuthToken(alternateAlgorithm, secret));
+
+  const missingIdentity = jwt.sign(
+    { sv: 3 },
+    secret,
+    { algorithm: "HS256", expiresIn: "1h" },
+  );
+  assert.throws(() => verifyAuthToken(missingIdentity, secret));
+
+  const missingExpiry = jwt.sign(
+    { id: validPayload.id, sv: 3 },
+    secret,
+    { algorithm: "HS256", noTimestamp: true },
+  );
+  assert.throws(() => verifyAuthToken(missingExpiry, secret));
+
+  const tampered = `${validToken.slice(0, -1)}${validToken.endsWith("a") ? "b" : "a"}`;
+  assert.throws(() => verifyAuthToken(tampered, secret));
+});
+
 test(
   "authentication lifecycle normalizes identities and revokes old credentials",
   { skip: !databaseAvailable },
@@ -144,6 +195,10 @@ test(
       userType: "staff",
     });
     let consentedRegistrationUserId: string | undefined;
+    await db
+      .update(users)
+      .set({ password: await bcrypt.hash("initial-password", BCRYPT_WORK_FACTOR - 2) })
+      .where(eq(users.id, user.id));
 
     const [{ registerRoutes }] = await Promise.all([import("./routes")]);
     const app = express();
@@ -268,11 +323,68 @@ test(
       const loginBody = login.body as { user: Record<string, unknown>; token: string };
       assert.equal(loginBody.user.email, profileEmail);
       assert.equal("password" in loginBody.user, false);
+      assert.equal(
+        bcrypt.getRounds((await storage.getUser(user.id))!.password),
+        BCRYPT_WORK_FACTOR,
+      );
       const loginClaims = jwt.decode(loginBody.token) as Record<string, unknown>;
       assert.equal(loginClaims.id, user.id);
       assert.equal(typeof loginClaims.sv, "number");
       assert.equal("email" in loginClaims, false);
       assert.equal("role" in loginClaims, false);
+      assert.equal((await request("/api/auth/me", { token: loginBody.token })).status, 200);
+      assert.equal(
+        (await request("/api/auth/me", {
+          token: jwt.sign(
+            { id: user.id, sv: (user.sessionVersion ?? 0) + 2 },
+            process.env.SESSION_SECRET!,
+            { algorithm: "HS256", expiresIn: "1h" },
+          ),
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/auth/me", {
+          token: jwt.sign(
+            { id: user.id, sv: user.sessionVersion ?? 0 },
+            process.env.SESSION_SECRET!,
+            { algorithm: "HS384", expiresIn: "1h" },
+          ),
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/auth/me", {
+          token: jwt.sign(
+            { sv: user.sessionVersion ?? 0 },
+            process.env.SESSION_SECRET!,
+            { algorithm: "HS256", expiresIn: "1h" },
+          ),
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/auth/me", {
+          token: `${loginBody.token.slice(0, -1)}${loginBody.token.endsWith("a") ? "b" : "a"}`,
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/auth/me", {
+          token: jwt.sign(
+            { id: user.id, sv: user.sessionVersion ?? 0 },
+            process.env.SESSION_SECRET!,
+            { algorithm: "HS256", expiresIn: -1 },
+          ),
+        })).status,
+        403,
+      );
+      assert.equal(
+        (await request("/api/posts?postType=news", {
+          token: "not-a-jwt",
+        })).status,
+        200,
+      );
 
       const duplicateRegistration = await request("/api/auth/register", {
         method: "POST",
@@ -830,6 +942,20 @@ test("managed object intents bind the caller and path, and private reads are not
       { expiresIn: -1 },
     );
     assert.equal(service.verifyObjectUploadIntent(expiredIntent, ownerId, objectPath), false);
+      const alternateAlgorithmIntent = jwt.sign(
+        {
+          typ: "managed-object-upload",
+          sub: ownerId,
+          objectPath,
+          purpose: "managed-content",
+        },
+        process.env.SESSION_SECRET,
+        { algorithm: "HS384", expiresIn: "15m" },
+      );
+      assert.equal(
+        service.verifyObjectUploadIntent(alternateAlgorithmIntent, ownerId, objectPath),
+        false,
+      );
     assert.equal(canMutateObjectAcl({
       ownerId,
       existingOwner: ownerId,
@@ -1881,9 +2007,9 @@ test(
     const app = express();
     app.use(express.json());
     const server = await registerRoutes(app);
-    const adminToken = jwt.sign({ id: adminId }, process.env.SESSION_SECRET!);
-    const memberToken = jwt.sign({ id: memberId }, process.env.SESSION_SECRET!);
-    const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
+    const adminToken = issueAuthToken({ id: adminId, sessionVersion: 0 }, process.env.SESSION_SECRET!);
+    const memberToken = issueAuthToken({ id: memberId, sessionVersion: 0 }, process.env.SESSION_SECRET!);
+    const operatorToken = issueAuthToken({ id: operator.id, sessionVersion: 0 }, process.env.SESSION_SECRET!);
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -2116,7 +2242,12 @@ test(
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
       const invalidIdResponse = await fetch(`${baseUrl}/api/inquiries/not-an-uuid`, {
-        headers: { Authorization: `Bearer ${jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!)}` },
+        headers: {
+          Authorization: `Bearer ${issueAuthToken(
+            { id: adminUserId, sessionVersion: 0 },
+            process.env.SESSION_SECRET!,
+          )}`,
+        },
       });
       assert.equal(invalidIdResponse.status, 400);
 
@@ -2591,7 +2722,7 @@ test(
     const app = express();
     app.use(express.json());
     const server = await registerRoutes(app);
-    const tokenFor = (id: string) => jwt.sign({ id }, process.env.SESSION_SECRET!);
+    const tokenFor = (id: string) => issueAuthToken({ id, sessionVersion: 0 }, process.env.SESSION_SECRET!);
     const request = (
       path: string,
       token: string,
@@ -4020,7 +4151,7 @@ test(
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-      const adminToken = jwt.sign({ id: adminUserId }, process.env.SESSION_SECRET!);
+      const adminToken = issueAuthToken({ id: adminUserId, sessionVersion: 0 }, process.env.SESSION_SECRET!);
       const request = async (
         path: string,
         options: { token?: string; method?: string; body?: unknown } = {},
@@ -4312,9 +4443,9 @@ test(
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-      const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
-      const noPermissionToken = jwt.sign({ id: noPermissionOperator!.id }, process.env.SESSION_SECRET!);
-      const memberToken = jwt.sign({ id: regularMember!.id }, process.env.SESSION_SECRET!);
+      const operatorToken = issueAuthToken(operator, process.env.SESSION_SECRET!);
+      const noPermissionToken = issueAuthToken(noPermissionOperator!, process.env.SESSION_SECRET!);
+      const memberToken = issueAuthToken(regularMember!, process.env.SESSION_SECRET!);
       const request = async (
         path: string,
         options: { token?: string; method?: string; body?: unknown } = {},
@@ -4583,10 +4714,10 @@ test(
         return { status: response.status, body: await response.json() };
       };
 
-      const ownerToken = jwt.sign({ id: owner.id }, process.env.SESSION_SECRET!);
-      const otherOwnerToken = jwt.sign({ id: otherOwner.id }, process.env.SESSION_SECRET!);
-      const adminToken = jwt.sign({ id: admin.id }, process.env.SESSION_SECRET!);
-      const operatorToken = jwt.sign({ id: operator.id }, process.env.SESSION_SECRET!);
+      const ownerToken = issueAuthToken(owner, process.env.SESSION_SECRET!);
+      const otherOwnerToken = issueAuthToken(otherOwner, process.env.SESSION_SECRET!);
+      const adminToken = issueAuthToken(admin, process.env.SESSION_SECRET!);
+      const operatorToken = issueAuthToken(operator, process.env.SESSION_SECRET!);
       const newProfile = {
         companyName: "Self Registered Company",
         industry: "Testing",
