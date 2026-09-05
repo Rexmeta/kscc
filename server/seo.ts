@@ -7,8 +7,9 @@ import {
   getLanguageFromUrl,
   getSeoPageKey,
   INDEXABLE_STATIC_PATHS,
+  isNoIndexPath,
   localizedPath,
-  NO_INDEX_PATH_PREFIXES,
+  normalizeSeoPathname,
   SEO_LANGUAGES,
   SEO_PAGE_METADATA,
   SITE_LOGO_PATH,
@@ -264,12 +265,6 @@ function buildSeoHead(options: {
   ].join("\n");
 }
 
-function isNoIndexPath(pathname: string): boolean {
-  return !pathname || NO_INDEX_PATH_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
-
 function getRequestPathname(req: Request): string {
   const requestUrl = req.originalUrl || req.url;
   if (!requestUrl) return req.path || "/";
@@ -325,7 +320,7 @@ export async function getInitialSeo(req: Request): Promise<InitialSeo> {
     description: metadata?.description || "",
     image: absoluteUrl(origin, SITE_LOGO_PATH),
     type: "website",
-    canonicalPath: pathname,
+    canonicalPath: normalizeSeoPathname(pathname),
     language,
     noIndex: !page || isNoIndexPath(pathname),
   };
@@ -378,9 +373,13 @@ export async function renderSeoDocument(req: Request, template: string): Promise
   });
   const replacement = `${SEO_HEAD_START}\n${head}\n${SEO_HEAD_END}`;
   const markerPattern = new RegExp(`${SEO_HEAD_START}[\\s\\S]*?${SEO_HEAD_END}`);
-  return markerPattern.test(template)
+  const documentWithSeoHead = markerPattern.test(template)
     ? template.replace(markerPattern, replacement)
     : template.replace("</head>", `${replacement}\n</head>`);
+  return documentWithSeoHead.replace(
+    /<html(\s[^>]*)?\slang="[^"]*"/i,
+    (_match, attributes = "") => `<html${attributes} lang="${seo.language}"`,
+  );
 }
 
 function postLocales(post: { primaryLocale: string; translations: Array<{ locale: string }> }): SeoLanguage[] {

@@ -4,7 +4,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import ksccLogoPath from "@/assets/kscc_logo.webp";
 import {
   absoluteUrl,
+  getSeoPageKey,
+  isNoIndexPath,
   localizedPath,
+  normalizeSeoPathname,
   SEO_PAGE_METADATA,
   SEO_LANGUAGES,
   SITE_NAME,
@@ -52,7 +55,7 @@ function upsertLink(rel: string, href: string, extra: Record<string, string> = {
   if (!element) {
     element = document.createElement("link");
     element.rel = rel;
-  Object.entries(extra).forEach(([key, value]) => element!.setAttribute(key, value));
+    Object.entries(extra).forEach(([key, value]) => element!.setAttribute(key, value));
     document.head.appendChild(element);
   }
   element.href = href;
@@ -88,7 +91,7 @@ export function Seo({
 }: SeoProps) {
   const { language } = useLanguage();
   const [location] = useLocation();
-  const pathname = canonicalPath || location.split("?")[0] || "/";
+  const pathname = normalizeSeoPathname(canonicalPath || location.split("?")[0] || "/");
   const metadata = page ? SEO_PAGE_METADATA[language][page] : undefined;
   const resolvedTitle = title || metadata?.title || SITE_NAME;
   const resolvedDescription = description || metadata?.description || "";
@@ -189,37 +192,19 @@ export function Seo({
   return null;
 }
 
-const STATIC_ROUTE_PAGES: Record<string, SeoPageKey> = {
-  "/": "home",
-  "/about": "about",
-  "/organization": "organization",
-  "/news": "news",
-  "/events": "events",
-  "/members": "members",
-  "/resources": "resources",
-  "/contact": "contact",
-  "/privacy": "privacy",
-  "/terms": "terms",
-};
-
 export function RouteSeo() {
   const [location] = useLocation();
   const { language } = useLanguage();
-  const pathname = location.split("?")[0] || "/";
-  const page = STATIC_ROUTE_PAGES[pathname];
+  const pathname = normalizeSeoPathname(location.split("?")[0] || "/");
+  const page = getSeoPageKey(pathname);
   const isDetailPage = pathname.startsWith("/news/") || pathname.startsWith("/events/");
-  const noIndex =
-    !page &&
-    !isDetailPage ||
-    ["/admin", "/dashboard", "/login", "/register"].some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    );
+  const noIndex = !page || isNoIndexPath(pathname);
 
   if (isDetailPage) return null;
 
   return (
     <Seo
-      page={page}
+      page={page || undefined}
       canonicalPath={pathname}
       noIndex={noIndex}
       breadcrumbs={

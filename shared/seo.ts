@@ -11,6 +11,7 @@ export type SeoPageKey =
   | "organization"
   | "news"
   | "events"
+  | "partners"
   | "members"
   | "resources"
   | "contact"
@@ -51,6 +52,11 @@ export const SEO_PAGE_METADATA: Record<
       title: "행사 일정 | 한국 사천-충칭 총상회",
       description:
         "한국 사천-충칭 총상회의 세미나, 네트워킹, 문화 교류 등 예정된 행사를 확인하고 신청할 수 있습니다.",
+    },
+    partners: {
+      title: "협력 파트너 | 한국 사천-충칭 총상회",
+      description:
+        "한국 사천-충칭 총상회가 확인한 한국과 사천·충칭 지역의 공식 협력 파트너와 교류 채널을 소개합니다.",
     },
     members: {
       title: "회원사 디렉토리 | 한국 사천-충칭 총상회",
@@ -102,6 +108,11 @@ export const SEO_PAGE_METADATA: Record<
       description:
         "Explore seminars, networking events, and cultural exchange programs hosted by KSCC.",
     },
+    partners: {
+      title: "Partners | Korea-Sichuan-Chongqing Chamber",
+      description:
+        "Meet the Korea-Sichuan-Chongqing Chamber's trusted partners and discover official channels for Korea-Sichuan-Chongqing exchange.",
+    },
     members: {
       title: "Member Directory | Korea-Sichuan-Chongqing Chamber",
       description:
@@ -149,6 +160,10 @@ export const SEO_PAGE_METADATA: Record<
       title: "活动日程 | 韩国四川-重庆总商会",
       description: "了解韩国四川-重庆总商会举办的研讨会、交流活动和文化项目。",
     },
+    partners: {
+      title: "合作伙伴 | 韩国四川-重庆总商会",
+      description: "了解韩国四川-重庆总商会甄选的合作伙伴及韩国与川渝地区的官方交流渠道。",
+    },
     members: {
       title: "会员名录 | 韩国四川-重庆总商会",
       description: "浏览韩国四川-重庆总商会公开的会员企业和合作机构。",
@@ -177,6 +192,7 @@ const PATH_TO_PAGE: Array<[string, SeoPageKey]> = [
   ["/organization", "organization"],
   ["/news", "news"],
   ["/events", "events"],
+  ["/partners", "partners"],
   ["/members", "members"],
   ["/resources", "resources"],
   ["/contact", "contact"],
@@ -190,8 +206,7 @@ export const INDEXABLE_STATIC_PATHS = [
   "/organization",
   "/news",
   "/events",
-  "/members",
-  "/resources",
+  "/partners",
   "/contact",
   "/privacy",
   "/terms",
@@ -202,6 +217,8 @@ export const NO_INDEX_PATH_PREFIXES = [
   "/dashboard",
   "/login",
   "/register",
+  "/members",
+  "/resources",
 ] as const;
 
 export function isSeoLanguage(value: string | null | undefined): value is SeoLanguage {
@@ -209,14 +226,25 @@ export function isSeoLanguage(value: string | null | undefined): value is SeoLan
 }
 
 export function getLanguageFromUrl(url: string): SeoLanguage {
-  const query = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
-  const language = new URLSearchParams(query).get("lang");
+  let language: string | null = null;
+  try {
+    language = new URL(url, "http://localhost").searchParams.get("lang");
+  } catch {
+    language = null;
+  }
   return isSeoLanguage(language) ? language : "ko";
 }
 
+export function normalizeSeoPathname(pathname: string): string {
+  if (!pathname || pathname === "/") return "/";
+  const withLeadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  const normalized = withLeadingSlash.replace(/\/+$/, "");
+  return normalized || "/";
+}
+
 export function getSeoPageKey(pathname: string): SeoPageKey | null {
-  if (pathname === "/") return "home";
-  const normalized = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const normalized = normalizeSeoPathname(pathname);
+  if (normalized === "/") return "home";
   const exact = PATH_TO_PAGE.find(([path]) => path === normalized);
   if (exact) return exact[1];
   if (normalized.startsWith("/news/")) return "news";
@@ -225,7 +253,14 @@ export function getSeoPageKey(pathname: string): SeoPageKey | null {
 }
 
 export function localizedPath(pathname: string, language: SeoLanguage): string {
-  return `${pathname}?lang=${language}`;
+  return `${normalizeSeoPathname(pathname)}?lang=${language}`;
+}
+
+export function isNoIndexPath(pathname: string): boolean {
+  const normalized = normalizeSeoPathname(pathname);
+  return NO_INDEX_PATH_PREFIXES.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
+  );
 }
 
 export function absoluteUrl(origin: string, pathname: string): string {
@@ -298,8 +333,7 @@ export function buildLlmsTxt(origin: string): string {
     link("/organization", "Organization"),
     link("/news", "News and activities"),
     link("/events", "Events"),
-    link("/members", "Public member directory"),
-    link("/resources", "Public resources"),
+    link("/partners", "Partners"),
     link("/contact", "Contact"),
     "",
     "## Content guidance",

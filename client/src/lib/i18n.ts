@@ -1,3 +1,5 @@
+import { getLanguageFromUrl } from '@shared/seo';
+
 export type Language = 'ko' | 'en' | 'zh';
 
 export interface TranslationKeys {
@@ -1157,9 +1159,9 @@ export function setLanguage(lang: Language, updateUrl = true): void {
 export function initializeLanguage(): void {
   const saved = localStorage.getItem('language') as Language;
   const browser = navigator.language.split('-')[0] as Language;
-  const fromUrl = new URLSearchParams(window.location.search).get('lang') as Language;
-  const detected = translations[fromUrl]
-    ? fromUrl
+  const requestedLanguage = new URLSearchParams(window.location.search).get('lang');
+  const detected = requestedLanguage !== null
+    ? getLanguageFromUrl(window.location.href)
     : saved || (translations[browser] ? browser : 'ko');
   setLanguage(detected, false);
 }

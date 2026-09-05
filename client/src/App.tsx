@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ComponentType } from "react";
-import { Redirect, Switch, Route } from "wouter";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { Redirect, Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -89,16 +89,32 @@ function Router() {
 
 function AppContent() {
   const { language } = useLanguage();
-  
+
   return (
     <TooltipProvider>
       <AuthProvider>
         <Toaster />
+        <LanguageUrlSync />
         <RouteSeo />
         <Router key={language} />
       </AuthProvider>
     </TooltipProvider>
   );
+}
+
+function LanguageUrlSync() {
+  const [location] = useLocation();
+  const { language } = useLanguage();
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("lang") !== language) {
+      url.searchParams.set("lang", language);
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [language, location]);
+
+  return null;
 }
 
 function App() {
