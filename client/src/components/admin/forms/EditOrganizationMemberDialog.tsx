@@ -21,6 +21,7 @@ import {
   type OrganizationMemberFormValues,
 } from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
+import { apiRequest } from '@/lib/queryClient';
 
 export function EditOrganizationMemberDialog({
   member,
@@ -91,20 +92,12 @@ export function EditOrganizationMemberDialog({
 
   const updateMutation = useMutation({
     mutationFn: async (data: z.infer<typeof organizationMemberSchema>) => {
-      const response = await fetch(`/api/organization-members/${member.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          ...data,
-          category,
-          photo,
-          isActive,
-        })
+      const response = await apiRequest('PUT', `/api/organization-members/${member.id}`, {
+        ...data,
+        category,
+        photo,
+        isActive,
       });
-      if (!response.ok) throw new Error('Failed to update');
       return response.json();
     },
     onSuccess: () => {
@@ -118,19 +111,11 @@ export function EditOrganizationMemberDialog({
   });
 
   const setPhotoPublicAcl = async (objectPath: string) => {
-    const token = localStorage.getItem('token');
     try {
-      await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await apiRequest('PUT', '/api/images', {
           imageURL: objectPath,
           visibility: 'public',
           ...(window.__lastUploadIntent ? { uploadIntent: window.__lastUploadIntent } : {}),
-        }),
       });
     } catch (e) {
       console.error('Failed to set photo ACL:', e);

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 const inquirySchema = z.object({
   subject: z.string().trim().min(1, '제목을 입력해주세요').max(200, '제목은 200자 이내로 입력해주세요'),
@@ -37,12 +38,7 @@ export function CreateInquiryForm({ onSuccess }: { onSuccess: () => void }) {
 
   const submitMutation = useMutation({
     mutationFn: async (data: InquiryFormValues) => {
-      const response = await fetch('/api/inquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, category })
-      });
-      if (!response.ok) throw new Error('Failed to create inquiry');
+      const response = await apiRequest('POST', '/api/inquiries', { ...data, category });
       return response.json();
     },
     onSuccess: () => {

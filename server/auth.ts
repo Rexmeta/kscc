@@ -2,8 +2,12 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 import type { User, UserProfileDto } from "@shared/schema";
+import { randomBytes } from "node:crypto";
+import type { Request, Response } from "express";
 
 export const AUTH_TOKEN_TTL = "7d";
+
+export const AUTH_SESSION_COOKIE = "auth_session";
 export const AUTH_TOKEN_ALGORITHM = "HS256" as const;
 
 /**
@@ -130,4 +134,92 @@ export function isUniqueViolation(error: unknown): boolean {
     && error !== null
     && "code" in error
     && (error as { code?: unknown }).code === "23505";
+}
+
+export const AUTH_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const CSRF_COOKIE = "csrf_token";
+
+export function getCsrfToken(req: Request): string | undefined {
+  return readCookie(req, CSRF_COOKIE);
+}
+
+export function setAuthSessionCookie(res: Response, token: string): void {
+  res.append("Set-Cookie", serializeCookie(AUTH_SESSION_COOKIE, token, {
+    httpOnly: true,
+    maxAge: AUTH_SESSION_MAX_AGE_MS,
+    path: "/",
+    sameSite: "Lax",
+    secure: isProduction(),
+  }));
+}
+
+export function issueCsrfToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function ensureCsrfCookie(req: Request, res: Response, next: () => void): void {
+  if (!getCsrfToken(req)) {
+    setCsrfCookie(res, issueCsrfToken());
+  }
+  next();
+}
+
+export function getSessionToken(req: Request): string | undefined {
+  return readCookie(req, AUTH_SESSION_COOKIE);
+}
+
+export function clearAuthSessionCookie(res: Response): void {
+  res.append("Set-Cookie", serializeCookie(AUTH_SESSION_COOKIE, "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+    sameSite: "Lax",
+    secure: isProduction(),
+  }));
+}
+
+function serializeCookie(
+  name: string,
+  value: string,
+  options: { httpOnly?: boolean; maxAge?: number; path: string; sameSite: "Lax" | "Strict"; secure: boolean },
+): string {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    `Path=${options.path}`,
+    `SameSite=${options.sameSite}`,
+  ];
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure) parts.push("Secure");
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge / 1000))}`);
+  return parts.join("; ");
+}
+
+export function readCookie(req: Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+
+  for (const entry of header.split(";")) {
+    const separator = entry.indexOf("=");
+    if (separator === -1) continue;
+    if (entry.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(entry.slice(separator + 1).trim());
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+export function setCsrfCookie(res: Response, token: string): void {
+  res.append("Set-Cookie", serializeCookie(CSRF_COOKIE, token, {
+    path: "/",
+    sameSite: "Lax",
+    secure: isProduction(),
+  }));
+}
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
 }

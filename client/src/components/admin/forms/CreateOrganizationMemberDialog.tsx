@@ -19,6 +19,7 @@ import {
   type OrganizationMemberFormValues,
 } from '../adminSchemas';
 import { getUploadParameters } from '../uploadHelpers';
+import { apiRequest } from '@/lib/queryClient';
 
 export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = false }: { onSuccess: () => void; executivesOnly?: boolean }) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -48,20 +49,12 @@ export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = fal
 
   const createMutation = useMutation({
     mutationFn: async (data: z.infer<typeof organizationMemberSchema>) => {
-      const response = await fetch('/api/organization-members', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          ...data,
-          category: executivesOnly ? 'executives' : category,
-          photo,
-          isActive,
-        })
+      const response = await apiRequest('POST', '/api/organization-members', {
+        ...data,
+        category: executivesOnly ? 'executives' : category,
+        photo,
+        isActive,
       });
-      if (!response.ok) throw new Error('Failed to create');
       return response.json();
     },
     onSuccess: () => {
@@ -79,19 +72,11 @@ export function CreateOrganizationMemberDialog({ onSuccess, executivesOnly = fal
   });
 
   const setPhotoPublicAcl = async (objectPath: string) => {
-    const token = localStorage.getItem('token');
     try {
-      await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await apiRequest('PUT', '/api/images', {
           imageURL: objectPath,
           visibility: 'public',
           ...(window.__lastUploadIntent ? { uploadIntent: window.__lastUploadIntent } : {}),
-        }),
       });
     } catch (e) {
       console.error('Failed to set photo ACL:', e);

@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import type { UploadResult } from '@uppy/core';
+import { apiRequest } from '@/lib/queryClient';
 
 interface RichTextEditorProps {
   value: string;
@@ -46,19 +47,11 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
     objectPath: string,
     uploadIntent = window.__lastUploadIntent,
   ) => {
-    const token = localStorage.getItem('token');
     try {
-      await fetch('/api/images', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      await apiRequest('PUT', '/api/images', {
           imageURL: objectPath,
           visibility: 'public',
           ...(uploadIntent ? { uploadIntent } : {}),
-        }),
       });
     } catch (e) {
       console.error('Failed to set image ACL:', e);
@@ -66,17 +59,9 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   };
 
   const handleGetUploadParameters = useCallback(async (file: { type?: string }) => {
-    const token = localStorage.getItem('token');
     console.log('[RichTextEditor] handleGetUploadParameters called for file');
     console.log('[RichTextEditor] Current editorRef:', !!editorRef.current);
-    const response = await fetch('/api/objects/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
+    const response = await apiRequest('POST', '/api/objects/upload', {});
     const data = await response.json();
     window.__lastUploadObjectPath = data.objectPath;
     window.__lastUploadIntent = data.uploadIntent;

@@ -202,7 +202,7 @@ export class ObjectStorageService {
           : {
               "Pragma": "no-cache",
               "Expires": "0",
-              "Vary": "Authorization",
+              "Vary": "Cookie",
             }),
       });
 

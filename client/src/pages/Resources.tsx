@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FileText, Download, Lock, File, Presentation, BookOpen, Filter, RefreshCw, Plus, Eye, Calendar, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { queryKeys } from '@/lib/queryClient';
@@ -142,16 +143,9 @@ export default function ResourcesPage() {
       
       // Increment download count
       if (isAuthenticated) {
-        await fetch(`/api/posts/${resource.id}/meta/increment`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({
+        await apiRequest('POST', `/api/posts/${resource.id}/meta/increment`, {
             key: 'resource.downloadCount',
             amount: 1
-          })
         });
       }
       

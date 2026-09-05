@@ -64,10 +64,15 @@ import {
   registrationConsentSchema,
 } from "@shared/policies";
 import {
+  clearAuthSessionCookie,
+  ensureCsrfCookie,
+  getCsrfToken,
+  getSessionToken,
   getTokenSessionVersion,
   hashPassword,
   isUniqueViolation,
   issueAuthToken,
+  setAuthSessionCookie,
   normalizedEmailSchema,
   passwordSchema,
   toSafeUser,
@@ -77,14 +82,6 @@ import { emitOperationalEvent, getCorrelationId } from "./telemetry";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
-}
-
-function getRouteParam(req: Request, name: string): string {
-  const value = req.params[name];
-  if (typeof value !== "string") {
-    throw new Error(`Expected a single route parameter for ${name}`);
-  }
-  return value;
 }
 
 const memberQuerySchema = z.object({
@@ -208,20 +205,15 @@ function toPublicMember(member: import("@shared/schema").Member) {
   return publicMember;
 }
 
-function getBearerToken(req: Request): string | undefined {
-  const authHeader = req.headers.authorization;
-  if (typeof authHeader !== "string") return undefined;
-  const match = /^Bearer\s+([^\s]+)$/i.exec(authHeader);
-  return match?.[1];
-}
+const CSRF_HEADER = "x-csrf-token";
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
-  const token = getBearerToken(req);
+  const token = getSessionToken(req);
 
   if (!token) {
     return res.sendStatus(401);
   }
 
-  let tokenPayload: string | jwt.JwtPayload;
+  let tokenPayload: jwt.JwtPayload;
   try {
     tokenPayload = verifyAuthToken(token, JWT_SECRET!);
   } catch (error: any) {
@@ -231,11 +223,13 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       reason: "invalid_token",
       errorType: error instanceof Error ? error.name : "UnknownError",
     });
+    clearAuthSessionCookie(res);
     return res.sendStatus(403);
   }
 
   const tokenSessionVersion = getTokenSessionVersion(tokenPayload);
   if (tokenSessionVersion === undefined) {
+    clearAuthSessionCookie(res);
     return res.sendStatus(403);
   }
 
@@ -245,6 +239,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     // deactivations effective immediately.
     const dbUser = await storage.getUser(tokenPayload.id);
     if (!dbUser || !dbUser.isActive || (dbUser.sessionVersion ?? 0) !== tokenSessionVersion) {
+      clearAuthSessionCookie(res);
       return res.sendStatus(403);
     }
 
@@ -257,14 +252,15 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       reason: "authorization_unavailable",
       errorType: error instanceof Error ? error.name : "UnknownError",
     });
+    clearAuthSessionCookie(res);
     return res.sendStatus(403);
   }
 }
 
 // Public endpoints may use a valid token for member-only content, but an
 // absent or invalid token should simply be treated as anonymous.
-export function optionalAuthenticateToken(req: Request, _res: Response, next: NextFunction) {
-  const token = getBearerToken(req);
+export async function optionalAuthenticateToken(req: Request, res: Response, next: NextFunction) {
+  const token = getSessionToken(req);
 
   if (!token) return next();
 
@@ -272,25 +268,31 @@ export function optionalAuthenticateToken(req: Request, _res: Response, next: Ne
   try {
     tokenPayload = verifyAuthToken(token, JWT_SECRET!);
   } catch {
+    clearAuthSessionCookie(res);
     return next();
   }
 
   const tokenSessionVersion = getTokenSessionVersion(tokenPayload);
-  if (tokenSessionVersion === undefined) return next();
+  if (tokenSessionVersion === undefined) {
+    clearAuthSessionCookie(res);
+    return next();
+  }
 
-  // Optional authentication still needs the current account state.
-  // Otherwise a demoted or deactivated account could retain access to
-  // member-only content through a stale token claim.
-  void storage.getUser(tokenPayload.id)
-    .then((dbUser) => {
-      if (dbUser?.isActive && (dbUser.sessionVersion ?? 0) === tokenSessionVersion) {
-        req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
-      }
-    })
-    .catch(() => {
-      // Fail closed for member content when the account cannot be loaded.
-    })
-    .finally(() => next());
+  try {
+    // Optional authentication still needs the current account state.
+    // Otherwise a demoted or deactivated account could retain access to
+    // member-only content through a stale token claim.
+    const dbUser = await storage.getUser(tokenPayload.id);
+    if (dbUser?.isActive && (dbUser.sessionVersion ?? 0) === tokenSessionVersion) {
+      req.user = { id: dbUser.id, email: dbUser.email, role: dbUser.role };
+    } else {
+      clearAuthSessionCookie(res);
+    }
+  } catch {
+    // Fail closed for member content when the account cannot be loaded.
+    clearAuthSessionCookie(res);
+  }
+  next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -337,6 +339,9 @@ function requireAdminOrOperatorPermission(permission: string) {
   };
 }
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.use(ensureCsrfCookie);
+  app.use(csrfProtection);
+
   // Mount Posts API router
   app.use("/api/posts", postsRouter);
   
@@ -413,8 +418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const token = issueAuthToken(user, JWT_SECRET!);
-      
-      res.json({ user: toSafeUser(user), token });
+      setAuthSessionCookie(res, token);
+      res.json({ user: toSafeUser(user) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: error.errors[0].message });
@@ -444,7 +449,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = issueAuthToken(user, JWT_SECRET!);
-      res.json({ user: toSafeUser(user), token });
+      setAuthSessionCookie(res, token);
+      res.json({ user: toSafeUser(user) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         emitOperationalEvent("auth.failure", "warn", {
@@ -470,6 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!revoked) {
         return res.sendStatus(401);
       }
+      clearAuthSessionCookie(res);
       return res.status(204).send();
     } catch {
       return res.status(500).json({ message: "Unable to log out" });
@@ -759,7 +766,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updates.email) updateData.email = updates.email;
       if (updates.weixin !== undefined) updateData.weixin = updates.weixin;
       if (updates.newPassword) {
-        updateData.password = await hashPassword(updates.newPassword);
+        const bcrypt = await import('bcrypt');
+        updateData.password = await bcrypt.hash(updates.newPassword, 10);
       }
 
       const updatedUser = await storage.updateUser(req.user!.id, updateData);
@@ -768,6 +776,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update profile" });
       }
 
+      if (updates.email || updates.newPassword) {
+        // updateUser already increments sessionVersion for email/password
+        // changes; clear the browser's now-invalid cookie as well.
+        clearAuthSessionCookie(res);
+      }
       res.json({ ...toSafeUser(updatedUser) });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -923,6 +936,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
+      if (userId === req.user!.id) {
+        clearAuthSessionCookie(res);
+      }
       res.json({ message: "User password reset successfully" });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -961,12 +977,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updatedUser = await storage.updateUserAuthorization(
-        getRouteParam(req, "id"),
+        req.params.id,
         updateData,
         accountRole,
       );
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
+      }
+      if (req.params.id === req.user!.id) {
+        clearAuthSessionCookie(res);
       }
       
       res.json({ ...toSafeUser(updatedUser) });
@@ -1016,7 +1035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { tierId, roleId } = membershipUpdateSchema.parse(req.body);
-      const userId = getRouteParam(req, "id");
+      const userId = req.params.id;
       
       // Validate userId is UUID
       const userIdSchema = z.string().uuid();
@@ -1025,6 +1044,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUserMembership(userId, tierId, roleId);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
+      }
+      if (userId === req.user!.id) {
+        clearAuthSessionCookie(res);
       }
 
       // Get updated membership info
@@ -1238,13 +1260,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/members/:id", authenticateToken, requireAdminOrPermission("member.delete"), async (req, res) => {
     try {
-      const memberId = getRouteParam(req, "id");
-      const member = await storage.getMember(memberId);
+      const member = await storage.getMember(req.params.id);
       if (!member) {
         return res.status(404).json({ message: "Member not found" });
       }
       
-      await storage.deleteMember(memberId);
+      await storage.deleteMember(req.params.id);
       res.json({ message: "Member deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -1579,13 +1600,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/organization-members/:id", optionalAuthenticateToken, async (req, res) => {
     try {
-      const memberId = getRouteParam(req, "id");
-      const parsedId = organizationMemberIdSchema.safeParse(memberId);
+      const parsedId = organizationMemberIdSchema.safeParse(req.params.id);
       if (!parsedId.success) {
         return res.status(400).json({ message: "Invalid organization member id" });
       }
 
-      const member = await storage.getOrganizationMember(memberId);
+      const member = await storage.getOrganizationMember(req.params.id);
       // Do not reveal whether an inactive record exists to public callers.
       const isExecutiveOperator = req.user?.role === 'operator'
         && await hasPermission(req.user.id, executivePermissions.read);
@@ -1655,8 +1675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAdminOrOperatorPermission(executivePermissions.update),
     async (req, res) => {
       try {
-        const memberId = getRouteParam(req, "id");
-        const member = await storage.getOrganizationMember(memberId);
+        const member = await storage.getOrganizationMember(req.params.id);
         if (!member) {
           return res.status(404).json({ message: "Organization member not found" });
         }
@@ -1668,7 +1687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(403).json({ message: "Operators may only manage executives" });
           }
         }
-        const updatedMember = await storage.updateOrganizationMember(memberId, updateData);
+        const updatedMember = await storage.updateOrganizationMember(req.params.id, updateData);
         res.json(updatedMember);
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -1681,13 +1700,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const memberId = getRouteParam(req, "id");
-      const member = await storage.getOrganizationMember(memberId);
+      const member = await storage.getOrganizationMember(req.params.id);
       if (!member) {
         return res.status(404).json({ message: "Organization member not found" });
       }
       
-      await storage.deleteOrganizationMember(memberId);
+      await storage.deleteOrganizationMember(req.params.id);
       res.json({ message: "Organization member deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -1826,7 +1844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Endpoint for serving uploaded objects. Every object must have an ACL;
   // resource objects also inherit the post's published visibility policy.
-  app.get("/objects{/*objectPath}", optionalAuthenticateToken, async (req, res) => {
+  app.get("/objects/:objectPath(*)", optionalAuthenticateToken, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
       const objectPath = objectStorageService.normalizeObjectEntityPath(req.path);
@@ -1891,4 +1909,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+function csrfTokensMatch(req: Request): boolean {
+  const cookieToken = getCsrfToken(req);
+  const requestToken = req.get(CSRF_HEADER);
+  return Boolean(cookieToken && requestToken && cookieToken === requestToken);
+}
+
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Cookie authentication is protected by both origin checks and a
+ * synchronizer-token-style double submit check. The CSRF cookie is readable
+ * by the application; the account session cookie is not.
+ */
+export function csrfProtection(req: Request, res: Response, next: NextFunction) {
+  if (!STATE_CHANGING_METHODS.has(req.method)) return next();
+  if (!hasSameOrigin(req)) {
+    return res.status(403).json({ message: "Cross-origin request rejected" });
+  }
+
+  // Login, registration, and public inquiry submission do not have an account
+  // session yet. Origin validation still prevents cross-site state changes.
+  if (getSessionToken(req) && !csrfTokensMatch(req)) {
+    return res.status(403).json({ message: "CSRF validation failed" });
+  }
+  next();
+}
+
+function requestOrigin(req: Request): string {
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return `${forwardedProto || req.protocol}://${req.get("host")}`;
+}
+
+function hasSameOrigin(req: Request): boolean {
+  const origin = req.get("origin");
+  if (origin) return origin === requestOrigin(req);
+
+  const referer = req.get("referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin === requestOrigin(req);
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }

@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useLocation } from 'wouter';
-import type { RegistrationConsentInput } from '@shared/policies';
 import { UserProfileDto } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import type { RegistrationConsentInput } from '@shared/policies';
+import { removeAuthToken } from '@/lib/auth';
 
 interface CompanyData {
   companyName: string;
@@ -13,7 +14,6 @@ interface CompanyData {
 
 interface AuthContextType {
   user: UserProfileDto | null;
-  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData, weixin?: string, consents?: RegistrationConsentInput) => Promise<void>;
   logout: () => Promise<void>;
@@ -30,25 +30,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<UserProfileDto | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (token) {
-      fetchUser();
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+    removeAuthToken();
+    fetchUser();
+  }, []);
 
   const fetchUser = async () => {
     try {
       const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
         cache: 'no-store',
+        credentials: 'include',
       });
       
       if (response.ok) {
@@ -56,18 +50,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
         setPermissions(new Set(userData.permissions || []));
       } else {
-        // Token is invalid
-        localStorage.removeItem('token');
+        removeAuthToken();
         queryClient.clear();
-        setToken(null);
         setUser(null);
         setPermissions(new Set());
       }
     } catch (error) {
       console.error('Error fetching user:', error);
-      localStorage.removeItem('token');
+      removeAuthToken();
       queryClient.clear();
-      setToken(null);
       setUser(null);
       setPermissions(new Set());
     }
@@ -80,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     queryClient.clear();
     setUser(data.user);
-    setToken(data.token);
-    localStorage.setItem('token', data.token);
+    removeAuthToken();
+    await fetchUser();
   };
 
   const register = async (name: string, email: string, password: string, userType: 'staff' | 'company' = 'staff', companyData?: CompanyData, weixin?: string, consents?: RegistrationConsentInput) => {
@@ -101,29 +92,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     queryClient.clear();
     setUser(data.user);
-    setToken(data.token);
-    localStorage.setItem('token', data.token);
+    removeAuthToken();
+    await fetchUser();
   };
 
   const logout = async () => {
-    const currentToken = token;
     try {
-      if (currentToken) {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${currentToken}` },
-          cache: 'no-store',
-        });
-      }
+      await apiRequest('POST', '/api/auth/logout');
     } catch {
       // Local logout still completes if the network is unavailable. When the
       // request reaches the server, the account session version is revoked.
     } finally {
       setUser(null);
-      setToken(null);
       setPermissions(new Set());
       queryClient.clear();
-      localStorage.removeItem('token');
+      removeAuthToken();
       setLocation('/');
     }
   };
@@ -151,7 +134,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextType = {
     user,
-    token,
     login,
     register,
     logout,

@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getCsrfHeaders, removeAuthToken } from "./auth";
 
 export class ApiRequestError extends Error {
   constructor(
@@ -27,14 +28,13 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("token");
   const headers = new Headers(init.headers);
-  if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
+  if (["POST", "PUT", "PATCH", "DELETE"].includes((init.method || "GET").toUpperCase())) {
+    Object.entries(getCsrfHeaders()).forEach(([name, value]) => headers.set(name, value));
   }
   const res = await fetch(url, {
     ...init,
-    ...(token ? { cache: "no-store" as const } : {}),
+    cache: "no-store",
     headers,
     credentials: "include",
   });
@@ -46,22 +46,21 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const token = localStorage.getItem("token");
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...((["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()))
+      ? getCsrfHeaders()
+      : {}),
+  };
   
   if (data) {
     headers["Content-Type"] = "application/json";
   }
   
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const res = await fetch(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    ...(token ? { cache: "no-store" as const } : {}),
+    cache: "no-store",
     credentials: "include",
   });
 
@@ -75,22 +74,15 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey, signal }) => {
-    const token = localStorage.getItem("token");
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
     const url = typeof queryKey[0] === "string" ? queryKey[0] : String(queryKey[0]);
     const res = await fetch(url, {
-      headers,
-      ...(token ? { cache: "no-store" as const } : {}),
+      cache: "no-store",
       credentials: "include",
       signal,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+      removeAuthToken();
       return null;
     }
 

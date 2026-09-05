@@ -1,5 +1,6 @@
-export type ObjectVisibility = 'public' | 'private';
+import { apiRequest } from '@/lib/queryClient';
 
+export type ObjectVisibility = 'public' | 'private';
 export const getResourceObjectAclVisibility = (
   visibility: 'public' | 'members' | 'premium',
   isPublished: boolean,
@@ -10,22 +11,11 @@ export const setObjectAcl = async (
   visibility: ObjectVisibility,
   uploadIntent = window.__lastUploadIntent,
 ) => {
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/images', {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  await apiRequest('PUT', '/api/images', {
       imageURL: objectPath,
       visibility,
       ...(uploadIntent ? { uploadIntent } : {}),
-    }),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to set object ACL (${response.status})`);
-  }
 };
 
 export const setImagePublicAcl = async (objectPath: string) => {
@@ -37,24 +27,8 @@ export const setImagePublicAcl = async (objectPath: string) => {
 };
 
 export const getUploadParameters = async (_file?: { type?: string }) => {
-  const token = localStorage.getItem('token');
-  const response = await fetch('/api/objects/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({}),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = typeof data?.message === 'string'
-      ? data.message
-      : typeof data?.error === 'string'
-        ? data.error
-        : `파일 업로드 권한을 확인하지 못했습니다. (${response.status})`;
-    throw new Error(message);
-  }
+  const response = await apiRequest('POST', '/api/objects/upload', {});
+  const data = await response.json();
   window.__lastUploadObjectPath = data.objectPath;
   window.__lastUploadIntent = data.uploadIntent;
   return {

@@ -14,9 +14,6 @@ import type {
 } from '@shared/schema';
 import type { AdminDashboardSnapshot } from '@shared/adminDashboard';
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('token')}`,
-});
 export type AdminPostFilters = {
   search?: string;
   status?: string;

@@ -22,9 +22,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Backend Architecture
 
-**Server Framework:** Express.js with TypeScript, providing RESTful API endpoints, JWT-based authentication, and middleware for logging and error handling.
+**Server Framework:** Express.js with TypeScript, providing RESTful API endpoints, HttpOnly cookie authentication, CSRF/origin protection, and middleware for logging and error handling.
 
-**Authentication & Authorization:** Implements JWT for stateless authentication, bcrypt for secure password hashing, and a comprehensive 5-tier, 5-role, 27-permission ACL system with wildcard support.
+**Authentication & Authorization:** Implements signed JWT sessions in an HttpOnly cookie, bcrypt for secure password hashing, same-origin/CSRF protection for state changes, and a comprehensive 5-tier, 5-role, 27-permission ACL system with wildcard support.
 
 **API Structure:** Adheres to RESTful conventions, offering dedicated endpoints for authentication, users, members, a unified posts system (for news, events, pages), resources, inquiries, and partners.
 
@@ -62,7 +62,7 @@ Preferred communication style: Simple, everyday language.
 - Neon Serverless PostgreSQL (`@neondatabase/serverless`)
 
 **Authentication:**
-- jsonwebtoken (JWT)
+- jsonwebtoken (HttpOnly cookie sessions)
 - bcrypt
 
 **Build & Development:**
