@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uuid, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uuid, pgEnum, uniqueIndex, index, check } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -84,6 +84,33 @@ export const inquiries = pgTable("inquiries", {
 }, (table) => ({
   statusCreatedIdx: index("inquiries_status_created_idx").on(table.status, table.createdAt.desc()),
   categoryCreatedIdx: index("inquiries_category_created_idx").on(table.category, table.createdAt.desc()),
+}));
+
+export const consentEvidence = pgTable("consent_evidence", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+  inquiryId: uuid("inquiry_id").references(() => inquiries.id, { onDelete: "cascade" }),
+  purpose: text("purpose").notNull(),
+  policyVersion: text("policy_version").notNull(),
+  consentedAt: timestamp("consented_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneSubject: check(
+    "consent_evidence_one_subject_check",
+    sql`(("user_id" IS NOT NULL)::integer + ("inquiry_id" IS NOT NULL)::integer) = 1`,
+  ),
+  purposeSubject: check(
+    "consent_evidence_purpose_subject_check",
+    sql`(
+      ("purpose" IN ('account_terms', 'account_privacy') AND "user_id" IS NOT NULL AND "inquiry_id" IS NULL)
+      OR ("purpose" = 'inquiry_privacy' AND "user_id" IS NULL AND "inquiry_id" IS NOT NULL)
+    )`,
+  ),
+  userPurposeUnique: uniqueIndex("consent_evidence_user_purpose_version_unique")
+    .on(table.userId, table.purpose, table.policyVersion),
+  inquiryPurposeUnique: uniqueIndex("consent_evidence_inquiry_purpose_version_unique")
+    .on(table.inquiryId, table.purpose, table.policyVersion),
+  subjectDateIdx: index("consent_evidence_subject_date_idx")
+    .on(table.userId, table.inquiryId, table.consentedAt),
 }));
 
 export const inquiryReplies = pgTable("inquiry_replies", {
@@ -288,6 +315,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   inquiriesResponded: many(inquiries),
   memberships: many(userMemberships),
   postsCreated: many(posts),
+  consentEvidence: many(consentEvidence),
 }));
 
 export const tiersRelations = relations(tiers, ({ many }) => ({
@@ -349,6 +377,7 @@ export const eventRegistrationsRelations = relations(eventRegistrations, ({ one 
 
 export const inquiriesRelations = relations(inquiries, ({ many }) => ({
   replies: many(inquiryReplies),
+  consentEvidence: many(consentEvidence),
 }));
 
 export const inquiryRepliesRelations = relations(inquiryReplies, ({ one }) => ({
@@ -359,6 +388,17 @@ export const inquiryRepliesRelations = relations(inquiryReplies, ({ one }) => ({
   responder: one(users, {
     fields: [inquiryReplies.respondedBy],
     references: [users.id],
+  }),
+}));
+
+export const consentEvidenceRelations = relations(consentEvidence, ({ one }) => ({
+  user: one(users, {
+    fields: [consentEvidence.userId],
+    references: [users.id],
+  }),
+  inquiry: one(inquiries, {
+    fields: [consentEvidence.inquiryId],
+    references: [inquiries.id],
   }),
 }));
 
@@ -403,6 +443,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
   name: true,
+  weixin: true,
 });
 
 export const insertMemberSchema = createInsertSchema(members).omit({
@@ -601,6 +642,7 @@ export const insertPostMetaSchema = createInsertSchema(postMeta).omit({
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type ConsentEvidence = typeof consentEvidence.$inferSelect;
 
 export type Member = typeof members.$inferSelect;
 export type InsertMember = z.infer<typeof insertMemberSchema>;

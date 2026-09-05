@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { CURRENT_TERMS_VERSION, POLICY_EFFECTIVE_DATE } from '@shared/policies';
 
 export default function TermsPage() {
   return (
@@ -27,7 +28,9 @@ export default function TermsPage() {
 
           <div className="prose prose-lg dark:prose-invert max-w-none space-y-8 text-foreground dark:text-foreground">
             <div>
-              <p className="text-muted-foreground dark:text-muted-foreground text-sm">최종 업데이트: 2024년 1월 1일</p>
+              <p className="text-muted-foreground dark:text-muted-foreground text-sm">
+                정책 버전: {CURRENT_TERMS_VERSION} · 시행일: {POLICY_EFFECTIVE_DATE}
+              </p>
             </div>
 
             <div>

@@ -59,6 +59,10 @@ import {
 import { getPostPermissionKey } from "./postPermissions";
 import { isSurveyVisible } from "@shared/survey";
 import {
+  inquiryConsentSchema,
+  registrationConsentSchema,
+} from "@shared/policies";
+import {
   getTokenSessionVersion,
   isUniqueViolation,
   issueAuthToken,
@@ -323,7 +327,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { userType: requestedUserType, companyData, ...baseUserData } = req.body;
+      const requestBody = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+        ? req.body
+        : {};
+      const {
+        userType: requestedUserType,
+        companyData,
+        consents: requestedConsents,
+        ...baseUserData
+      } = requestBody;
+      const consents = registrationConsentSchema.parse(requestedConsents);
+      const consentEvidence = [
+        consents.terms,
+        consents.privacy,
+      ].map(({ purpose, policyVersion }) => ({ purpose, policyVersion }));
       
       // Validate userType from request
       const userTypeSchema = z.enum(['staff', 'company']);
@@ -367,12 +384,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create user and member atomically
         const result = await storage.createUserWithMemberForRegistration(
           { ...userData, userType: 'company' },
-          memberPayload
+          memberPayload,
+          consentEvidence,
         );
         user = result.user;
       } else {
         // Staff user - just create user
-        user = await storage.createUserForRegistration({ ...userData, userType: 'staff' });
+        user = await storage.createUserForRegistration(
+          { ...userData, userType: 'staff' },
+          consentEvidence,
+        );
       }
       
       const token = issueAuthToken(user, JWT_SECRET!);
@@ -1161,8 +1182,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Inquiries routes
   app.post("/api/inquiries", inquiryCreateLimiter, async (req, res) => {
     try {
-      const inquiryData = insertInquirySchema.parse(req.body);
-      const inquiry = await storage.createInquiry(inquiryData);
+      const requestBody = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+        ? req.body
+        : {};
+      const { privacyConsent, ...inquiryBody } = requestBody;
+      const consent = inquiryConsentSchema.parse(privacyConsent);
+      const inquiryData = insertInquirySchema.parse(inquiryBody);
+      const inquiry = await storage.createInquiry(inquiryData, {
+        purpose: consent.purpose,
+        policyVersion: consent.policyVersion,
+      });
       res.status(201).json(inquiry);
     } catch (error) {
       if (error instanceof DuplicateInquiryError) {

@@ -1,7 +1,7 @@
 import { 
   users, members, eventRegistrations, inquiries, inquiryReplies, partners,
   posts, postTranslations, postTranslationHistory, postMeta, organizationMembers,
-  tiers, roles, userMemberships, surveySettings, surveySettingsHistory,
+  tiers, roles, userMemberships, surveySettings, surveySettingsHistory, consentEvidence,
   type User, type InsertUser, type Member, type InsertMember,
   type EventRegistration, type InsertEventRegistration,
   type Inquiry, type InsertInquiry, type InquiryReply, type InsertInquiryReply,
@@ -27,6 +27,7 @@ import {
 import { getPostPermissionKey, postPermissionKeys } from "./postPermissions";
 import { hasPermission } from "./permissions";
 import { normalizeEmail } from "./auth";
+import type { ConsentPurpose } from "@shared/policies";
 import { parseEventDateTime } from "@shared/eventDateTime";
 import {
   InvalidPostScheduleError,
@@ -63,6 +64,10 @@ export type EventRegistrationErrorCode =
 export type AccountRole = "admin" | "operator" | "user";
 
 export type SurveySettingsHistoryEntry = SurveySettingsHistory;
+export interface ConsentEvidenceInput {
+  purpose: ConsentPurpose;
+  policyVersion: string;
+}
 export type PageTranslationHistoryEntry = PostTranslationHistory & {
   postSlug: string;
 };
@@ -175,9 +180,16 @@ export interface IStorage {
 
   createUserWithMember(userData: InsertUser & { role?: string; userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
 
-  createUserForRegistration(userData: InsertUser & { userType?: string }): Promise<User>;
+  createUserForRegistration(
+    userData: InsertUser & { userType?: string },
+    consents?: readonly ConsentEvidenceInput[],
+  ): Promise<User>;
 
-  createUserWithMemberForRegistration(userData: InsertUser & { userType?: string }, memberData: Omit<InsertMember, 'userId'>): Promise<{ user: User; member: Member }>;
+  createUserWithMemberForRegistration(
+    userData: InsertUser & { userType?: string },
+    memberData: Omit<InsertMember, 'userId'>,
+    consents?: readonly ConsentEvidenceInput[],
+  ): Promise<{ user: User; member: Member }>;
 
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
 
@@ -255,7 +267,7 @@ export interface IStorage {
 
   }): Promise<{ inquiries: Inquiry[]; total: number }>;
 
-  createInquiry(inquiry: InsertInquiry): Promise<Inquiry>;
+  createInquiry(inquiry: InsertInquiry, consent?: ConsentEvidenceInput): Promise<Inquiry>;
 
   updateInquiry(id: string, updates: Partial<Inquiry>): Promise<Inquiry | undefined>;
   
@@ -483,6 +495,7 @@ export class DatabaseStorage implements IStorage {
 
   async createUserForRegistration(
     userData: InsertUser & { userType?: string },
+    consents?: readonly ConsentEvidenceInput[],
   ): Promise<User> {
     return await db.transaction(async (tx) => {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
@@ -498,6 +511,15 @@ export class DatabaseStorage implements IStorage {
           password: hashedPassword,
         })
         .returning();
+      if (consents?.length) {
+        await tx.insert(consentEvidence).values(
+          consents.map((consent) => ({
+            userId: user.id,
+            purpose: consent.purpose,
+            policyVersion: consent.policyVersion,
+          })),
+        );
+      }
       return user;
     });
   }
@@ -505,6 +527,7 @@ export class DatabaseStorage implements IStorage {
   async createUserWithMemberForRegistration(
     userData: InsertUser & { userType?: string },
     memberData: Omit<InsertMember, 'userId'>,
+    consents?: readonly ConsentEvidenceInput[],
   ): Promise<{ user: User; member: Member }> {
     return await db.transaction(async (tx) => {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
@@ -528,6 +551,16 @@ export class DatabaseStorage implements IStorage {
           userId: user.id,
         })
         .returning();
+
+      if (consents?.length) {
+        await tx.insert(consentEvidence).values(
+          consents.map((consent) => ({
+            userId: user.id,
+            purpose: consent.purpose,
+            policyVersion: consent.policyVersion,
+          })),
+        );
+      }
 
       return { user, member };
     });
@@ -1536,7 +1569,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async createInquiry(inquiry: InsertInquiry): Promise<Inquiry> {
+  async createInquiry(inquiry: InsertInquiry, consent?: ConsentEvidenceInput): Promise<Inquiry> {
     const duplicateWindowStart = new Date(Date.now() - 15 * 60 * 1000);
 
     return db.transaction(async (tx) => {
@@ -1567,6 +1600,13 @@ export class DatabaseStorage implements IStorage {
         .insert(inquiries)
         .values(inquiry)
         .returning();
+      if (consent) {
+        await tx.insert(consentEvidence).values({
+          inquiryId: newInquiry.id,
+          purpose: consent.purpose,
+          policyVersion: consent.policyVersion,
+        });
+      }
       return newInquiry;
     });
   }

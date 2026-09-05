@@ -54,18 +54,27 @@ export default function SurveyCard({
           </p>
         )}
         {isAuthenticated && survey.externalUrl ? (
-          <Button asChild className="btn-accent mt-6 w-full">
-            <a
-              href={survey.externalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`${testIdPrefix}-${survey.id}`}
-              onClick={() => trackEvent('survey_link_clicked', { location: trackingLocation })}
-            >
-              {content.participate}
-              <ArrowRight className="h-4 w-4" />
-            </a>
-          </Button>
+          <>
+            <p className="mt-4 text-xs text-muted-foreground">
+              {language === 'ko'
+                ? '선택하면 외부 설문 서비스로 이동합니다.'
+                : language === 'zh'
+                  ? '选择后将跳转到外部问卷服务。'
+                  : 'You will leave this site for an external survey service.'}
+            </p>
+            <Button asChild className="btn-accent mt-3 w-full">
+              <a
+                href={survey.externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid={`${testIdPrefix}-${survey.id}`}
+                onClick={() => trackEvent('survey_link_clicked', { location: trackingLocation })}
+              >
+                {content.participate}
+                <ArrowRight className="h-4 w-4" />
+              </a>
+            </Button>
+          </>
         ) : (
           <Button
             className="btn-accent mt-6 w-full"

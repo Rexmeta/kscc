@@ -1,4 +1,9 @@
 import { ApiRequestError } from "@/lib/queryClient";
+import {
+  CURRENT_PRIVACY_POLICY_VERSION,
+  CURRENT_TERMS_VERSION,
+  type RegistrationConsentInput,
+} from "@shared/policies";
 
 export const DEFAULT_REGISTER_ERROR = "회원가입 중 오류가 발생했습니다.";
 
@@ -18,6 +23,8 @@ export interface RegisterSubmissionData {
   business?: string;
   contactEmail?: string;
   contactPhone?: string;
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
 }
 
 export type RegisterUser = (
@@ -27,6 +34,7 @@ export type RegisterUser = (
   userType: "staff" | "company",
   companyData?: RegisterCompanyData,
   weixin?: string,
+  consents?: RegistrationConsentInput,
 ) => Promise<void>;
 
 export interface RegisterToast {
@@ -101,6 +109,22 @@ export async function submitRegistration({
     }
   }
 
+  const consents: RegistrationConsentInput | undefined = data.termsAccepted === true && data.privacyAccepted === true
+    ? {
+        terms: {
+          agreed: true as const,
+          policyVersion: CURRENT_TERMS_VERSION as typeof CURRENT_TERMS_VERSION,
+          purpose: "account_terms" as const,
+        },
+        privacy: {
+          agreed: true as const,
+          policyVersion: CURRENT_PRIVACY_POLICY_VERSION as typeof CURRENT_PRIVACY_POLICY_VERSION,
+          purpose: "account_privacy" as const,
+        },
+      }
+    : undefined;
+  const consentArgs = consents ? [consents] as const : [];
+
   try {
     if (userType === "company") {
       await registerUser(
@@ -115,6 +139,7 @@ export async function submitRegistration({
           contactPhone: data.contactPhone || undefined,
         },
         data.weixin || undefined,
+        ...consentArgs,
       );
     } else {
       await registerUser(
@@ -124,6 +149,7 @@ export async function submitRegistration({
         "staff",
         undefined,
         data.weixin || undefined,
+        ...consentArgs,
       );
     }
 

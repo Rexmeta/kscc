@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Eye, EyeOff, User, Mail, Lock, Building, Briefcase, Phone, MessageCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -13,6 +14,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { t } from '@/lib/i18n';
 import { submitRegistration } from '@/lib/registerFlow';
+import {
+  CURRENT_PRIVACY_POLICY_VERSION,
+  CURRENT_TERMS_VERSION,
+  POLICY_EFFECTIVE_DATE,
+} from '@shared/policies';
 
 const companySchema = z.object({
   name: z.string().min(2, '이름은 2자 이상이어야 합니다'),
@@ -24,6 +30,8 @@ const companySchema = z.object({
   business: z.string().optional(),
   contactEmail: z.string().email('올바른 이메일을 입력해주세요').optional().or(z.literal('')),
   contactPhone: z.string().optional(),
+  termsAccepted: z.boolean().refine(val => val, '이용약관에 동의해주세요'),
+  privacyAccepted: z.boolean().refine(val => val, '개인정보 처리방침에 동의해주세요'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "비밀번호가 일치하지 않습니다",
   path: ["confirmPassword"],
@@ -39,7 +47,7 @@ export default function RegisterPage() {
   const { register: registerUser } = useAuth();
   const { toast } = useToast();
 
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
+  const { register, handleSubmit, setError, setValue, watch, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
     resolver: zodResolver(companySchema),
     defaultValues: {
       name: '',
@@ -51,6 +59,8 @@ export default function RegisterPage() {
       business: '',
       contactEmail: '',
       contactPhone: '',
+      termsAccepted: false,
+      privacyAccepted: false,
     },
   });
 
@@ -93,6 +103,7 @@ export default function RegisterPage() {
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="name"
+                       autoComplete="name"
                       placeholder="홍길동"
                       className="pl-10"
                       {...register('name')}
@@ -110,6 +121,7 @@ export default function RegisterPage() {
                     <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="email"
+                       autoComplete="email"
                       type="email"
                       placeholder="example@email.com"
                       className="pl-10"
@@ -132,6 +144,7 @@ export default function RegisterPage() {
                       placeholder="••••••••"
                       className="pl-10 pr-10"
                       {...register('password')}
+                       autoComplete="new-password"
                       data-testid="input-password"
                     />
                     <button
@@ -159,6 +172,7 @@ export default function RegisterPage() {
                       placeholder="••••••••"
                       className="pl-10 pr-10"
                       {...register('confirmPassword')}
+                       autoComplete="new-password"
                       data-testid="input-confirm-password"
                     />
                     <button
@@ -260,6 +274,43 @@ export default function RegisterPage() {
                     </div>
                   </>
                 )}
+
+                 <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+                   <div className="flex items-start gap-2">
+                     <Checkbox
+                       id="termsAccepted"
+                       checked={watch('termsAccepted')}
+                       onCheckedChange={(checked) => setValue('termsAccepted', checked === true, { shouldValidate: true })}
+                       aria-describedby={errors.termsAccepted ? 'error-terms' : undefined}
+                       data-testid="checkbox-terms"
+                     />
+                     <Label htmlFor="termsAccepted" className="text-sm font-normal leading-relaxed">
+                       <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">이용약관</a>에 동의합니다. (필수)
+                     </Label>
+                   </div>
+                   {errors.termsAccepted && (
+                     <p id="error-terms" role="alert" className="text-sm text-destructive">{errors.termsAccepted.message}</p>
+                   )}
+                   <div className="flex items-start gap-2">
+                     <Checkbox
+                       id="privacyAccepted"
+                       checked={watch('privacyAccepted')}
+                       onCheckedChange={(checked) => setValue('privacyAccepted', checked === true, { shouldValidate: true })}
+                       aria-describedby={errors.privacyAccepted ? 'error-registration-privacy' : undefined}
+                       data-testid="checkbox-registration-privacy"
+                     />
+                     <Label htmlFor="privacyAccepted" className="text-sm font-normal leading-relaxed">
+                       <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">개인정보 처리방침</a>에 동의합니다. (필수)
+                     </Label>
+                   </div>
+                   {errors.privacyAccepted && (
+                     <p id="error-registration-privacy" role="alert" className="text-sm text-destructive">{errors.privacyAccepted.message}</p>
+                   )}
+                   <p className="text-xs text-muted-foreground">
+                     정책 버전 {CURRENT_TERMS_VERSION} / 시행일 {POLICY_EFFECTIVE_DATE}
+                     <span className="sr-only"> 개인정보 처리방침 버전 {CURRENT_PRIVACY_POLICY_VERSION}</span>
+                   </p>
+                 </div>
                 
                 <Button 
                   type="submit" 

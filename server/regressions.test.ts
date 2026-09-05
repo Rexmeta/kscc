@@ -7,6 +7,7 @@ import jwt from "jsonwebtoken";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
+  consentEvidence,
   insertInquiryReplySchema,
   insertInquirySchema,
   insertPartnerSchema,
@@ -55,6 +56,10 @@ import {
   sortOrganizationMembers,
 } from "@shared/organization";
 import { getSurveyStatus, isSurveyVisible } from "@shared/survey";
+import {
+  CURRENT_PRIVACY_POLICY_VERSION,
+  CURRENT_TERMS_VERSION,
+} from "@shared/policies";
 import {
   canAccessObject,
   ObjectPermission,
@@ -136,6 +141,7 @@ test(
       name: "Auth User Two",
       userType: "staff",
     });
+    let consentedRegistrationUserId: string | undefined;
 
     const [{ registerRoutes }] = await Promise.all([import("./routes")]);
     const app = express();
@@ -184,6 +190,59 @@ test(
       assert.equal(weakRegistration.status, 400);
       assert.equal(JSON.stringify(weakRegistration.body).includes("short"), false);
 
+      const missingConsentRegistration = await request("/api/auth/register", {
+        method: "POST",
+        body: {
+          name: "Missing Consent",
+          email: `missing-consent-${suffix}@example.test`,
+          password: "strong-password",
+          userType: "staff",
+        },
+      });
+      assert.equal(missingConsentRegistration.status, 400);
+
+      const consentedRegistration = await request("/api/auth/register", {
+        method: "POST",
+        body: {
+          name: "Consented User",
+          email: `consented-${suffix}@example.test`,
+          password: "strong-password",
+          userType: "staff",
+          consents: {
+            terms: {
+              agreed: true,
+              policyVersion: CURRENT_TERMS_VERSION,
+              purpose: "account_terms",
+            },
+            privacy: {
+              agreed: true,
+              policyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+              purpose: "account_privacy",
+            },
+          },
+        },
+      });
+      assert.equal(consentedRegistration.status, 200);
+      consentedRegistrationUserId = (
+        consentedRegistration.body as { user: { id: string } }
+      ).user.id;
+      const registrationEvidence = await db
+        .select({
+          purpose: consentEvidence.purpose,
+          policyVersion: consentEvidence.policyVersion,
+          consentedAt: consentEvidence.consentedAt,
+        })
+        .from(consentEvidence)
+        .where(eq(consentEvidence.userId, consentedRegistrationUserId));
+      assert.deepEqual(
+        registrationEvidence.map(({ purpose, policyVersion }) => ({ purpose, policyVersion })),
+        [
+          { purpose: "account_terms", policyVersion: CURRENT_TERMS_VERSION },
+          { purpose: "account_privacy", policyVersion: CURRENT_PRIVACY_POLICY_VERSION },
+        ],
+      );
+      assert.ok(registrationEvidence.every(({ consentedAt }) => consentedAt instanceof Date));
+
       const initialToken = issueAuthToken(user, process.env.SESSION_SECRET!);
       const profileEmail = `profile-${suffix}@example.test`;
       const profileEmailChange = await request("/api/auth/profile", {
@@ -220,6 +279,10 @@ test(
           email: ` ${profileEmail.toUpperCase()} `,
           password: "different-password",
           userType: "staff",
+          consents: {
+            terms: { agreed: true, policyVersion: "2026-09-04", purpose: "account_terms" },
+            privacy: { agreed: true, policyVersion: "2026-09-04", purpose: "account_privacy" },
+          },
         },
       });
       assert.equal(duplicateRegistration.status, 400);
@@ -356,6 +419,9 @@ test(
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await db.delete(users).where(inArray(users.id, [admin.id, user.id, user2.id]));
+      if (consentedRegistrationUserId) {
+        await db.delete(users).where(eq(users.id, consentedRegistrationUserId));
+      }
       if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
       else process.env.SESSION_SECRET = originalSessionSecret;
     }
@@ -1831,7 +1897,55 @@ test(
         email: "inquiry@example.test",
         subject: "Subject",
         message: "Message",
+        privacyConsent: {
+          agreed: true,
+          policyVersion: "2026-09-04",
+          purpose: "inquiry_privacy",
+        },
       };
+      const missingConsentResponse = await fetch(`${baseUrl}/api/inquiries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: "membership",
+          name: "Missing Consent",
+          email: "missing-consent@example.test",
+          subject: "Subject",
+          message: "Message",
+        }),
+      });
+      assert.equal(missingConsentResponse.status, 400);
+
+      const falseConsentResponse = await fetch(`${baseUrl}/api/inquiries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...requestBody,
+          email: "false-consent@example.test",
+          privacyConsent: {
+            agreed: false,
+            policyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+            purpose: "inquiry_privacy",
+          },
+        }),
+      });
+      assert.equal(falseConsentResponse.status, 400);
+
+      const oldConsentResponse = await fetch(`${baseUrl}/api/inquiries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...requestBody,
+          email: "old-consent@example.test",
+          privacyConsent: {
+            agreed: true,
+            policyVersion: "2024-01-01",
+            purpose: "inquiry_privacy",
+          },
+        }),
+      });
+      assert.equal(oldConsentResponse.status, 400);
+
       const responses = [];
       for (let index = 0; index < 6; index += 1) {
         responses.push(await fetch(`${baseUrl}/api/inquiries`, {
@@ -1840,7 +1954,7 @@ test(
           body: JSON.stringify(requestBody),
         }));
       }
-      assert.deepEqual(responses.slice(0, 5).map((response) => response.status), [201, 201, 201, 201, 201]);
+      assert.deepEqual(responses.slice(0, 5).map((response) => response.status), [201, 201, 429, 429, 429]);
       assert.equal(responses[5].status, 429);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));

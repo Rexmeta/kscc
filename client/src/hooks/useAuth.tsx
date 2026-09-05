@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useLocation } from 'wouter';
 import { User } from '@shared/schema';
 import { apiRequest } from '@/lib/queryClient';
+import type { RegistrationConsentInput } from '@shared/policies';
 
 interface CompanyData {
   companyName: string;
@@ -14,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData, weixin?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, userType?: 'staff' | 'company', companyData?: CompanyData, weixin?: string, consents?: RegistrationConsentInput) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -79,13 +80,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('token', data.token);
   };
 
-  const register = async (name: string, email: string, password: string, userType: 'staff' | 'company' = 'staff', companyData?: CompanyData, weixin?: string) => {
+  const register = async (name: string, email: string, password: string, userType: 'staff' | 'company' = 'staff', companyData?: CompanyData, weixin?: string, consents?: RegistrationConsentInput) => {
     const payload: any = { name, email, password, userType };
     if (userType === 'company' && companyData) {
       payload.companyData = companyData;
     }
     if (weixin) {
       payload.weixin = weixin;
+    }
+    if (consents) {
+      payload.consents = consents;
     }
     
     const response = await apiRequest('POST', '/api/auth/register', payload);

@@ -18,6 +18,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import PageEditModal from '@/components/PageEditModal';
 import type { PostWithTranslations } from '@shared/schema';
 import { fetchJson } from '@/lib/queryClient';
+import { CURRENT_PRIVACY_POLICY_VERSION, POLICY_EFFECTIVE_DATE } from '@shared/policies';
 
 const inquirySchema = z.object({
   category: z.string().min(1, '문의 분류를 선택해주세요'),
@@ -95,8 +96,16 @@ export default function ContactPage() {
   });
 
   const inquiryMutation = useMutation({
-    mutationFn: async (data: Omit<InquiryForm, 'privacy'>) => {
-      const response = await apiRequest('POST', '/api/inquiries', data);
+    mutationFn: async (data: InquiryForm) => {
+      const { privacy, ...inquiryData } = data;
+      const response = await apiRequest('POST', '/api/inquiries', {
+        ...inquiryData,
+        privacyConsent: {
+          agreed: privacy,
+          policyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+          purpose: 'inquiry_privacy',
+        },
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -116,8 +125,7 @@ export default function ContactPage() {
   });
 
   const onSubmit = (data: InquiryForm) => {
-    const { privacy, ...inquiryData } = data;
-    inquiryMutation.mutate(inquiryData);
+    inquiryMutation.mutate(data);
   };
 
   return (
@@ -276,6 +284,9 @@ export default function ContactPage() {
                   <label htmlFor="privacy" className="text-sm text-muted-foreground">
                     {t('contact.form.privacy')}{' '}
                   <a href="/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">보기</a>
+                     <span className="mt-1 block text-xs text-muted-foreground">
+                       정책 버전 {CURRENT_PRIVACY_POLICY_VERSION} · 시행일 {POLICY_EFFECTIVE_DATE}
+                     </span>
                   </label>
                 </div>
                 {errors.privacy && (
@@ -373,6 +384,13 @@ export default function ContactPage() {
                     {t('contact.office.mapTitle')}
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">{t('contact.office.addressValue')}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {language === 'ko'
+                      ? '지도를 표시하면 외부 지도 서비스로 브라우저 요청이 전송될 수 있습니다.'
+                      : language === 'zh'
+                        ? '显示地图时，浏览器请求可能会发送至外部地图服务。'
+                        : 'Displaying the map may send a browser request to the external map provider.'}
+                  </p>
                 </div>
                 <div className="relative aspect-[4/3] min-h-[16rem] w-full bg-muted sm:aspect-video">
                   <iframe
