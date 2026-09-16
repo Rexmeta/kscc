@@ -2277,6 +2277,11 @@ const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   if (!STATE_CHANGING_METHODS.has(req.method)) return next();
   if (!hasSameOrigin(req)) {
+    emitOperationalEvent("auth.failure", "warn", {
+      correlationId: getCorrelationId(req),
+      operation: "csrf",
+      reason: "origin_mismatch",
+    });
     return res.status(403).json({ message: "Cross-origin request rejected" });
   }
 
@@ -2289,6 +2294,11 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     && !CSRF_SESSION_ESTABLISHING_PATHS.has(req.path)
     && !csrfTokensMatch(req)
   ) {
+    emitOperationalEvent("auth.failure", "warn", {
+      correlationId: getCorrelationId(req),
+      operation: "csrf",
+      reason: "token_mismatch",
+    });
     return res.status(403).json({ message: "CSRF validation failed" });
   }
   next();
