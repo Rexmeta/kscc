@@ -2296,7 +2296,8 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
 
 function requestOrigin(req: Request): string {
   const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  return `${forwardedProto || req.protocol}://${req.get("host")}`;
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  return `${forwardedProto || req.protocol}://${forwardedHost || req.get("host")}`;
 }
 
 function hasSameOrigin(req: Request): boolean {

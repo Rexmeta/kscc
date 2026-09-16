@@ -18,6 +18,24 @@ function createRequest(path: string, cookie: string) {
   } as any;
 }
 
+function createForwardedRequest(path: string, cookie: string) {
+  return {
+    method: "POST",
+    path,
+    protocol: "http",
+    headers: {
+      cookie,
+      origin: "https://preview.example",
+      host: "127.0.0.1:5000",
+      "x-forwarded-proto": "https",
+      "x-forwarded-host": "preview.example",
+    },
+    get(name: string) {
+      return this.headers[name.toLowerCase() as keyof typeof this.headers];
+    },
+  } as any;
+}
+
 function createResponse() {
   const response = {
     statusCode: 200,
@@ -52,6 +70,23 @@ test("stale auth cookies do not block same-origin login", () => {
 
 test("authenticated state-changing requests still require the CSRF token", () => {
   const request = createRequest(
+    "/api/auth/profile",
+    "auth_session=active-token",
+  );
+  const response = createResponse();
+  let called = false;
+
+  csrfProtection(request, response as any, () => {
+    called = true;
+  });
+
+  assert.equal(called, false);
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.body, { message: "CSRF validation failed" });
+});
+
+test("same-origin checks use the public host behind a preview proxy", () => {
+  const request = createForwardedRequest(
     "/api/auth/profile",
     "auth_session=active-token",
   );
