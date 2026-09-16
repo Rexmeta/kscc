@@ -2322,5 +2322,9 @@ function hasSameOrigin(req: Request): boolean {
       return false;
     }
   }
-  return true;
+
+  // Replit's preview proxy can rewrite the externally visible host while the
+  // browser still marks a relative fetch as same-origin. Fetch Metadata is a
+  // browser-controlled signal and preserves the CSRF boundary in that case.
+  return req.get("sec-fetch-site") === "same-origin";
 }

@@ -29,6 +29,7 @@ function createForwardedRequest(path: string, cookie: string) {
       host: "127.0.0.1:5000",
       "x-forwarded-proto": "https",
       "x-forwarded-host": "preview.example",
+      "sec-fetch-site": "same-origin",
     },
     get(name: string) {
       return this.headers[name.toLowerCase() as keyof typeof this.headers];
