@@ -151,11 +151,14 @@ export const consentEvidenceAccessLog = pgTable("consent_evidence_access_log", {
   subjectId: uuid("subject_id").notNull(),
   action: text("action").notNull(),
   accessedAt: timestamp("accessed_at", { withTimezone: true }).notNull().defaultNow(),
+  retentionHoldUntil: timestamp("retention_hold_until", { withTimezone: true }),
 }, (table) => ({
   subjectAccessIdx: index("consent_evidence_access_log_subject_access_idx")
     .on(table.subjectType, table.subjectId, table.accessedAt.desc()),
   actionAccessIdx: index("consent_evidence_access_log_action_access_idx")
     .on(table.action, table.accessedAt.desc()),
+  retentionCleanupIdx: index("consent_evidence_access_log_retention_cleanup_idx")
+    .on(table.accessedAt, table.retentionHoldUntil),
   subjectTypeCheck: check(
     "consent_evidence_access_log_subject_type_check",
     sql`"subject_type" IN ('account', 'inquiry')`,
@@ -719,7 +722,8 @@ export type UserProfileDto = Pick<
 export type ConsentEvidence = typeof consentEvidence.$inferSelect;
 export type ConsentEvidenceAccessLogEntry = Pick<
   typeof consentEvidenceAccessLog.$inferSelect,
-  "adminUserId" | "subjectType" | "subjectId" | "action" | "accessedAt"
+  "id" | "adminUserId" | "subjectType" | "subjectId" | "action" | "accessedAt" |
+    "retentionHoldUntil"
 >;
 
 export type Member = typeof members.$inferSelect;

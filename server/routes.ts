@@ -158,6 +158,9 @@ const consentEvidenceAccessLogQuerySchema = paginatedCollectionQuerySchema.exten
   subjectId: z.string().uuid().optional(),
   action: z.enum(["view", "export"]).optional(),
 }).strict();
+const consentEvidenceAccessLogRetentionHoldSchema = z.object({
+  holdUntil: z.coerce.date().nullable(),
+}).strict();
 const inquiryUpdateSchema = z.object({
   status: inquiryStatusSchema.optional(),
   category: inquiryCategorySchema.optional(),
@@ -1229,11 +1232,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         res.json({
           entries: result.entries.map((entry) => ({
+            id: entry.id,
             adminUserId: entry.adminUserId,
             subjectType: entry.subjectType,
             subjectId: entry.subjectId,
             action: entry.action,
             accessedAt: entry.accessedAt.toISOString(),
+            retentionHoldUntil: entry.retentionHoldUntil?.toISOString() ?? null,
           })),
           total: result.total,
           page,
@@ -1249,6 +1254,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errorType: error instanceof Error ? error.name : "UnknownError",
         });
         res.status(500).json({ message: "Unable to read consent evidence access history" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/consent-evidence/access-log/:id/retention-hold",
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const id = z.string().uuid().parse(req.params.id);
+        const { holdUntil } =
+          consentEvidenceAccessLogRetentionHoldSchema.parse(req.body);
+        const updated = await storage.setConsentEvidenceAccessLogRetentionHold(
+          id,
+          holdUntil,
+        );
+        if (!updated) {
+          return res.status(404).json({ message: "Access history record not found" });
+        }
+        res.json({
+          id,
+          retentionHoldUntil: holdUntil?.toISOString() ?? null,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: "Invalid consent evidence retention hold",
+            errors: error.errors,
+          });
+        }
+        emitOperationalEvent("consent_evidence.operation", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "retention_hold",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        res.status(500).json({ message: "Unable to update consent evidence retention hold" });
       }
     },
   );

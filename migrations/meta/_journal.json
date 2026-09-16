@@ -43,6 +43,13 @@
       "when": 1788362192007,
       "tag": "0003_wechat_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789574400000,
+      "tag": "0005_consent_evidence_access_retention",
+      "breakpoints": true
     }
   ]
 }

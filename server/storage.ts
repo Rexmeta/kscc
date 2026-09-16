@@ -36,6 +36,9 @@ import {
   verifyPassword,
 } from "./auth";
 import type { ConsentPurpose } from "@shared/policies";
+import {
+  CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+} from "./consentEvidenceRetention";
 import { parseEventDateTime } from "@shared/eventDateTime";
 import {
   InvalidPostScheduleError,
@@ -244,6 +247,17 @@ export interface IStorage {
     offset?: number;
 
   }): Promise<{ entries: ConsentEvidenceAccessLogEntry[]; total: number }>;
+
+  cleanupConsentEvidenceAccessLog(options: {
+    cutoff: Date;
+    now: Date;
+    limit?: number;
+  }): Promise<{ deleted: number; held: number }>;
+
+  setConsentEvidenceAccessLogRetentionHold(
+    id: string,
+    holdUntil: Date | null,
+  ): Promise<boolean>;
 
   getUserCount(): Promise<number>;
 
@@ -618,17 +632,21 @@ export class DatabaseStorage implements IStorage {
     const entriesQuery = whereCondition
       ? db.select({
           adminUserId: consentEvidenceAccessLog.adminUserId,
+          id: consentEvidenceAccessLog.id,
           subjectType: consentEvidenceAccessLog.subjectType,
           subjectId: consentEvidenceAccessLog.subjectId,
           action: consentEvidenceAccessLog.action,
           accessedAt: consentEvidenceAccessLog.accessedAt,
+          retentionHoldUntil: consentEvidenceAccessLog.retentionHoldUntil,
         }).from(consentEvidenceAccessLog).where(whereCondition)
       : db.select({
+          id: consentEvidenceAccessLog.id,
           adminUserId: consentEvidenceAccessLog.adminUserId,
           subjectType: consentEvidenceAccessLog.subjectType,
           subjectId: consentEvidenceAccessLog.subjectId,
           action: consentEvidenceAccessLog.action,
           accessedAt: consentEvidenceAccessLog.accessedAt,
+          retentionHoldUntil: consentEvidenceAccessLog.retentionHoldUntil,
         }).from(consentEvidenceAccessLog);
     const [[totalResult], entries] = await Promise.all([
       totalQuery,
@@ -642,6 +660,66 @@ export class DatabaseStorage implements IStorage {
       entries,
       total: Number(totalResult?.count ?? 0),
     };
+  }
+
+  async cleanupConsentEvidenceAccessLog(options: {
+    cutoff: Date;
+    now: Date;
+    limit?: number;
+  }): Promise<{ deleted: number; held: number }> {
+    const limit = Math.min(
+      Math.max(Math.trunc(options.limit ?? CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE), 1),
+      CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+    );
+
+    return db.transaction(async (tx) => {
+      const heldRows = await tx.execute(sql`
+        SELECT count(*)::int AS count
+        FROM ${consentEvidenceAccessLog}
+        WHERE ${consentEvidenceAccessLog.accessedAt} < ${options.cutoff}
+          AND ${consentEvidenceAccessLog.retentionHoldUntil} > ${options.now}
+      `);
+
+      const candidateRows = await tx.execute(sql`
+        SELECT ${consentEvidenceAccessLog.id}
+        FROM ${consentEvidenceAccessLog}
+        WHERE ${consentEvidenceAccessLog.accessedAt} < ${options.cutoff}
+          AND (
+            ${consentEvidenceAccessLog.retentionHoldUntil} IS NULL
+            OR ${consentEvidenceAccessLog.retentionHoldUntil} <= ${options.now}
+          )
+        ORDER BY ${consentEvidenceAccessLog.accessedAt} ASC,
+          ${consentEvidenceAccessLog.id} ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      `);
+      const candidateIds = candidateRows.rows.map((row) => String(row.id));
+      if (candidateIds.length === 0) {
+        return { deleted: 0, held: Number(heldRows.rows[0]?.count ?? 0) };
+      }
+
+      const deletedRows = await tx
+        .delete(consentEvidenceAccessLog)
+        .where(inArray(consentEvidenceAccessLog.id, candidateIds))
+        .returning({ id: consentEvidenceAccessLog.id });
+
+      return {
+        deleted: deletedRows.length,
+        held: Number(heldRows.rows[0]?.count ?? 0),
+      };
+    });
+  }
+
+  async setConsentEvidenceAccessLogRetentionHold(
+    id: string,
+    holdUntil: Date | null,
+  ): Promise<boolean> {
+    const updated = await db
+      .update(consentEvidenceAccessLog)
+      .set({ retentionHoldUntil: holdUntil })
+      .where(eq(consentEvidenceAccessLog.id, id))
+      .returning({ id: consentEvidenceAccessLog.id });
+    return updated.length > 0;
   }
 
   async createUser(insertUser: InsertUser & { role?: string; userType?: string }): Promise<User> {

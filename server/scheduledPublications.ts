@@ -9,6 +9,10 @@ import {
 } from "./postScheduling";
 import { publicPostAccess, type PostAccessContext } from "./postAccess";
 import { storage, type IStorage } from "./storage";
+import {
+  CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+  getConsentEvidenceAccessLogRetentionCutoff,
+} from "./consentEvidenceRetention";
 
 export const DEFAULT_SCHEDULED_PUBLICATION_BATCH_SIZE = 25;
 export const DEFAULT_SCHEDULED_PUBLICATION_INTERVAL_MS = 30_000;
@@ -25,6 +29,11 @@ export interface ScheduledPublicationStorage {
     access?: PostAccessContext,
   ): Promise<PostMeta | undefined>;
   markResourceAclSynchronized(postId: string, marker: string): Promise<void>;
+  cleanupConsentEvidenceAccessLog(options: {
+    cutoff: Date;
+    now: Date;
+    limit?: number;
+  }): Promise<{ deleted: number; held: number }>;
 }
 
 const internalPostMetaAccess: PostAccessContext = {
@@ -48,6 +57,8 @@ export type ScheduledPublicationLogger = (
 export interface ScheduledPublicationRunResult {
   published: number;
   aclSynchronized: number;
+  consentEvidenceAccessLogDeleted: number;
+  consentEvidenceAccessLogHeld: number;
   failures: number;
 }
 
@@ -102,7 +113,29 @@ export class ScheduledPublicationRunner {
   async runOnce(now = new Date()): Promise<ScheduledPublicationRunResult> {
     let published = 0;
     let aclSynchronized = 0;
+    let consentEvidenceAccessLogDeleted = 0;
+    let consentEvidenceAccessLogHeld = 0;
     let failures = 0;
+
+    try {
+      const cleanup = await this.storage.cleanupConsentEvidenceAccessLog({
+        cutoff: getConsentEvidenceAccessLogRetentionCutoff(now),
+        now,
+        limit: CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+      });
+      consentEvidenceAccessLogDeleted = cleanup.deleted;
+      consentEvidenceAccessLogHeld = cleanup.held;
+      this.logger("consent_evidence_access_log_cleanup", {
+        deleted: cleanup.deleted,
+        held: cleanup.held,
+        batchSize: CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+      });
+    } catch (error) {
+      failures += 1;
+      this.logger("consent_evidence_access_log_cleanup_failed", {
+        error: errorCode(error),
+      });
+    }
 
     let duePosts: Post[] = [];
     try {
@@ -122,7 +155,13 @@ export class ScheduledPublicationRunner {
     } catch (error) {
       failures += 1;
       this.logger("resource_acl_scan_failed", { error: errorCode(error) });
-      return { published, aclSynchronized, failures };
+      return {
+        published,
+        aclSynchronized,
+        consentEvidenceAccessLogDeleted,
+        consentEvidenceAccessLogHeld,
+        failures,
+      };
     }
 
     // A due resource is normally in the scan result, but deduplication keeps a
@@ -171,7 +210,13 @@ export class ScheduledPublicationRunner {
       }
     }
 
-    return { published, aclSynchronized, failures };
+    return {
+      published,
+      aclSynchronized,
+      consentEvidenceAccessLogDeleted,
+      consentEvidenceAccessLogHeld,
+      failures,
+    };
   }
 }
 

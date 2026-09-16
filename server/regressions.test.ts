@@ -46,6 +46,10 @@ import {
 } from "./objectStorage";
 import { ScheduledPublicationRunner } from "./scheduledPublications";
 import {
+  CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+  getConsentEvidenceAccessLogRetentionCutoff,
+} from "./consentEvidenceRetention";
+import {
   AuthorizationStateError,
   DuplicateInquiryError,
   EventRegistrationError,
@@ -2711,6 +2715,7 @@ test("scheduled publications respect clock boundaries, restart retries, and idem
   let aclAttempts = 0;
   let aclFailuresRemaining = 1;
   let marker: string | undefined;
+  const cleanupCalls: Array<{ cutoff: Date; now: Date; limit?: number }> = [];
   const fakeStorage = {
     claimDueScheduledPosts: async (now: Date, _limit: number) => {
       if (now < scheduledAt || claimCount > 0) return [];
@@ -2731,6 +2736,14 @@ test("scheduled publications respect clock boundaries, restart retries, and idem
     markResourceAclSynchronized: async (_postId: string, nextMarker: string) => {
       marker = nextMarker;
     },
+    cleanupConsentEvidenceAccessLog: async (options: {
+      cutoff: Date;
+      now: Date;
+      limit?: number;
+    }) => {
+      cleanupCalls.push(options);
+      return { deleted: 0, held: 0 };
+    },
   };
   const events: string[] = [];
   const objectStorage = {
@@ -2750,7 +2763,13 @@ test("scheduled publications respect clock boundaries, restart retries, and idem
   };
 
   const beforeRun = await new ScheduledPublicationRunner(options).runOnce(before);
-  assert.deepEqual(beforeRun, { published: 0, aclSynchronized: 0, failures: 0 });
+  assert.deepEqual(beforeRun, {
+    published: 0,
+    aclSynchronized: 0,
+    consentEvidenceAccessLogDeleted: 0,
+    consentEvidenceAccessLogHeld: 0,
+    failures: 0,
+  });
   assert.equal(resource.status, "draft");
 
   const firstDueRun = await new ScheduledPublicationRunner(options).runOnce(scheduledAt);
@@ -2764,18 +2783,113 @@ test("scheduled publications respect clock boundaries, restart retries, and idem
   const restartedRun = await new ScheduledPublicationRunner(options).runOnce(
     new Date(scheduledAt.getTime() + 1),
   );
-  assert.deepEqual(restartedRun, { published: 0, aclSynchronized: 1, failures: 0 });
+  assert.deepEqual(restartedRun, {
+    published: 0,
+    aclSynchronized: 1,
+    consentEvidenceAccessLogDeleted: 0,
+    consentEvidenceAccessLogHeld: 0,
+    failures: 0,
+  });
   assert.equal(claimCount, 1);
   assert.equal(aclAttempts, 2);
 
   const idempotentRun = await new ScheduledPublicationRunner(options).runOnce(
     new Date(scheduledAt.getTime() + 2),
   );
-  assert.deepEqual(idempotentRun, { published: 0, aclSynchronized: 0, failures: 0 });
+  assert.deepEqual(idempotentRun, {
+    published: 0,
+    aclSynchronized: 0,
+    consentEvidenceAccessLogDeleted: 0,
+    consentEvidenceAccessLogHeld: 0,
+    failures: 0,
+  });
   assert.equal(aclAttempts, 2);
   assert.ok(events.includes("posts_published"));
   assert.ok(events.includes("resource_acl_sync_failed"));
+  assert.equal(cleanupCalls[0]?.limit, CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE);
+  assert.equal(
+    cleanupCalls[0]?.cutoff.toISOString(),
+    getConsentEvidenceAccessLogRetentionCutoff(before).toISOString(),
+  );
+  assert.ok(events.includes("consent_evidence_access_log_cleanup"));
 });
+
+test(
+  "consent-evidence access cleanup is bounded, honors audit holds, and survives administrator deletion",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const suffix = randomUUID();
+    const admin = await storage.createUser({
+      email: `consent-retention-${suffix}@example.test`,
+      password: "test-password",
+      name: "Consent Retention Admin",
+      role: "admin",
+      userType: "staff",
+    });
+    const oldAccessedAt = new Date("2022-01-01T00:00:00.000Z");
+    const now = new Date("2026-09-16T00:00:00.000Z");
+    const holdUntil = new Date("2027-01-01T00:00:00.000Z");
+    const [deletable, held] = await db.insert(consentEvidenceAccessLog).values([
+      {
+        adminUserId: admin.id,
+        subjectType: "account",
+        subjectId: randomUUID(),
+        action: "view",
+        accessedAt: oldAccessedAt,
+      },
+      {
+        adminUserId: admin.id,
+        subjectType: "account",
+        subjectId: randomUUID(),
+        action: "export",
+        accessedAt: oldAccessedAt,
+        retentionHoldUntil: holdUntil,
+      },
+    ]).returning();
+
+    try {
+      await db.delete(users).where(eq(users.id, admin.id));
+      const cleanup = await storage.cleanupConsentEvidenceAccessLog({
+        cutoff: getConsentEvidenceAccessLogRetentionCutoff(now),
+        now,
+        limit: 1,
+      });
+      assert.equal(cleanup.deleted, 1);
+      assert.equal(cleanup.held, 1);
+
+      const heldRecord = await db
+        .select()
+        .from(consentEvidenceAccessLog)
+        .where(eq(consentEvidenceAccessLog.id, held.id));
+      assert.equal(heldRecord[0]?.adminUserId, null);
+      assert.equal(heldRecord[0]?.retentionHoldUntil?.toISOString(), holdUntil.toISOString());
+      assert.deepEqual(
+        await db
+          .select({ id: consentEvidenceAccessLog.id })
+          .from(consentEvidenceAccessLog)
+          .where(eq(consentEvidenceAccessLog.id, deletable.id)),
+        [],
+      );
+
+      assert.equal(
+        await storage.setConsentEvidenceAccessLogRetentionHold(held.id, null),
+        true,
+      );
+      const releasedCleanup = await storage.cleanupConsentEvidenceAccessLog({
+        cutoff: getConsentEvidenceAccessLogRetentionCutoff(now),
+        now,
+        limit: CONSENT_EVIDENCE_ACCESS_LOG_CLEANUP_BATCH_SIZE,
+      });
+      assert.equal(releasedCleanup.deleted, 1);
+    } finally {
+      await db
+        .delete(consentEvidenceAccessLog)
+        .where(inArray(consentEvidenceAccessLog.id, [deletable.id, held.id]));
+      await db.delete(users).where(eq(users.id, admin.id));
+    }
+  },
+);
 
 test("scheduled post rules reject conflicting states and resource ACLs follow time windows", () => {
   const scheduledAt = new Date("2026-08-31T12:00:00.000Z");
