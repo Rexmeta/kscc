@@ -236,6 +236,11 @@ function toPublicMember(member: import("@shared/schema").Member) {
 }
 
 const CSRF_HEADER = "x-csrf-token";
+const CSRF_SESSION_ESTABLISHING_PATHS = new Set([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/wechat/exchange",
+]);
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   const token = getSessionToken(req);
 
@@ -2276,8 +2281,14 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   }
 
   // Login, registration, and public inquiry submission do not have an account
-  // session yet. Origin validation still prevents cross-site state changes.
-  if (getSessionToken(req) && !csrfTokensMatch(req)) {
+  // session yet. A stale session cookie may still be present when a user tries
+  // to sign in again, so session-establishing endpoints must not be blocked by
+  // that cookie. Origin validation still prevents cross-site state changes.
+  if (
+    getSessionToken(req)
+    && !CSRF_SESSION_ESTABLISHING_PATHS.has(req.path)
+    && !csrfTokensMatch(req)
+  ) {
     return res.status(403).json({ message: "CSRF validation failed" });
   }
   next();
