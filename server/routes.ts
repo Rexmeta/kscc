@@ -1092,15 +1092,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No fields to update" });
       }
       
+      const userId = z.string().uuid().parse(req.params.id);
       const updatedUser = await storage.updateUserAuthorization(
-        req.params.id,
+        userId,
         updateData,
         accountRole,
       );
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
-      if (req.params.id === req.user!.id) {
+      if (userId === req.user!.id) {
         clearAuthSessionCookie(res);
       }
       
@@ -1334,7 +1335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { tierId, roleId } = membershipUpdateSchema.parse(req.body);
-      const userId = req.params.id;
+      const userId = z.string().uuid().parse(req.params.id);
       
       // Validate userId is UUID
       const userIdSchema = z.string().uuid();
@@ -1559,12 +1560,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/members/:id", authenticateToken, requireAdminOrPermission("member.delete"), async (req, res) => {
     try {
-      const member = await storage.getMember(req.params.id);
+      const memberId = z.string().uuid().parse(req.params.id);
+      const member = await storage.getMember(memberId);
       if (!member) {
         return res.status(404).json({ message: "Member not found" });
       }
       
-      await storage.deleteMember(req.params.id);
+      await storage.deleteMember(memberId);
       res.json({ message: "Member deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -1904,7 +1906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid organization member id" });
       }
 
-      const member = await storage.getOrganizationMember(req.params.id);
+      const member = await storage.getOrganizationMember(parsedId.data);
       // Do not reveal whether an inactive record exists to public callers.
       const isExecutiveOperator = req.user?.role === 'operator'
         && await hasPermission(req.user.id, executivePermissions.read);
@@ -1974,7 +1976,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAdminOrOperatorPermission(executivePermissions.update),
     async (req, res) => {
       try {
-        const member = await storage.getOrganizationMember(req.params.id);
+        const memberId = organizationMemberIdSchema.parse(req.params.id);
+        const member = await storage.getOrganizationMember(memberId);
         if (!member) {
           return res.status(404).json({ message: "Organization member not found" });
         }
@@ -1986,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(403).json({ message: "Operators may only manage executives" });
           }
         }
-        const updatedMember = await storage.updateOrganizationMember(req.params.id, updateData);
+        const updatedMember = await storage.updateOrganizationMember(memberId, updateData);
         res.json(updatedMember);
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -1999,12 +2002,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/organization-members/:id", authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const member = await storage.getOrganizationMember(req.params.id);
+      const memberId = organizationMemberIdSchema.parse(req.params.id);
+      const member = await storage.getOrganizationMember(memberId);
       if (!member) {
         return res.status(404).json({ message: "Organization member not found" });
       }
       
-      await storage.deleteOrganizationMember(req.params.id);
+      await storage.deleteOrganizationMember(memberId);
       res.json({ message: "Organization member deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
@@ -2143,7 +2147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Endpoint for serving uploaded objects. Every object must have an ACL;
   // resource objects also inherit the post's published visibility policy.
-  app.get("/objects/:objectPath(*)", optionalAuthenticateToken, async (req, res) => {
+  app.get("/objects{/*objectPath}", optionalAuthenticateToken, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
       const objectPath = objectStorageService.normalizeObjectEntityPath(req.path);

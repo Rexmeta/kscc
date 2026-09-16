@@ -9,6 +9,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   eventRegistrations,
   consentEvidence,
+  consentEvidenceAccessLog,
   insertInquiryReplySchema,
   insertInquirySchema,
   insertPartnerSchema,
@@ -536,6 +537,234 @@ test(
       if (consentedRegistrationUserId) {
         await db.delete(users).where(eq(users.id, consentedRegistrationUserId));
       }
+      if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
+      else process.env.SESSION_SECRET = originalSessionSecret;
+    }
+  },
+);
+
+test(
+  "consent evidence access history is administrator-only, filtered, paginated, and redacted",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db, storage } = await getDatabase();
+    const originalSessionSecret = process.env.SESSION_SECRET;
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = `consent-history-test-${randomUUID()}`;
+    }
+    const suffix = randomUUID();
+    const logIds = Array.from({ length: 5 }, () => randomUUID());
+    const accountSubjectId = randomUUID();
+    const secondAccountSubjectId = randomUUID();
+    const secondInquirySubjectId = randomUUID();
+    const [admin, member, deletedAdmin] = await Promise.all([
+      storage.createUser({
+        email: `consent-history-admin-${suffix}@example.test`,
+        password: "test-password",
+        name: "Consent History Admin",
+        role: "admin",
+        userType: "staff",
+      }),
+      storage.createUser({
+        email: `consent-history-member-${suffix}@example.test`,
+        password: "test-password",
+        name: "Consent History Member",
+        role: "user",
+        userType: "staff",
+      }),
+      storage.createUser({
+        email: `consent-history-deleted-${suffix}@example.test`,
+        password: "test-password",
+        name: "Deleted Consent History Admin",
+        role: "admin",
+        userType: "staff",
+      }),
+    ]);
+    const [inquiry] = await db.insert(inquiries).values({
+      category: "membership",
+      name: "Private inquiry sender",
+      email: `private-inquiry-${suffix}@example.test`,
+      phone: "010-0000-0000",
+      subject: "Private inquiry subject",
+      message: "Private inquiry message with password=should-not-appear",
+    }).returning();
+    const accessedAt = [
+      new Date("2026-09-16T03:00:00.000Z"),
+      new Date("2026-09-16T02:00:00.000Z"),
+      new Date("2026-09-16T02:00:00.000Z"),
+      new Date("2026-09-16T01:00:00.000Z"),
+      new Date("2026-09-16T00:00:00.000Z"),
+    ];
+    const logRows = [
+      {
+        id: logIds[0],
+        adminUserId: admin.id,
+        subjectType: "inquiry" as const,
+        subjectId: inquiry.id,
+        action: "export" as const,
+        accessedAt: accessedAt[0],
+      },
+      {
+        id: logIds[1],
+        adminUserId: deletedAdmin.id,
+        subjectType: "inquiry" as const,
+        subjectId: inquiry.id,
+        action: "view" as const,
+        accessedAt: accessedAt[1],
+      },
+      {
+        id: logIds[2],
+        adminUserId: admin.id,
+        subjectType: "account" as const,
+        subjectId: accountSubjectId,
+        action: "view" as const,
+        accessedAt: accessedAt[2],
+      },
+      {
+        id: logIds[3],
+        adminUserId: admin.id,
+        subjectType: "account" as const,
+        subjectId: secondAccountSubjectId,
+        action: "export" as const,
+        accessedAt: accessedAt[3],
+      },
+      {
+        id: logIds[4],
+        adminUserId: admin.id,
+        subjectType: "inquiry" as const,
+        subjectId: secondInquirySubjectId,
+        action: "view" as const,
+        accessedAt: accessedAt[4],
+      },
+    ];
+    await db.insert(consentEvidenceAccessLog).values(logRows);
+    await db.delete(users).where(eq(users.id, deletedAdmin.id));
+
+    const [{ registerRoutes }] = await Promise.all([import("./routes")]);
+    const app = express();
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    const tokenFor = (user: { id: string; sessionVersion: number | null }) =>
+      issueAuthToken(user, process.env.SESSION_SECRET!);
+    const request = async (path: string, token?: string) => {
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+        headers: token ? { Cookie: `auth_session=${token}` } : undefined,
+      });
+      const responseText = await response.text();
+      let body: Record<string, any>;
+      try {
+        body = JSON.parse(responseText);
+      } catch {
+        body = { message: responseText };
+      }
+      return {
+        status: response.status,
+        body,
+      };
+    };
+    const adminToken = tokenFor(admin);
+    const memberToken = tokenFor(member);
+    const expectedEntry = (row: typeof logRows[number]) => ({
+      adminUserId: row.adminUserId === deletedAdmin.id ? null : row.adminUserId,
+      subjectType: row.subjectType,
+      subjectId: row.subjectId,
+      action: row.action,
+      accessedAt: row.accessedAt.toISOString(),
+    });
+    const orderedRows = [...logRows].sort((left, right) =>
+      right.accessedAt.getTime() - left.accessedAt.getTime()
+      || right.id.localeCompare(left.id));
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+
+      assert.equal((await request("/api/admin/consent-evidence/access-log")).status, 401);
+      assert.equal(
+        (await request("/api/admin/consent-evidence/access-log", memberToken)).status,
+        403,
+      );
+
+      const firstPage = await request(
+        "/api/admin/consent-evidence/access-log?page=1&limit=2",
+        adminToken,
+      );
+      assert.equal(firstPage.status, 200);
+      assert.deepEqual(firstPage.body, {
+        entries: orderedRows.slice(0, 2).map(expectedEntry),
+        total: logRows.length,
+        page: 1,
+        totalPages: 3,
+      });
+
+      const secondPage = await request(
+        "/api/admin/consent-evidence/access-log?page=2&limit=2",
+        adminToken,
+      );
+      assert.equal(secondPage.status, 200);
+      assert.deepEqual(
+        secondPage.body.entries,
+        orderedRows.slice(2, 4).map(expectedEntry),
+      );
+
+      for (const [query, rows] of [
+        ["subjectType=account", logRows.filter((row) => row.subjectType === "account")],
+        [`subjectId=${inquiry.id}`, logRows.filter((row) => row.subjectId === inquiry.id)],
+        ["action=view", logRows.filter((row) => row.action === "view")],
+      ] as const) {
+        const filtered = await request(
+          `/api/admin/consent-evidence/access-log?${query}`,
+          adminToken,
+        );
+        assert.equal(filtered.status, 200);
+        assert.deepEqual(
+          filtered.body.entries,
+          [...rows].sort((left, right) =>
+            right.accessedAt.getTime() - left.accessedAt.getTime()
+            || right.id.localeCompare(left.id)).map(expectedEntry),
+        );
+        assert.equal(filtered.body.total, rows.length);
+      }
+
+      const serialized = JSON.stringify(firstPage.body);
+      for (const forbidden of [
+        "Private inquiry message",
+        `private-inquiry-${suffix}@example.test`,
+        "password=should-not-appear",
+        "Consent History Admin",
+        "Deleted Consent History Admin",
+      ]) {
+        assert.equal(serialized.includes(forbidden), false, `leaked ${forbidden}`);
+      }
+
+      const deletedAdminEntry = await request(
+        `/api/admin/consent-evidence/access-log?subjectId=${inquiry.id}&action=view`,
+        adminToken,
+      );
+      assert.deepEqual(deletedAdminEntry.body.entries, [
+        expectedEntry(logRows[1]),
+      ]);
+      assert.equal(deletedAdminEntry.body.entries[0].adminUserId, null);
+      assert.deepEqual(Object.keys(deletedAdminEntry.body.entries[0]).sort(), [
+        "accessedAt",
+        "action",
+        "adminUserId",
+        "subjectId",
+        "subjectType",
+      ]);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()));
+      await db.delete(consentEvidenceAccessLog).where(inArray(
+        consentEvidenceAccessLog.id,
+        logIds,
+      ));
+      await db.delete(inquiries).where(eq(inquiries.id, inquiry.id));
+      await db.delete(users).where(inArray(users.id, [admin.id, member.id]));
       if (originalSessionSecret === undefined) delete process.env.SESSION_SECRET;
       else process.env.SESSION_SECRET = originalSessionSecret;
     }
