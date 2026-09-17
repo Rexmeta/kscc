@@ -38,6 +38,7 @@ import {
   getUserMembershipInfoBatch,
   getUserPermissions,
   hasPermission,
+  hasAnyPermission,
   requirePermission,
   requireAnyPermission,
 } from "./permissions";
@@ -95,8 +96,11 @@ import {
 } from "./wechatOAuth";
 import { getMemberServiceFlags, isMemberServiceDirectoryEnabled } from "./memberServiceFlags";
 import {
+  getMemberServiceOrganizationReview,
   getPublicOrganization,
+  listMemberServiceReviewQueue,
   listPublicOrganizations,
+  reviewMemberServiceOrganization,
 } from "./memberServiceDirectory";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
@@ -120,6 +124,25 @@ const inquiryQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
+
+const memberServiceReviewQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+}).strict();
+
+const memberServiceReviewBodySchema = z.object({
+  decision: z.enum(["approve", "limit", "reject"]),
+  evidenceUrl: z.string()
+    .trim()
+    .url()
+    .max(2048)
+    .refine((value) => value.startsWith("https://") || value.startsWith("http://"), {
+      message: "Evidence URL must use http or https.",
+    })
+    .optional(),
+  verificationDate: z.coerce.date().optional(),
+  note: z.string().trim().max(2000).optional(),
 }).strict();
 
 const paginatedCollectionQuerySchema = z.object({
@@ -378,6 +401,25 @@ function requireAdminOrOperatorPermission(permission: string) {
     next();
   };
 }
+
+function requireAdminOrOperatorAnyPermission(...permissionKeys: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.user?.role === 'admin') {
+      return next();
+    }
+    if (req.user?.role !== 'operator') {
+      return res.status(403).json({ message: 'Operator access required' });
+    }
+    const allowed = await hasAnyPermission(req.user.id, permissionKeys);
+    if (!allowed) {
+      return res.status(403).json({
+        message: 'Insufficient permissions',
+        requiredAny: permissionKeys,
+      });
+    }
+    next();
+  };
+}
 export async function registerRoutes(app: Express): Promise<Server> {
   app.use(ensureCsrfCookie);
   app.use(csrfProtection);
@@ -457,6 +499,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Organization could not be loaded." });
     }
   });
+
+  app.get(
+    "/api/member-service/v1/operator/review-queue",
+    authenticateToken,
+    requireAdminOrOperatorAnyPermission("member_service.operator.manage", "member_service.verification.read"),
+    async (req, res) => {
+      if (!getMemberServiceFlags().operator) {
+        return res.status(404).json({ message: "Member service operator tools are not available." });
+      }
+
+      try {
+        const query = memberServiceReviewQuerySchema.parse(req.query);
+        return res.json(await listMemberServiceReviewQueue(query));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid review queue filters." });
+        }
+        emitOperationalEvent("member_service.operator.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "review_queue_list",
+          reason: "query_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Review queue could not be loaded." });
+      }
+    },
+  );
+
+  app.get(
+    "/api/member-service/v1/operator/organizations/:id/review",
+    authenticateToken,
+    requireAdminOrOperatorAnyPermission("member_service.operator.manage", "member_service.verification.read"),
+    async (req, res) => {
+      if (!getMemberServiceFlags().operator) {
+        return res.status(404).json({ message: "Member service operator tools are not available." });
+      }
+
+      try {
+        const id = z.string().uuid().parse(req.params.id);
+        const review = await getMemberServiceOrganizationReview(id);
+        if (!review) {
+          return res.status(404).json({ message: "Organization review not found." });
+        }
+        return res.json(review);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid organization ID." });
+        }
+        emitOperationalEvent("member_service.operator.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "organization_review_detail",
+          reason: "query_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Organization review could not be loaded." });
+      }
+    },
+  );
+
+  app.post(
+    "/api/member-service/v1/operator/organizations/:id/verify",
+    authenticateToken,
+    requireAdminOrOperatorAnyPermission("member_service.operator.manage", "member_service.verification.write"),
+    async (req, res) => {
+      if (!getMemberServiceFlags().operator) {
+        return res.status(404).json({ message: "Member service operator tools are not available." });
+      }
+
+      try {
+        const id = z.string().uuid().parse(req.params.id);
+        const body = memberServiceReviewBodySchema.parse(req.body);
+        if (body.decision === "approve" && (!body.evidenceUrl || !body.verificationDate)) {
+          return res.status(400).json({
+            message: "Approval requires an evidence URL and verification date.",
+          });
+        }
+        if (body.verificationDate && body.verificationDate.getTime() > Date.now()) {
+          return res.status(400).json({ message: "Verification date cannot be in the future." });
+        }
+
+        const organization = await reviewMemberServiceOrganization({
+          organizationId: id,
+          reviewerId: req.user!.id,
+          decision: body.decision,
+          evidenceUrl: body.evidenceUrl,
+          verificationDate: body.verificationDate,
+          note: body.note || undefined,
+          correlationId: getCorrelationId(req),
+        });
+        if (!organization) {
+          return res.status(404).json({ message: "Organization is no longer awaiting review." });
+        }
+        return res.json({
+          organizationId: organization.id,
+          decision: body.decision,
+          publicApproved: organization.publicApproved,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid organization review input." });
+        }
+        emitOperationalEvent("member_service.operator.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "organization_review_decision",
+          reason: "mutation_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Organization review could not be saved." });
+      }
+    },
+  );
   
   // Auth routes
   app.get("/api/auth/wechat/start", (req, res) => {

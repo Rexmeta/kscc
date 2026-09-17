@@ -1,11 +1,14 @@
 import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
+  memberServiceImportRows,
   memberServiceOrganizationLocalizations,
   memberServiceOrganizations,
   memberServiceOrganizationServices,
   memberServiceOrganizationRegions,
   memberServiceServices,
   memberServiceRegions,
+  memberServiceReviewAudits,
+  users,
   type MemberServicePublicOrganization,
 } from "@shared/schema";
 import { db } from "./db";
@@ -16,6 +19,7 @@ export const PUBLIC_VERIFICATION_STATUSES = [
 ] as const;
 
 const MAX_PAGE_SIZE = 50;
+export const MAX_REVIEW_PAGE_SIZE = 50;
 
 type DirectoryFilters = {
   q?: string;
@@ -290,4 +294,299 @@ export async function getPublicOrganization(id: string, language: "ko" | "en" | 
       .map(({ organizationId: _organizationId, ...row }) => row),
     language,
   );
+}
+
+type ReviewQueueFilters = {
+  page: number;
+  limit: number;
+};
+
+type ReviewDecision = "approve" | "limit" | "reject";
+
+export type MemberServiceReviewInput = {
+  organizationId: string;
+  reviewerId: string;
+  decision: ReviewDecision;
+  evidenceUrl?: string;
+  verificationDate?: Date;
+  note?: string;
+  correlationId?: string;
+};
+
+function clampReviewPageSize(limit: number) {
+  return Math.min(Math.max(limit, 1), MAX_REVIEW_PAGE_SIZE);
+}
+
+function reviewQueueWhere() {
+  return and(
+    eq(memberServiceOrganizations.publicApproved, false),
+    sql`exists (
+      select 1
+      from ${memberServiceImportRows} staged_row
+      where staged_row.organization_id = ${memberServiceOrganizations.id}
+        and staged_row.status = 'needs_review'
+    )`,
+  );
+}
+
+function toReviewOrganization(
+  organization: typeof memberServiceOrganizations.$inferSelect,
+  importRow: typeof memberServiceImportRows.$inferSelect | null,
+  localizations: Array<{
+    locale: "ko" | "en" | "zh";
+    officialName: string;
+    displayName: string | null;
+    summary: string | null;
+    isOfficial: boolean;
+  }>,
+) {
+  return {
+    id: organization.id,
+    sourceRecordKey: organization.sourceRecordKey,
+    organizationType: organization.organizationType,
+    legalForm: organization.legalForm,
+    supervisingAuthority: organization.supervisingAuthority,
+    scope: organization.scope,
+    baseCountry: organization.baseCountry,
+    baseRegion: organization.baseRegion,
+    chinaRegionFocus: organization.chinaRegionFocus,
+    primaryDomain: organization.primaryDomain,
+    summaryKo: organization.summaryKo,
+    websiteUrl: organization.websiteUrl,
+    contactUrl: organization.contactUrl,
+    verificationStatus: organization.verificationStatus,
+    sourceType: organization.sourceType,
+    sourceUrl: organization.sourceUrl,
+    lastVerifiedAt: organization.lastVerifiedAt?.toISOString() ?? null,
+    nextReviewAt: organization.nextReviewAt?.toISOString() ?? null,
+    isActive: organization.isActive,
+    publicApproved: organization.publicApproved,
+    reviewNote: organization.reviewNote,
+    createdAt: organization.createdAt.toISOString(),
+    updatedAt: organization.updatedAt.toISOString(),
+    localizations,
+    import: importRow
+      ? {
+        id: importRow.id,
+        sourceRecordKey: importRow.sourceRecordKey,
+        rawData: importRow.rawData,
+        status: importRow.status,
+        reasonCodes: importRow.reasonCodes,
+        createdAt: importRow.createdAt.toISOString(),
+      }
+      : null,
+  };
+}
+
+async function getReviewLocalizations(organizationIds: string[]) {
+  if (organizationIds.length === 0) return [];
+  return db
+    .select({
+      organizationId: memberServiceOrganizationLocalizations.organizationId,
+      locale: memberServiceOrganizationLocalizations.locale,
+      officialName: memberServiceOrganizationLocalizations.officialName,
+      displayName: memberServiceOrganizationLocalizations.displayName,
+      summary: memberServiceOrganizationLocalizations.summary,
+      isOfficial: memberServiceOrganizationLocalizations.isOfficial,
+    })
+    .from(memberServiceOrganizationLocalizations)
+    .where(inArray(memberServiceOrganizationLocalizations.organizationId, organizationIds));
+}
+
+async function getLatestImportRows(organizationIds: string[], status?: string) {
+  if (organizationIds.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(memberServiceImportRows)
+    .where(and(
+      inArray(memberServiceImportRows.organizationId, organizationIds),
+      status ? eq(memberServiceImportRows.status, status) : undefined,
+    ))
+    .orderBy(desc(memberServiceImportRows.createdAt));
+  const latestByOrganization = new Map<string, typeof rows[number]>();
+  for (const row of rows) {
+    if (row.organizationId && !latestByOrganization.has(row.organizationId)) {
+      latestByOrganization.set(row.organizationId, row);
+    }
+  }
+  return Array.from(latestByOrganization.values());
+}
+
+export async function listMemberServiceReviewQueue(filters: ReviewQueueFilters) {
+  const page = Math.max(filters.page, 1);
+  const limit = clampReviewPageSize(filters.limit);
+  const offset = (page - 1) * limit;
+  const where = reviewQueueWhere();
+
+  const [organizations, countRows] = await Promise.all([
+    db
+      .select()
+      .from(memberServiceOrganizations)
+      .where(where)
+      .orderBy(memberServiceOrganizations.createdAt, memberServiceOrganizations.id)
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberServiceOrganizations)
+      .where(where),
+  ]);
+
+  const ids = organizations.map((organization) => organization.id);
+  const [localizations, importRows] = await Promise.all([
+    getReviewLocalizations(ids),
+    getLatestImportRows(ids, "needs_review"),
+  ]);
+  const importByOrganization = new Map(
+    importRows
+      .filter((row) => row.organizationId)
+      .map((row) => [row.organizationId as string, row]),
+  );
+  const items = organizations.map((organization) => toReviewOrganization(
+    organization,
+    importByOrganization.get(organization.id) ?? null,
+    localizations
+      .filter((row) => row.organizationId === organization.id)
+      .map(({ organizationId: _organizationId, ...row }) => row),
+  ));
+  const total = countRows[0]?.count ?? 0;
+
+  return {
+    organizations: items,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
+}
+
+export async function getMemberServiceOrganizationReview(id: string) {
+  const [organization] = await db
+    .select()
+    .from(memberServiceOrganizations)
+    .where(eq(memberServiceOrganizations.id, id))
+    .limit(1);
+  if (!organization) return null;
+
+  const [localizations, importRows, audits] = await Promise.all([
+    getReviewLocalizations([id]),
+    getLatestImportRows([id]),
+    db
+      .select({
+        id: memberServiceReviewAudits.id,
+        decision: memberServiceReviewAudits.decision,
+        evidenceUrl: memberServiceReviewAudits.evidenceUrl,
+        verificationDate: memberServiceReviewAudits.verificationDate,
+        publicApproved: memberServiceReviewAudits.publicApproved,
+        note: memberServiceReviewAudits.note,
+        correlationId: memberServiceReviewAudits.correlationId,
+        createdAt: memberServiceReviewAudits.createdAt,
+        reviewerId: memberServiceReviewAudits.reviewerId,
+        reviewerName: users.name,
+      })
+      .from(memberServiceReviewAudits)
+      .leftJoin(users, eq(memberServiceReviewAudits.reviewerId, users.id))
+      .where(eq(memberServiceReviewAudits.organizationId, id))
+      .orderBy(desc(memberServiceReviewAudits.createdAt)),
+  ]);
+
+  return {
+    organization: toReviewOrganization(
+      organization,
+      importRows[0] ?? null,
+      localizations
+        .filter((row) => row.organizationId === organization.id)
+        .map(({ organizationId: _organizationId, ...row }) => row),
+    ),
+    audits: audits.map((audit) => ({
+      ...audit,
+      verificationDate: audit.verificationDate?.toISOString() ?? null,
+      createdAt: audit.createdAt.toISOString(),
+    })),
+  };
+}
+
+function nextReviewDate(verificationDate: Date, verificationStatus: string) {
+  const days = verificationStatus === "verified_register" ? 365 : 180;
+  return new Date(verificationDate.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+export async function reviewMemberServiceOrganization(input: MemberServiceReviewInput) {
+  return db.transaction(async (tx) => {
+    const [organization] = await tx
+      .select()
+      .from(memberServiceOrganizations)
+      .where(and(
+        eq(memberServiceOrganizations.id, input.organizationId),
+        eq(memberServiceOrganizations.publicApproved, false),
+        sql`exists (
+          select 1
+          from ${memberServiceImportRows} staged_row
+          where staged_row.organization_id = ${memberServiceOrganizations.id}
+            and staged_row.status = 'needs_review'
+        )`,
+      ))
+      .limit(1);
+    if (!organization) return null;
+
+    const publicApproved = input.decision === "approve";
+    const verificationStatus = input.decision === "approve"
+      ? (["verified_official", "verified_register"].includes(organization.verificationStatus)
+        ? organization.verificationStatus
+        : "verified_official")
+      : input.decision === "limit" ? "limited" : "rejected";
+    const verificationDate = input.verificationDate ?? organization.lastVerifiedAt;
+    const updatedValues = {
+      verificationStatus,
+      sourceUrl: input.evidenceUrl ?? organization.sourceUrl,
+      lastVerifiedAt: verificationDate,
+      nextReviewAt: publicApproved && verificationDate
+        ? nextReviewDate(verificationDate, verificationStatus)
+        : null,
+      reviewNote: input.note ?? organization.reviewNote,
+      isActive: input.decision === "reject" ? false : true,
+      publicApproved,
+      updatedAt: new Date(),
+    };
+    const [updated] = await tx
+      .update(memberServiceOrganizations)
+      .set(updatedValues)
+      .where(eq(memberServiceOrganizations.id, organization.id))
+      .returning();
+
+    await tx
+      .update(memberServiceImportRows)
+      .set({ status: input.decision === "approve" ? "approved" : input.decision === "limit" ? "limited" : "rejected" })
+      .where(and(
+        eq(memberServiceImportRows.organizationId, organization.id),
+        eq(memberServiceImportRows.status, "needs_review"),
+      ));
+
+    await tx.insert(memberServiceReviewAudits).values({
+      organizationId: organization.id,
+      reviewerId: input.reviewerId,
+      decision: input.decision,
+      evidenceUrl: input.evidenceUrl ?? organization.sourceUrl,
+      verificationDate,
+      publicApproved,
+      note: input.note ?? null,
+      beforeState: {
+        verificationStatus: organization.verificationStatus,
+        sourceUrl: organization.sourceUrl,
+        lastVerifiedAt: organization.lastVerifiedAt?.toISOString() ?? null,
+        isActive: organization.isActive,
+        publicApproved: organization.publicApproved,
+      },
+      afterState: {
+        verificationStatus: updated.verificationStatus,
+        sourceUrl: updated.sourceUrl,
+        lastVerifiedAt: updated.lastVerifiedAt?.toISOString() ?? null,
+        isActive: updated.isActive,
+        publicApproved: updated.publicApproved,
+      },
+      correlationId: input.correlationId,
+    });
+
+    return updated;
+  });
 }

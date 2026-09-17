@@ -1087,12 +1087,35 @@ export const memberServiceImportRows = pgTable("member_service_import_rows", {
     .on(table.status, table.createdAt),
 }));
 
+export const memberServiceReviewAudits = pgTable("member_service_review_audits", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "cascade" }),
+  reviewerId: uuid("reviewer_id").references(() => users.id, { onDelete: "set null" }),
+  decision: text("decision").notNull(),
+  evidenceUrl: text("evidence_url"),
+  verificationDate: timestamp("verification_date", { withTimezone: true }),
+  publicApproved: boolean("public_approved").notNull(),
+  note: text("note"),
+  beforeState: jsonb("before_state"),
+  afterState: jsonb("after_state"),
+  correlationId: text("correlation_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  organizationCreatedIdx: index("member_service_review_audits_org_created_idx")
+    .on(table.organizationId, table.createdAt),
+  reviewerCreatedIdx: index("member_service_review_audits_reviewer_created_idx")
+    .on(table.reviewerId, table.createdAt),
+}));
+
 export type MemberServiceOrganization = typeof memberServiceOrganizations.$inferSelect;
 export type MemberServiceOrganizationLocalization =
   typeof memberServiceOrganizationLocalizations.$inferSelect;
 export type MemberServiceOrganizationService = typeof memberServiceOrganizationServices.$inferSelect;
 export type MemberServiceOrganizationRegion = typeof memberServiceOrganizationRegions.$inferSelect;
 export type MemberServiceOrganizationContact = typeof memberServiceOrganizationContacts.$inferSelect;
+export type MemberServiceReviewAudit = typeof memberServiceReviewAudits.$inferSelect;
 export type MemberServicePublicOrganization = {
   id: string;
   name: string;

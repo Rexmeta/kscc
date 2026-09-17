@@ -62,6 +62,20 @@ export interface TranslationKeys {
   'memberService.noSummary': string;
   'memberService.services': string;
   'memberService.regions': string;
+  'memberService.operatorTitle': string;
+  'memberService.operatorSubtitle': string;
+  'memberService.operatorDisabled': string;
+  'memberService.operatorQueue': string;
+  'memberService.operatorEmpty': string;
+  'memberService.operatorEvidence': string;
+  'memberService.operatorVerificationDate': string;
+  'memberService.operatorNote': string;
+  'memberService.operatorApprove': string;
+  'memberService.operatorLimit': string;
+  'memberService.operatorReject': string;
+  'memberService.operatorRawData': string;
+  'memberService.operatorReasonCodes': string;
+  'memberService.operatorSaved': string;
 
   // Hero Section
   'hero.title': string;
@@ -367,6 +381,20 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': '공개된 소개가 없습니다.',
     'memberService.services': '서비스',
     'memberService.regions': '대응 지역',
+    'memberService.operatorTitle': '기관 검수',
+    'memberService.operatorSubtitle': '기관이 공개되기 전에 운영자가 검수합니다.',
+    'memberService.operatorDisabled': '회원 서비스 운영 도구가 활성화되지 않았습니다.',
+    'memberService.operatorQueue': '검수 대기열',
+    'memberService.operatorEmpty': '검수를 기다리는 임시 저장 기관이 없습니다.',
+    'memberService.operatorEvidence': '근거 URL',
+    'memberService.operatorVerificationDate': '확인 날짜',
+    'memberService.operatorNote': '내부 검수 메모',
+    'memberService.operatorApprove': '공개 승인',
+    'memberService.operatorLimit': '제한',
+    'memberService.operatorReject': '반려',
+    'memberService.operatorRawData': '가져온 원본 데이터',
+    'memberService.operatorReasonCodes': '검수 사유',
+    'memberService.operatorSaved': '검수 결정이 저장되었습니다.',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -670,6 +698,20 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': 'No public summary is available.',
     'memberService.services': 'Services',
     'memberService.regions': 'Regions',
+    'memberService.operatorTitle': 'Organization review',
+    'memberService.operatorSubtitle': 'Review staged organizations before they become public.',
+    'memberService.operatorDisabled': 'The member service operator tools are not enabled.',
+    'memberService.operatorQueue': 'Review queue',
+    'memberService.operatorEmpty': 'There are no staged organizations waiting for review.',
+    'memberService.operatorEvidence': 'Evidence URL',
+    'memberService.operatorVerificationDate': 'Verification date',
+    'memberService.operatorNote': 'Internal review note',
+    'memberService.operatorApprove': 'Approve publicly',
+    'memberService.operatorLimit': 'Limit',
+    'memberService.operatorReject': 'Reject',
+    'memberService.operatorRawData': 'Imported source data',
+    'memberService.operatorReasonCodes': 'Review reasons',
+    'memberService.operatorSaved': 'Review decision saved.',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -973,6 +1015,20 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': '暂无公开介绍。',
     'memberService.services': '服务',
     'memberService.regions': '对应地区',
+    'memberService.operatorTitle': '机构审核',
+    'memberService.operatorSubtitle': '在机构公开前审核暂存机构。',
+    'memberService.operatorDisabled': '机构服务运营工具尚未启用。',
+    'memberService.operatorQueue': '审核队列',
+    'memberService.operatorEmpty': '目前没有等待审核的暂存机构。',
+    'memberService.operatorEvidence': '证据网址',
+    'memberService.operatorVerificationDate': '验证日期',
+    'memberService.operatorNote': '内部审核备注',
+    'memberService.operatorApprove': '批准公开',
+    'memberService.operatorLimit': '限制',
+    'memberService.operatorReject': '拒绝',
+    'memberService.operatorRawData': '导入源数据',
+    'memberService.operatorReasonCodes': '审核原因',
+    'memberService.operatorSaved': '审核决定已保存。',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',
