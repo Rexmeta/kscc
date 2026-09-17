@@ -214,8 +214,8 @@ export function UsersTab({ activeTab }: { activeTab: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => setConsentEvidenceUser(user)}
-                aria-label={`${user.name} 동의 증적 보기`}
-                title="동의 증적 보기"
+                aria-label={`${user.name} 동의 기록 보기`}
+                title="동의 기록 보기"
                 data-testid={`button-view-consent-evidence-account-${user.id}`}
               >
                 <FileCheck className="h-4 w-4" />

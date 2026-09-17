@@ -91,8 +91,8 @@ export function InquiriesTab({ activeTab }: { activeTab: string }) {
                 size="sm"
                 variant="outline"
                 onClick={() => setConsentEvidenceInquiry(inquiry)}
-                aria-label="문의 동의 증적 보기"
-                title="동의 증적 보기"
+                aria-label="문의 동의 기록 보기"
+                title="동의 기록 보기"
                 data-testid={`button-view-consent-evidence-inquiry-${inquiry.id}`}
               >
                 <FileCheck className="h-4 w-4" />

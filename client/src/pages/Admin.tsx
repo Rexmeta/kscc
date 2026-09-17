@@ -122,7 +122,7 @@ export default function AdminPage() {
                 {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
                 {allowedTabs.includes('pages') && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
                  {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
-                {isAdmin && <SelectItem value="consent-evidence-access-log" data-testid="option-tab-consent-evidence-access-log">동의 증적 접근 이력</SelectItem>}
+                {isAdmin && <SelectItem value="consent-evidence-access-log" data-testid="option-tab-consent-evidence-access-log">동의 기록 내역</SelectItem>}
                 {allowedTabs.includes('organization') && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
                  {allowedTabs.includes('partners') && <SelectItem value="partners" data-testid="option-tab-partners">파트너</SelectItem>}
                  {allowedTabs.includes('survey') && <SelectItem value="survey" data-testid="option-tab-survey">설문</SelectItem>}
@@ -143,7 +143,7 @@ export default function AdminPage() {
               {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
                {allowedTabs.includes('pages') && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
                {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
-              {isAdmin && <TabsTrigger value="consent-evidence-access-log" data-testid="tab-consent-evidence-access-log" className="text-sm whitespace-nowrap">동의 증적 이력</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="consent-evidence-access-log" data-testid="tab-consent-evidence-access-log" className="text-sm whitespace-nowrap">동의 기록 내역</TabsTrigger>}
                {allowedTabs.includes('organization') && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
                {allowedTabs.includes('partners') && <TabsTrigger value="partners" data-testid="tab-partners" className="text-sm whitespace-nowrap">파트너</TabsTrigger>}
                {allowedTabs.includes('survey') && <TabsTrigger value="survey" data-testid="tab-survey" className="text-sm whitespace-nowrap">설문</TabsTrigger>}

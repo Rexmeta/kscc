@@ -80,10 +80,10 @@ export function ConsentEvidenceDialog({
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(url);
-      toast({ title: '동의 증적을 내보냈습니다.' });
+      toast({ title: '동의 기록을 CSV로 다운로드했습니다.' });
     } catch {
       toast({
-        title: '동의 증적 내보내기 실패',
+        title: '동의 기록 다운로드 실패',
         description: '관리자 권한을 확인하고 다시 시도해주세요.',
         variant: 'destructive',
       });
@@ -96,10 +96,12 @@ export function ConsentEvidenceDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck className="h-5 w-5" />
-            {title} 동의 증적
+            {title} 동의 기록
           </DialogTitle>
           <DialogDescription>
-            목적, 정책 버전, 동의 시각만 표시합니다. 원문과 연락처 등 불필요한 개인정보는 포함하지 않습니다.
+            동의 기록은 약관·개인정보 처리방침에 동의한 목적, 정책 버전, 동의 시각을 뜻합니다.
+            이 기록을 확인하거나 CSV로 다운로드한 내역은 관리자 감사 기록에 남습니다.
+            원문과 연락처 등 불필요한 개인정보는 포함하지 않습니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,15 +114,15 @@ export function ConsentEvidenceDialog({
             data-testid={`button-export-consent-evidence-${subjectType}-${subjectId}`}
           >
             <Download className="mr-2 h-4 w-4" />
-            CSV 내보내기
+            CSV 다운로드
           </Button>
         </div>
 
         {evidenceQuery.isLoading && (
-          <p className="py-8 text-center text-sm text-muted-foreground">동의 증적을 불러오는 중...</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">동의 기록을 불러오는 중...</p>
         )}
         {evidenceQuery.isError && (
-          <p className="py-8 text-center text-sm text-destructive">동의 증적을 불러오지 못했습니다.</p>
+          <p className="py-8 text-center text-sm text-destructive">동의 기록을 불러오지 못했습니다.</p>
         )}
         {evidenceQuery.data && (
           evidenceQuery.data.evidence.length > 0 ? (
@@ -144,7 +146,7 @@ export function ConsentEvidenceDialog({
             </Table>
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              저장된 동의 증적이 없습니다.
+              저장된 동의 기록이 없습니다.
             </p>
           )
         )}

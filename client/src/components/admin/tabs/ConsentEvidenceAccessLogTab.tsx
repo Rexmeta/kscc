@@ -8,13 +8,13 @@ import { AdminListPagination } from '../AdminListPagination';
 import type { ConsentEvidenceAccessLogEntry } from '@shared/schema';
 
 const subjectTypeLabels = {
-  account: '계정',
+  account: '회원',
   inquiry: '문의',
 } as const;
 
 const actionLabels = {
-  view: '조회',
-  export: '내보내기',
+  view: '확인',
+  export: 'CSV 다운로드',
 } as const;
 
 function formatDateTime(value: Date | string) {
@@ -64,10 +64,15 @@ export function ConsentEvidenceAccessLogTab({ activeTab }: { activeTab: string }
   return (
     <TabsContent value="consent-evidence-access-log" className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">동의 증적 접근 이력</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          동의 증적을 조회하거나 내보낸 관리자와 대상 참조만 표시합니다.
-        </p>
+        <h2 className="text-2xl font-bold">동의 기록 확인 및 다운로드 내역</h2>
+        <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+          <p>
+            회원 또는 문의자가 약관·개인정보 처리방침에 동의한 목적, 정책 버전, 동의 시각을 확인하는 기록입니다.
+          </p>
+          <p>
+            회원 관리와 문의 관리의 ‘동의 기록 보기’에서 기록을 확인하거나 CSV로 다운로드하면 이 목록에 남습니다.
+          </p>
+        </div>
       </div>
 
       <AdminFilterBar
@@ -76,8 +81,8 @@ export function ConsentEvidenceAccessLogTab({ activeTab }: { activeTab: string }
         onSearchChange={setSubjectIdInput}
         onApply={applyFilters}
         onReset={resetFilters}
-        searchLabel="대상 참조"
-        searchPlaceholder="계정 또는 문의 UUID"
+        searchLabel="대상 ID"
+        searchPlaceholder="회원 또는 문의 대상 ID 검색"
         searchTestId="input-search-consent-evidence-access-log"
         total={data?.total}
         filters={[
@@ -89,20 +94,20 @@ export function ConsentEvidenceAccessLogTab({ activeTab }: { activeTab: string }
             testId: 'select-consent-evidence-subject-type-filter',
             options: [
               { value: 'all', label: '전체 대상' },
-              { value: 'account', label: '계정' },
+              { value: 'account', label: '회원' },
               { value: 'inquiry', label: '문의' },
             ],
           },
           {
             name: 'action',
-            label: '동작',
+            label: '작업',
             value: actionInput || 'all',
             onChange: (value) => setActionInput(value === 'all' ? '' : value),
             testId: 'select-consent-evidence-action-filter',
             options: [
-              { value: 'all', label: '전체 동작' },
-              { value: 'view', label: '조회' },
-              { value: 'export', label: '내보내기' },
+              { value: 'all', label: '전체 작업' },
+              { value: 'view', label: '확인' },
+              { value: 'export', label: 'CSV 다운로드' },
             ],
           },
         ]}
@@ -113,18 +118,18 @@ export function ConsentEvidenceAccessLogTab({ activeTab }: { activeTab: string }
         isError={accessLogQuery.isError}
         onRetry={() => accessLogQuery.refetch()}
         empty={!data?.entries?.length}
-        emptyMessage="동의 증적 접근 이력이 없습니다."
-        loadingMessage="접근 이력을 불러오는 중..."
+        emptyMessage="동의 기록 확인·다운로드 내역이 없습니다."
+        loadingMessage="동의 기록 내역을 불러오는 중..."
       >
         <div className="overflow-hidden rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>관리자 참조</TableHead>
+                <TableHead>관리자 ID</TableHead>
                 <TableHead>대상 유형</TableHead>
-                <TableHead>대상 참조</TableHead>
-                <TableHead>동작</TableHead>
-                <TableHead>접근 시각</TableHead>
+                <TableHead>대상 ID</TableHead>
+                <TableHead>작업</TableHead>
+                <TableHead>작업 시각</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
