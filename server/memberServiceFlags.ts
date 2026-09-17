@@ -9,20 +9,21 @@ export type MemberServiceFlags = {
   operator: boolean;
 };
 
-export function getMemberServiceFlags(): MemberServiceFlags {
-  const enabled = isExplicitlyEnabled(process.env.MEMBER_SERVICE_ENABLED)
-    || process.env.NODE_ENV !== "production";
+export function getMemberServiceFlags(environment: NodeJS.ProcessEnv = process.env): MemberServiceFlags {
+  const enabled = environment.MEMBER_SERVICE_ENABLED === undefined
+    ? environment.NODE_ENV !== "production"
+    : isExplicitlyEnabled(environment.MEMBER_SERVICE_ENABLED);
 
   return {
     enabled,
     directory: enabled && (
-      isExplicitlyEnabled(process.env.MEMBER_SERVICE_DIRECTORY_ENABLED)
-      || process.env.MEMBER_SERVICE_DIRECTORY_ENABLED === undefined
+      isExplicitlyEnabled(environment.MEMBER_SERVICE_DIRECTORY_ENABLED)
+      || environment.MEMBER_SERVICE_DIRECTORY_ENABLED === undefined
     ),
-    recommendation: enabled && isExplicitlyEnabled(process.env.MEMBER_SERVICE_RECOMMENDATION_ENABLED),
-    connections: enabled && isExplicitlyEnabled(process.env.MEMBER_SERVICE_CONNECTIONS_ENABLED),
-    opportunities: enabled && isExplicitlyEnabled(process.env.MEMBER_SERVICE_OPPORTUNITIES_ENABLED),
-    operator: enabled && isExplicitlyEnabled(process.env.MEMBER_SERVICE_OPERATOR_ENABLED),
+    recommendation: enabled && isExplicitlyEnabled(environment.MEMBER_SERVICE_RECOMMENDATION_ENABLED),
+    connections: enabled && isExplicitlyEnabled(environment.MEMBER_SERVICE_CONNECTIONS_ENABLED),
+    opportunities: enabled && isExplicitlyEnabled(environment.MEMBER_SERVICE_OPPORTUNITIES_ENABLED),
+    operator: enabled && isExplicitlyEnabled(environment.MEMBER_SERVICE_OPERATOR_ENABLED),
   };
 }
 

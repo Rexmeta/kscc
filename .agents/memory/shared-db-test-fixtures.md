@@ -7,4 +7,4 @@ Integration tests that mutate shared database rows should create uniquely identi
 
 **Why:** A failed test can leave persistent rows behind, causing later runs to assert against stale data and making failures appear unrelated to the code under test.
 
-**How to apply:** Prefer fixture IDs captured from the create response over broad cleanup queries; restore pre-existing shared rows only after the test-owned data has been removed.
+**How to apply:** Prefer fixture IDs captured from the create response over broad cleanup queries; restore pre-existing shared rows only after the test-owned data has been removed. Do not mutate process-wide environment variables in database tests; the test runner may execute other tests concurrently.

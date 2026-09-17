@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { after, test } from "node:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import express from "express";
 import jwt from "jsonwebtoken";
@@ -16,6 +20,10 @@ import {
   memberProfileSchema,
   inquiries,
   members,
+  memberServiceImportBatches,
+  memberServiceImportRows,
+  memberServiceOrganizationLocalizations,
+  memberServiceOrganizations,
   organizationMembers,
   partners,
   permissions,
@@ -85,6 +93,7 @@ import {
   isMetaKeyForPostType,
   validatePostMetaValue,
 } from "@shared/postMetaKeys";
+import { getMemberServiceFlags } from "./memberServiceFlags";
 
 test("organization member ordering is deterministic for public and admin views", () => {
   const members = [
@@ -122,6 +131,37 @@ test("organization categories keep the public and admin contract in order", () =
     zh: "秘书室",
   });
   assert.equal(isExecutiveManagementCategory("secretary_office"), false);
+});
+
+test("member service flags honor explicit disablement and development defaults", () => {
+  const disabled = getMemberServiceFlags({
+    NODE_ENV: "development",
+    MEMBER_SERVICE_ENABLED: "false",
+    MEMBER_SERVICE_DIRECTORY_ENABLED: "true",
+    MEMBER_SERVICE_RECOMMENDATION_ENABLED: "true",
+  });
+  assert.deepEqual(disabled, {
+    enabled: false,
+    directory: false,
+    recommendation: false,
+    connections: false,
+    opportunities: false,
+    operator: false,
+  });
+
+  const developmentDefaults = getMemberServiceFlags({ NODE_ENV: "development" });
+  assert.equal(developmentDefaults.enabled, true);
+  assert.equal(developmentDefaults.directory, true);
+
+  const productionDefaults = getMemberServiceFlags({ NODE_ENV: "production" });
+  assert.deepEqual(productionDefaults, {
+    enabled: false,
+    directory: false,
+    recommendation: false,
+    connections: false,
+    opportunities: false,
+    operator: false,
+  });
 });
 
 const databaseAvailable = Boolean(process.env.DATABASE_URL);
@@ -5206,6 +5246,326 @@ test(
         delete process.env.SESSION_SECRET;
       } else {
         process.env.SESSION_SECRET = originalSessionSecret;
+      }
+    }
+  },
+);
+
+function xmlEscape(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function columnReference(index: number) {
+  let value = "";
+  let current = index + 1;
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    value = String.fromCharCode(65 + remainder) + value;
+    current = Math.floor((current - 1) / 26);
+  }
+  return value;
+}
+
+function createMemberServiceWorkbook(rows: Array<Record<string, string>>) {
+  const headers = Object.keys(rows[0]);
+  const sheetRows = [headers, ...rows].map((row, rowIndex) => {
+    const cells = headers.map((header, columnIndex) => {
+      const value = row[header] ?? header;
+      return `<c r="${columnReference(columnIndex)}${rowIndex + 1}"><v>${xmlEscape(value)}</v></c>`;
+    }).join("");
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join("");
+  const root = mkdtempSync(join(tmpdir(), "member-service-regression-"));
+  const workbookPath = join(tmpdir(), `member-service-regression-${randomUUID()}.xlsx`);
+  writeFileSync(join(root, "sheet.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`);
+  writeFileSync(join(root, "content-types.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>`);
+  writeFileSync(join(root, "workbook.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  writeFileSync(join(root, "workbook-rels.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
+  writeFileSync(join(root, "root-rels.xml"), `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  execFileSync("mkdir", ["-p", join(root, "xl", "worksheets"), join(root, "xl", "_rels"), join(root, "_rels")]);
+  execFileSync("mv", [join(root, "sheet.xml"), join(root, "xl", "worksheets", "sheet1.xml")]);
+  execFileSync("mv", [join(root, "workbook.xml"), join(root, "xl", "workbook.xml")]);
+  execFileSync("mv", [join(root, "workbook-rels.xml"), join(root, "xl", "_rels", "workbook.xml.rels")]);
+  execFileSync("mv", [join(root, "root-rels.xml"), join(root, "_rels", ".rels")]);
+  execFileSync("mv", [join(root, "content-types.xml"), join(root, "[Content_Types].xml")]);
+  execFileSync("zip", ["-q", "-r", workbookPath, "."], { cwd: root });
+  rmSync(root, { recursive: true, force: true });
+  return workbookPath;
+}
+
+test(
+  "member service directory only exposes reviewed, current records and preserves legacy member APIs",
+  { skip: !databaseAvailable },
+  async () => {
+    const { db } = await getDatabase();
+    const suffix = randomUUID();
+    let importedBatchId: string | undefined;
+    let importedSourceRecordKey: string | undefined;
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const organizations = await db.insert(memberServiceOrganizations).values([
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-visible-one`,
+        organizationType: "company",
+        baseCountry: "KR",
+        baseRegion: "Seoul",
+        chinaRegionFocus: "Sichuan",
+        primaryDomain: `${suffix}-visible-one.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        websiteUrl: "https://public.example.test/one",
+        contactUrl: "https://public.example.test/contact",
+        verificationStatus: "verified_official",
+        lastVerifiedAt: now,
+        nextReviewAt: tomorrow,
+        isActive: true,
+        publicApproved: true,
+        reviewNote: `private-review-note-${suffix}`,
+        sourceUrl: `https://private-source.example.test/${suffix}`,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-visible-two`,
+        organizationType: "company",
+        baseCountry: "KR",
+        baseRegion: "Busan",
+        chinaRegionFocus: "Chongqing",
+        primaryDomain: `${suffix}-visible-two.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "verified_register",
+        lastVerifiedAt: now,
+        nextReviewAt: tomorrow,
+        isActive: true,
+        publicApproved: true,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-visible-three`,
+        organizationType: "nonprofit",
+        baseCountry: "KR",
+        baseRegion: "Daejeon",
+        primaryDomain: `${suffix}-visible-three.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "verified_official",
+        nextReviewAt: null,
+        isActive: true,
+        publicApproved: true,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-not-approved`,
+        organizationType: "company",
+        baseCountry: "KR",
+        primaryDomain: `${suffix}-not-approved.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "verified_official",
+        nextReviewAt: tomorrow,
+        isActive: true,
+        publicApproved: false,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-wrong-status`,
+        organizationType: "company",
+        baseCountry: "KR",
+        primaryDomain: `${suffix}-wrong-status.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "needs_review",
+        nextReviewAt: tomorrow,
+        isActive: true,
+        publicApproved: true,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-expired`,
+        organizationType: "company",
+        baseCountry: "KR",
+        primaryDomain: `${suffix}-expired.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "verified_official",
+        lastVerifiedAt: yesterday,
+        nextReviewAt: yesterday,
+        isActive: true,
+        publicApproved: true,
+      },
+      {
+        sourceSystem: "member-service-regression",
+        sourceRecordKey: `${suffix}-inactive`,
+        organizationType: "company",
+        baseCountry: "KR",
+        primaryDomain: `${suffix}-inactive.example.test`,
+        summaryKo: `Directory ${suffix}`,
+        verificationStatus: "verified_official",
+        nextReviewAt: tomorrow,
+        isActive: false,
+        publicApproved: true,
+      },
+    ]).returning();
+    const visibleOne = organizations[0];
+    const expired = organizations[5];
+    await db.insert(memberServiceOrganizationLocalizations).values([
+      {
+        organizationId: visibleOne.id,
+        locale: "ko",
+        officialName: `한국어 기관 ${suffix}`,
+        displayName: `한국어 기관 ${suffix}`,
+        summary: "한국어 요약",
+      },
+      {
+        organizationId: organizations[1].id,
+        locale: "ko",
+        officialName: `한국어 등록기관 ${suffix}`,
+        displayName: `한국어 등록기관 ${suffix}`,
+      },
+      {
+        organizationId: organizations[1].id,
+        locale: "en",
+        officialName: `English Registry ${suffix}`,
+        displayName: `English Registry ${suffix}`,
+      },
+      {
+        organizationId: organizations[2].id,
+        locale: "ko",
+        officialName: `한국어 세번째 기관 ${suffix}`,
+        displayName: `한국어 세번째 기관 ${suffix}`,
+      },
+    ]);
+
+    const app = express();
+    app.use(express.json());
+    const { registerRoutes } = await import("./routes");
+    const server = await registerRoutes(app);
+    let workbookPath: string | undefined;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+      });
+      const address = server.address();
+      assert.ok(address && typeof address !== "string");
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const request = async (path: string) => {
+        const response = await fetch(`${baseUrl}${path}`);
+        return { status: response.status, body: await response.json() };
+      };
+      const query = encodeURIComponent(suffix);
+
+      const bootstrap = await request("/api/member-service/v1/bootstrap?lang=en");
+      assert.equal(bootstrap.status, 200);
+      assert.deepEqual(bootstrap.body.flags, getMemberServiceFlags());
+      assert.equal(bootstrap.body.locale, "en");
+
+      const pageOne = await request(`/api/member-service/v1/directory?q=${query}&language=en&page=1&limit=1`);
+      assert.equal(pageOne.status, 200);
+      assert.equal(pageOne.body.total, 3);
+      assert.equal(pageOne.body.limit, 1);
+      assert.equal(pageOne.body.page, 1);
+      assert.equal(pageOne.body.totalPages, 3);
+      assert.equal(pageOne.body.organizations[0].name.includes(suffix), true);
+      assert.equal("sourceUrl" in pageOne.body.organizations[0], false);
+      assert.equal("reviewNote" in pageOne.body.organizations[0], false);
+      assert.equal("sourceRecordKey" in pageOne.body.organizations[0], false);
+      assert.equal(JSON.stringify(pageOne.body).includes(`private-review-note-${suffix}`), false);
+      assert.equal(JSON.stringify(pageOne.body).includes("private-source.example.test"), false);
+
+      const pageTwo = await request(`/api/member-service/v1/directory?q=${query}&page=2&limit=1`);
+      assert.equal(pageTwo.status, 200);
+      assert.equal(pageTwo.body.organizations.length, 1);
+      const fallbackDetail = await request(
+        `/api/member-service/v1/directory/${visibleOne.id}?lang=en`,
+      );
+      assert.equal(fallbackDetail.status, 200);
+      assert.equal(fallbackDetail.body.name, `한국어 기관 ${suffix}`);
+
+      assert.equal(
+        (await request(`/api/member-service/v1/directory/${expired.id}`)).status,
+        404,
+      );
+      assert.equal(
+        (await request(`/api/member-service/v1/directory/${randomUUID()}`)).status,
+        404,
+      );
+      assert.equal(
+        (await request("/api/member-service/v1/directory/not-a-uuid")).status,
+        400,
+      );
+      assert.equal(
+        (await request(`/api/member-service/v1/directory?q=${query}&limit=51`)).status,
+        400,
+      );
+      assert.equal(
+        (await request(`/api/member-service/v1/directory?q=${query}&page=0`)).status,
+        400,
+      );
+
+      const workbookRows = [{
+        organization_id: `${suffix}-import-one`,
+        name_ko: `가져온 기관 ${suffix}`,
+        organization_type: "company",
+        base_country: "KR",
+        summary_ko: "staged only",
+        verification_status: "verified_official",
+        last_verified_at: "2026-09-17T00:00:00.000Z",
+        is_active: "true",
+        website_url: "https://staged.example.test",
+        source_url: `https://raw-source.example.test/${suffix}`,
+        review_note: `raw-review-${suffix}`,
+      }];
+      workbookPath = createMemberServiceWorkbook(workbookRows);
+      importedSourceRecordKey = workbookRows[0].organization_id;
+      const { importMemberServiceWorkbook } = await import("../scripts/import-member-service-xlsx");
+      const firstImport = await importMemberServiceWorkbook(workbookPath);
+      importedBatchId = firstImport.batchId;
+      const secondImport = await importMemberServiceWorkbook(workbookPath);
+      assert.equal(firstImport.status, "staged");
+      assert.equal(secondImport.status, "already_staged");
+      assert.equal(secondImport.batchId, firstImport.batchId);
+      const stagedRows = await db
+        .select()
+        .from(memberServiceImportRows)
+        .where(eq(memberServiceImportRows.batchId, firstImport.batchId));
+      assert.equal(stagedRows.length, 1);
+      assert.equal(stagedRows[0].status, "needs_review");
+      assert.equal((stagedRows[0].rawData as Record<string, unknown>).source_url, workbookRows[0].source_url);
+      const stagedOrganizations = await db
+        .select()
+        .from(memberServiceOrganizations)
+        .where(eq(memberServiceOrganizations.sourceRecordKey, workbookRows[0].organization_id));
+      assert.equal(stagedOrganizations.length, 1);
+      assert.equal(stagedOrganizations[0].publicApproved, false);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()),
+      );
+      await db.delete(memberServiceOrganizations).where(inArray(
+        memberServiceOrganizations.id,
+        organizations.map(({ id }) => id),
+      ));
+      if (importedBatchId) {
+        await db.delete(memberServiceImportBatches).where(eq(
+          memberServiceImportBatches.id,
+          importedBatchId,
+        ));
+      }
+      if (importedSourceRecordKey) {
+        await db.delete(memberServiceOrganizations).where(and(
+          eq(memberServiceOrganizations.sourceSystem, "kscc_initial_seed"),
+          eq(memberServiceOrganizations.sourceRecordKey, importedSourceRecordKey),
+        ));
+      }
+      if (workbookPath) {
+        rmSync(workbookPath, { force: true });
       }
     }
   },

@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   memberServiceOrganizationLocalizations,
   memberServiceOrganizations,
@@ -185,6 +185,10 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
     eq(memberServiceOrganizations.isActive, true),
     eq(memberServiceOrganizations.publicApproved, true),
     inArray(memberServiceOrganizations.verificationStatus, [...PUBLIC_VERIFICATION_STATUSES]),
+    or(
+      isNull(memberServiceOrganizations.nextReviewAt),
+      gt(memberServiceOrganizations.nextReviewAt, new Date()),
+    ),
     filters.organizationType
       ? eq(memberServiceOrganizations.organizationType, filters.organizationType)
       : undefined,
@@ -259,6 +263,10 @@ export async function getPublicOrganization(id: string, language: "ko" | "en" | 
       eq(memberServiceOrganizations.isActive, true),
       eq(memberServiceOrganizations.publicApproved, true),
       inArray(memberServiceOrganizations.verificationStatus, [...PUBLIC_VERIFICATION_STATUSES]),
+      or(
+        isNull(memberServiceOrganizations.nextReviewAt),
+        gt(memberServiceOrganizations.nextReviewAt, new Date()),
+      ),
     ))
     .limit(1);
 

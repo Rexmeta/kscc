@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, eq } from "drizzle-orm";
 import {
   memberServiceImportBatches,
@@ -11,7 +12,7 @@ import {
 } from "@shared/schema";
 import { db } from "../server/db";
 
-const SOURCE_SYSTEM = "kscc_initial_seed";
+export const SOURCE_SYSTEM = "kscc_initial_seed";
 const DEFAULT_INPUT = "attached_assets/KSCC_Korea_China_Organization_Initial_DB_1789554002706.xlsx";
 const ALLOWED_VERIFICATION_STATUSES = new Set(["verified_official", "verified_register"]);
 
@@ -104,9 +105,8 @@ function reasonCodes(row: SeedRow) {
   return reasons;
 }
 
-async function main() {
-  const inputArgument = process.argv.slice(2).find((argument) => argument.startsWith("--file="));
-  const input = resolve(inputArgument?.slice("--file=".length) || DEFAULT_INPUT);
+export async function importMemberServiceWorkbook(inputPath: string) {
+  const input = resolve(inputPath);
   const file = readFileSync(input);
   const fileHash = createHash("sha256").update(file).digest("hex");
   const rawRows = readSheet(input);
@@ -125,10 +125,15 @@ async function main() {
 
   if (existingBatch.length > 0) {
     console.log(`Import already staged for ${basename(input)} (${fileHash.slice(0, 12)}).`);
-    return;
+    return {
+      status: "already_staged" as const,
+      fileHash,
+      batchId: existingBatch[0].id,
+      rowCount: rows.length,
+    };
   }
 
-  await db.transaction(async (tx) => {
+  const [batch] = await db.transaction(async (tx) => {
     const [batch] = await tx.insert(memberServiceImportBatches).values({
       sourceSystem: SOURCE_SYSTEM,
       sourceFileName: basename(input),
@@ -195,13 +200,29 @@ async function main() {
         organizationId: organization.id,
       });
     }
+    return [batch];
   });
 
   console.log(`Staged ${rows.length} organizations from ${basename(input)}.`);
   console.log("All organizations remain publicApproved=false until operator verification.");
+  return {
+    status: "staged" as const,
+    fileHash,
+    batchId: batch.id,
+    rowCount: rows.length,
+  };
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+async function main() {
+  const inputArgument = process.argv.slice(2).find((argument) => argument.startsWith("--file="));
+  await importMemberServiceWorkbook(
+    inputArgument?.slice("--file=".length) || DEFAULT_INPUT,
+  );
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
