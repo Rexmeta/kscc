@@ -154,6 +154,7 @@ function toPublicOrganization(
     chinaRegionFocus: organization.chinaRegionFocus,
     websiteUrl: organization.websiteUrl,
     contactUrl: organization.contactUrl,
+    referenceUrl: organization.sourceUrl,
     verification: {
       status: organization.verificationStatus,
       lastVerifiedAt: organization.lastVerifiedAt?.toISOString() ?? null,

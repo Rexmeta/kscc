@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { ArrowRight, Building2, ExternalLink, Search, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { QueryState } from '@/components/QueryState';
@@ -20,6 +19,7 @@ type PublicOrganization = {
   organizationType: string;
   websiteUrl: string | null;
   contactUrl: string | null;
+  referenceUrl: string | null;
   verification: {
     status: string;
   };
@@ -31,49 +31,90 @@ type DirectoryResponse = {
   total: number;
 };
 
-function OrganizationCard({ organization }: { organization: PublicOrganization }) {
+function OrganizationTable({ organizations }: { organizations: PublicOrganization[] }) {
   return (
-    <Card className="group flex h-full flex-col overflow-hidden border-border/70 bg-card transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_18px_48px_hsl(var(--primary)/0.12)]">
-      <div className="h-1 bg-gradient-to-r from-primary via-primary/70 to-accent" />
-      <CardContent className="flex flex-1 flex-col p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Building2 className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <Badge variant="secondary">{organization.organizationType}</Badge>
-        </div>
-        <h3 className="mt-5 text-xl font-semibold leading-tight">{organization.name}</h3>
-        <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">
-          {organization.summary || t('memberService.noSummary')}
-        </p>
-        <div className="mt-5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-          {organization.verification.status === 'verified_register'
-            ? t('memberService.verifiedRegister')
-            : t('memberService.verifiedOfficial')}
-        </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/directory/${organization.id}`}>
-              {t('common.more')}
-              <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-            </Link>
-          </Button>
-          {organization.websiteUrl ? (
-            <Button asChild size="sm">
-              <a href={organization.websiteUrl} target="_blank" rel="noopener noreferrer">
-                {t('koreaChina.viewWebsite')}
-                <ExternalLink className="ml-2 h-4 w-4" aria-hidden="true" />
-              </a>
-            </Button>
-          ) : (
-            <Button size="sm" variant="secondary" disabled>
-              {t('koreaChina.noWebsite')}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-border bg-primary text-primary-foreground">
+              <th className="w-[15%] px-5 py-4 text-sm font-semibold">{t('koreaChina.tableCategory')}</th>
+              <th className="w-[24%] px-5 py-4 text-sm font-semibold">{t('koreaChina.tableOrganization')}</th>
+              <th className="w-[41%] px-5 py-4 text-sm font-semibold">{t('koreaChina.tableRole')}</th>
+              <th className="w-[20%] px-5 py-4 text-sm font-semibold">{t('koreaChina.tableLink')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {organizations.map((organization, index) => {
+              const link = organization.websiteUrl || organization.referenceUrl;
+              return (
+                <tr
+                  key={organization.id}
+                  className={`border-b border-border/70 align-top transition-colors hover:bg-primary/[0.035] ${
+                    index % 2 === 1 ? 'bg-muted/30' : 'bg-card'
+                  }`}
+                >
+                  <td className="px-5 py-5">
+                    <Badge variant="secondary" className="whitespace-nowrap">
+                      {organization.organizationType}
+                    </Badge>
+                  </td>
+                  <td className="px-5 py-5">
+                    <Link
+                      href={`/directory/${organization.id}`}
+                      className="group inline-flex items-start font-semibold leading-6 text-foreground hover:text-primary"
+                    >
+                      {organization.name}
+                      <ArrowRight className="ml-1.5 mt-1 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    </Link>
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                      {organization.verification.status === 'verified_register'
+                        ? t('memberService.verifiedRegister')
+                        : t('memberService.verifiedOfficial')}
+                    </div>
+                  </td>
+                  <td className="px-5 py-5 text-sm leading-6 text-muted-foreground">
+                    {organization.summary || t('memberService.noSummary')}
+                  </td>
+                  <td className="px-5 py-5 text-sm">
+                    {organization.websiteUrl ? (
+                      <a
+                        href={organization.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center font-medium text-primary hover:underline"
+                      >
+                        {t('koreaChina.viewWebsite')}
+                        <ExternalLink className="ml-1.5 h-4 w-4" aria-hidden="true" />
+                      </a>
+                    ) : (
+                      <div>
+                        <p className="text-muted-foreground">{t('koreaChina.noWebsite')}</p>
+                        {link && (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center font-medium text-primary hover:underline"
+                          >
+                            {t('koreaChina.viewReference')}
+                            <ExternalLink className="ml-1.5 h-4 w-4" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="border-t border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground md:hidden">
+        {t('koreaChina.tableScrollHint')}
+      </p>
+    </div>
   );
 }
 
@@ -97,16 +138,6 @@ export default function KoreaChinaOrganizationsPage() {
       return fetchJson<DirectoryResponse>(`/api/member-service/v1/directory?${params}`, { signal });
     },
   });
-
-  const grouped = useMemo(() => {
-    const groups = new Map<string, PublicOrganization[]>();
-    for (const organization of query.data?.organizations ?? []) {
-      const items = groups.get(organization.organizationType) ?? [];
-      items.push(organization);
-      groups.set(organization.organizationType, items);
-    }
-    return Array.from(groups.entries());
-  }, [query.data?.organizations]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -170,21 +201,7 @@ export default function KoreaChinaOrganizationsPage() {
           empty={!query.data?.organizations.length}
           emptyMessage={t('koreaChina.empty')}
         >
-          <div className="space-y-12">
-            {grouped.map(([group, organizations]) => (
-              <section key={group}>
-                <div className="mb-5 flex items-center gap-3">
-                  <h2 className="text-xl font-semibold md:text-2xl">{group}</h2>
-                  <Badge variant="outline">{organizations.length}</Badge>
-                </div>
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  {organizations.map((organization) => (
-                    <OrganizationCard key={organization.id} organization={organization} />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
+          <OrganizationTable organizations={query.data?.organizations ?? []} />
         </QueryState>
       </section>
     </div>

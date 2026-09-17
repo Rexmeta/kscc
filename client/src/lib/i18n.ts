@@ -138,6 +138,12 @@ export interface TranslationKeys {
   'koreaChina.public': string;
   'koreaChina.private': string;
   'koreaChina.verificationRequired': string;
+  'koreaChina.tableCategory': string;
+  'koreaChina.tableOrganization': string;
+  'koreaChina.tableRole': string;
+  'koreaChina.tableLink': string;
+  'koreaChina.viewReference': string;
+  'koreaChina.tableScrollHint': string;
 
   // Hero Section
   'hero.title': string;
@@ -519,6 +525,12 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.public': '공개',
     'koreaChina.private': '비공개',
     'koreaChina.verificationRequired': '공개하려면 현재 유효한 기관 검증이 필요합니다.',
+    'koreaChina.tableCategory': '분류',
+    'koreaChina.tableOrganization': '기관/단체',
+    'koreaChina.tableRole': '성격·주요 역할',
+    'koreaChina.tableLink': '링크',
+    'koreaChina.viewReference': '관련 근거 보기',
+    'koreaChina.tableScrollHint': '표를 좌우로 밀어 전체 내용을 확인할 수 있습니다.',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -898,6 +910,12 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.public': 'Public',
     'koreaChina.private': 'Private',
     'koreaChina.verificationRequired': 'Current organization verification is required before publication.',
+    'koreaChina.tableCategory': 'Category',
+    'koreaChina.tableOrganization': 'Organization',
+    'koreaChina.tableRole': 'Purpose and primary role',
+    'koreaChina.tableLink': 'Link',
+    'koreaChina.viewReference': 'View reference',
+    'koreaChina.tableScrollHint': 'Swipe horizontally to view the full table.',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -1277,6 +1295,12 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.public': '公开',
     'koreaChina.private': '非公开',
     'koreaChina.verificationRequired': '公开前需要当前有效的机构验证。',
+    'koreaChina.tableCategory': '分类',
+    'koreaChina.tableOrganization': '机构/团体',
+    'koreaChina.tableRole': '性质与主要职能',
+    'koreaChina.tableLink': '链接',
+    'koreaChina.viewReference': '查看相关依据',
+    'koreaChina.tableScrollHint': '左右滑动可查看完整表格。',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',
