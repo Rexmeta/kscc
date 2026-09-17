@@ -93,6 +93,11 @@ import {
   WECHAT_HANDOFF_TTL_MS,
   WECHAT_STATE_COOKIE,
 } from "./wechatOAuth";
+import { getMemberServiceFlags, isMemberServiceDirectoryEnabled } from "./memberServiceFlags";
+import {
+  getPublicOrganization,
+  listPublicOrganizations,
+} from "./memberServiceDirectory";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
@@ -379,6 +384,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount Posts API router
   app.use("/api/posts", postsRouter);
+
+  // The member service is namespaced away from the legacy members API.
+  // Bootstrap exposes feature state so the client can hide disabled features,
+  // while the server remains the source of truth for every directory request.
+  app.get("/api/member-service/v1/bootstrap", optionalAuthenticateToken, (req, res) => {
+    const flags = getMemberServiceFlags();
+    return res.json({
+      flags,
+      locale: typeof req.query.lang === "string" && ["ko", "en", "zh"].includes(req.query.lang)
+        ? req.query.lang
+        : "ko",
+      profileCompletion: null,
+    });
+  });
+
+  app.get("/api/member-service/v1/directory", optionalAuthenticateToken, async (req, res) => {
+    if (!isMemberServiceDirectoryEnabled()) {
+      return res.status(404).json({ message: "Member service directory is not available." });
+    }
+
+    try {
+      const query = z.object({
+        q: z.string().trim().max(120).optional(),
+        service: z.string().trim().max(80).optional(),
+        region: z.string().trim().max(80).optional(),
+        organizationType: z.string().trim().max(80).optional(),
+        language: z.enum(["ko", "en", "zh"]).default("ko"),
+        page: z.coerce.number().int().min(1).max(10000).default(1),
+        limit: z.coerce.number().int().min(1).max(50).default(12),
+      }).parse(req.query);
+
+      const result = await listPublicOrganizations(query);
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid directory filters." });
+      }
+      emitOperationalEvent("member_service.directory.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "public_directory_list",
+        reason: "query_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Directory could not be loaded." });
+    }
+  });
+
+  app.get("/api/member-service/v1/directory/:id", optionalAuthenticateToken, async (req, res) => {
+    if (!isMemberServiceDirectoryEnabled()) {
+      return res.status(404).json({ message: "Member service directory is not available." });
+    }
+
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      const language = z.enum(["ko", "en", "zh"]).catch("ko").parse(req.query.lang);
+      const organization = await getPublicOrganization(id, language);
+      if (!organization) {
+        return res.status(404).json({ message: "Organization not found." });
+      }
+      return res.json(organization);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid organization ID." });
+      }
+      emitOperationalEvent("member_service.directory.failure", "error", {
+        correlationId: getCorrelationId(req),
+        operation: "public_directory_detail",
+        reason: "query_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Organization could not be loaded." });
+    }
+  });
   
   // Auth routes
   app.get("/api/auth/wechat/start", (req, res) => {

@@ -931,4 +931,184 @@ export type AdminMembershipDto = {
   isActive: boolean;
 };
 
+// Member service domain. These tables intentionally do not reuse or mutate
+// the legacy members table; the public directory owns its own reviewed data.
+export const memberServiceOrganizations = pgTable("member_service_organizations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceSystem: text("source_system").notNull(),
+  sourceRecordKey: text("source_record_key").notNull(),
+  organizationType: text("organization_type").notNull(),
+  legalForm: text("legal_form"),
+  supervisingAuthority: text("supervising_authority"),
+  scope: text("scope"),
+  baseCountry: text("base_country").notNull(),
+  baseRegion: text("base_region"),
+  chinaRegionFocus: text("china_region_focus"),
+  primaryDomain: text("primary_domain"),
+  summaryKo: text("summary_ko"),
+  websiteUrl: text("website_url"),
+  contactUrl: text("contact_url"),
+  verificationStatus: text("verification_status").notNull(),
+  sourceType: text("source_type"),
+  sourceUrl: text("source_url"),
+  lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+  nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+  reviewNote: text("review_note"),
+  isActive: boolean("is_active").notNull().default(false),
+  publicApproved: boolean("public_approved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sourceUnique: uniqueIndex("member_service_organizations_source_unique")
+    .on(table.sourceSystem, table.sourceRecordKey),
+  publicLookupIdx: index("member_service_organizations_public_lookup_idx")
+    .on(table.publicApproved, table.isActive, table.verificationStatus),
+  reviewIdx: index("member_service_organizations_review_idx")
+    .on(table.publicApproved, table.nextReviewAt),
+}));
+
+export const memberServiceOrganizationLocalizations = pgTable("member_service_organization_localizations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "cascade" }),
+  locale: localeEnum("locale").notNull(),
+  officialName: text("official_name").notNull(),
+  displayName: text("display_name"),
+  summary: text("summary"),
+  isOfficial: boolean("is_official").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  organizationLocaleUnique: uniqueIndex("member_service_organization_localizations_org_locale_unique")
+    .on(table.organizationId, table.locale),
+  nameLookupIdx: index("member_service_organization_localizations_name_lookup_idx")
+    .on(table.locale, table.officialName),
+}));
+
+export const memberServiceServices = pgTable("member_service_services", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(),
+  nameKo: text("name_ko").notNull(),
+  nameEn: text("name_en"),
+  nameZh: text("name_zh"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const memberServiceOrganizationServices = pgTable("member_service_organization_services", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "cascade" }),
+  serviceId: uuid("service_id")
+    .notNull()
+    .references(() => memberServiceServices.id, { onDelete: "restrict" }),
+  rawValue: text("raw_value"),
+  isApproved: boolean("is_approved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  organizationServiceUnique: uniqueIndex("member_service_organization_services_unique")
+    .on(table.organizationId, table.serviceId),
+}));
+
+export const memberServiceRegions = pgTable("member_service_regions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull().unique(),
+  countryCode: text("country_code").notNull(),
+  nameKo: text("name_ko").notNull(),
+  nameEn: text("name_en"),
+  nameZh: text("name_zh"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const memberServiceOrganizationRegions = pgTable("member_service_organization_regions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "cascade" }),
+  regionId: uuid("region_id")
+    .notNull()
+    .references(() => memberServiceRegions.id, { onDelete: "restrict" }),
+  relationScope: text("relation_scope").notNull().default("focus"),
+  rawValue: text("raw_value"),
+  isApproved: boolean("is_approved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  organizationRegionUnique: uniqueIndex("member_service_organization_regions_unique")
+    .on(table.organizationId, table.regionId, table.relationScope),
+}));
+
+export const memberServiceOrganizationContacts = pgTable("member_service_organization_contacts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "cascade" }),
+  contactType: text("contact_type").notNull(),
+  label: text("label"),
+  value: text("value").notNull(),
+  isPublic: boolean("is_public").notNull().default(false),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const memberServiceImportBatches = pgTable("member_service_import_batches", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceSystem: text("source_system").notNull(),
+  sourceFileName: text("source_file_name"),
+  sourceFileHash: text("source_file_hash"),
+  status: text("status").notNull().default("staged"),
+  importedBy: uuid("imported_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => ({
+  sourceHashUnique: uniqueIndex("member_service_import_batches_source_hash_unique")
+    .on(table.sourceSystem, table.sourceFileHash),
+}));
+
+export const memberServiceImportRows = pgTable("member_service_import_rows", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  batchId: uuid("batch_id")
+    .notNull()
+    .references(() => memberServiceImportBatches.id, { onDelete: "cascade" }),
+  sourceRecordKey: text("source_record_key").notNull(),
+  rawData: jsonb("raw_data").notNull(),
+  status: text("status").notNull().default("needs_review"),
+  reasonCodes: jsonb("reason_codes"),
+  organizationId: uuid("organization_id")
+    .references(() => memberServiceOrganizations.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  batchRecordUnique: uniqueIndex("member_service_import_rows_batch_record_unique")
+    .on(table.batchId, table.sourceRecordKey),
+  reviewQueueIdx: index("member_service_import_rows_review_queue_idx")
+    .on(table.status, table.createdAt),
+}));
+
+export type MemberServiceOrganization = typeof memberServiceOrganizations.$inferSelect;
+export type MemberServiceOrganizationLocalization =
+  typeof memberServiceOrganizationLocalizations.$inferSelect;
+export type MemberServiceOrganizationService = typeof memberServiceOrganizationServices.$inferSelect;
+export type MemberServiceOrganizationRegion = typeof memberServiceOrganizationRegions.$inferSelect;
+export type MemberServiceOrganizationContact = typeof memberServiceOrganizationContacts.$inferSelect;
+export type MemberServicePublicOrganization = {
+  id: string;
+  name: string;
+  alternateNames: string[];
+  summary: string | null;
+  organizationType: string;
+  baseCountry: string;
+  baseRegion: string | null;
+  chinaRegionFocus: string | null;
+  websiteUrl: string | null;
+  contactUrl: string | null;
+  verification: {
+    status: string;
+    lastVerifiedAt: string | null;
+    nextReviewAt: string | null;
+  };
+};
+
 export type AuthHandoff = typeof authHandoffs.$inferSelect;

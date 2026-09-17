@@ -103,6 +103,13 @@ export const queryKeys = {
     list: (params: Record<string, unknown> = {}) =>
       ["/api/members", "list", params] as const,
   },
+  memberService: {
+    bootstrap: () => ["/api/member-service/v1/bootstrap"] as const,
+    directory: (params: Record<string, unknown> = {}) =>
+      ["/api/member-service/v1/directory", "list", params] as const,
+    organization: (id: string, language?: string) =>
+      ["/api/member-service/v1/directory", id, language ?? null] as const,
+  },
   partners: {
     list: (params: Record<string, unknown> = {}) =>
       ["/api/partners", "public", params] as const,

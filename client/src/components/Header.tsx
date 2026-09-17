@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import LanguageSwitcher from './LanguageSwitcher';
 import { t } from '@/lib/i18n';
 import LoginRequiredDialog from './LoginRequiredDialog';
+import { useQuery } from '@tanstack/react-query';
+import { fetchJson, queryKeys } from '@/lib/queryClient';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +21,14 @@ export default function Header() {
   const { user, logout, isAuthenticated, isAdmin, hasAnyPermission } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginRequiredOpen, setLoginRequiredOpen] = useState(false);
+  const { data: memberServiceBootstrap } = useQuery({
+    queryKey: queryKeys.memberService.bootstrap(),
+    queryFn: ({ signal }) => fetchJson<{ flags: { directory: boolean } }>(
+      '/api/member-service/v1/bootstrap',
+      { signal },
+    ),
+    staleTime: 5 * 60 * 1000,
+  });
   const canAccessAdmin = isAdmin || hasAnyPermission([
     'news.read',
     'event.read',
@@ -36,6 +46,9 @@ export default function Header() {
     { name: t('nav.news'), href: '/news' },
     { name: t('nav.events'), href: '/events' },
     { name: t('nav.members'), href: '/members', requiresAuth: true },
+    ...(memberServiceBootstrap?.flags.directory
+      ? [{ name: t('nav.directory'), href: '/directory' }]
+      : []),
     { name: t('nav.resources'), href: '/resources', requiresAuth: true },
     { name: t('nav.contact'), href: '/contact' },
   ];

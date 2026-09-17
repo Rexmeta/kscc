@@ -20,3 +20,4 @@
 - [Event timezone handling](event-timezone.md) — treat event wall-clock inputs as Asia/Seoul explicitly; never rely on browser, Node, or database timezone defaults.
 - [Database ACL seed readiness](database-acl-seeds.md) — operator permission route tests require the matching ACL seed to exist in the development database.
 - [Stale login session cookies](stale-login-session-cookies.md) — session-establishing requests must not be blocked by CSRF checks triggered only by an old auth cookie.
+- [Member-service seed imports](member-service-seed-import.md) — validate the workbook itself; stage every source row and require review before any public projection.

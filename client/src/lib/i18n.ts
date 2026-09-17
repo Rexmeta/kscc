@@ -9,6 +9,7 @@ export interface TranslationKeys {
   'nav.news': string;
   'nav.events': string;
   'nav.members': string;
+  'nav.directory': string;
   'nav.resources': string;
   'nav.contact': string;
   'nav.organization': string;
@@ -44,6 +45,23 @@ export interface TranslationKeys {
   'common.loadError': string;
   'common.pagination': string;
   'common.empty': string;
+
+  // Member service
+  'memberService.title': string;
+  'memberService.subtitle': string;
+  'memberService.searchPlaceholder': string;
+  'memberService.search': string;
+  'memberService.verifiedOfficial': string;
+  'memberService.verifiedRegister': string;
+  'memberService.empty': string;
+  'memberService.disabled': string;
+  'memberService.reviewNote': string;
+  'memberService.website': string;
+  'memberService.contact': string;
+  'memberService.backToDirectory': string;
+  'memberService.noSummary': string;
+  'memberService.services': string;
+  'memberService.regions': string;
 
   // Hero Section
   'hero.title': string;
@@ -298,6 +316,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': '상회 활동',
     'nav.events': '행사',
     'nav.members': '회원사',
+    'nav.directory': '기관 찾기',
     'nav.resources': '자료센터',
     'nav.contact': '문의하기',
     'nav.organization': '조직',
@@ -333,6 +352,21 @@ const translations: Record<Language, TranslationKeys> = {
     'common.loadError': '정보를 불러오지 못했습니다.',
     'common.pagination': '페이지 탐색',
     'common.empty': '표시할 정보가 없습니다.',
+    'memberService.title': '기관 찾기',
+    'memberService.subtitle': '검증된 기관과 서비스 정보를 찾아보세요.',
+    'memberService.searchPlaceholder': '기관명, 지역 또는 서비스 검색',
+    'memberService.search': '검색',
+    'memberService.verifiedOfficial': '공식 확인',
+    'memberService.verifiedRegister': '등록 확인',
+    'memberService.empty': '현재 공개 승인을 받은 기관이 없습니다.',
+    'memberService.disabled': '회원 서비스 기관 디렉터리는 현재 준비 중입니다.',
+    'memberService.reviewNote': '공개 전 운영자 검수를 거친 기관만 표시됩니다.',
+    'memberService.website': '공식 웹사이트',
+    'memberService.contact': '공식 문의',
+    'memberService.backToDirectory': '기관 목록으로',
+    'memberService.noSummary': '공개된 소개가 없습니다.',
+    'memberService.services': '서비스',
+    'memberService.regions': '대응 지역',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -585,6 +619,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': 'Chamber Activities',
     'nav.events': 'Events',
     'nav.members': 'Members',
+    'nav.directory': 'Directory',
     'nav.resources': 'Resources',
     'nav.contact': 'Contact Us',
     'nav.organization': 'Organization',
@@ -620,6 +655,21 @@ const translations: Record<Language, TranslationKeys> = {
     'common.loadError': 'We could not load this information.',
     'common.pagination': 'Pagination',
     'common.empty': 'No information to display.',
+    'memberService.title': 'Organization directory',
+    'memberService.subtitle': 'Find reviewed organizations and their services.',
+    'memberService.searchPlaceholder': 'Search by organization, region, or service',
+    'memberService.search': 'Search',
+    'memberService.verifiedOfficial': 'Officially verified',
+    'memberService.verifiedRegister': 'Registry verified',
+    'memberService.empty': 'No publicly approved organizations are available yet.',
+    'memberService.disabled': 'The member service directory is being prepared.',
+    'memberService.reviewNote': 'Only organizations reviewed for public release are shown.',
+    'memberService.website': 'Official website',
+    'memberService.contact': 'Official contact',
+    'memberService.backToDirectory': 'Back to directory',
+    'memberService.noSummary': 'No public summary is available.',
+    'memberService.services': 'Services',
+    'memberService.regions': 'Regions',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -872,6 +922,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': '商会活动',
     'nav.events': '活动',
     'nav.members': '会员',
+    'nav.directory': '机构目录',
     'nav.resources': '资料中心',
     'nav.contact': '联系我们',
     'nav.organization': '组织',
@@ -907,6 +958,21 @@ const translations: Record<Language, TranslationKeys> = {
     'common.loadError': '无法加载此信息。',
     'common.pagination': '分页导航',
     'common.empty': '没有可显示的信息。',
+    'memberService.title': '机构目录',
+    'memberService.subtitle': '查找经过审核的机构和服务信息。',
+    'memberService.searchPlaceholder': '搜索机构、地区或服务',
+    'memberService.search': '搜索',
+    'memberService.verifiedOfficial': '官方已验证',
+    'memberService.verifiedRegister': '登记已验证',
+    'memberService.empty': '目前还没有获得公开批准的机构。',
+    'memberService.disabled': '机构目录正在准备中。',
+    'memberService.reviewNote': '这里只显示已完成公开审核的机构。',
+    'memberService.website': '官方网站',
+    'memberService.contact': '官方联系',
+    'memberService.backToDirectory': '返回机构目录',
+    'memberService.noSummary': '暂无公开介绍。',
+    'memberService.services': '服务',
+    'memberService.regions': '对应地区',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',

@@ -18,6 +18,7 @@ const Events = lazy(() => import("@/pages/Events"));
 const EventDetail = lazy(() => import("@/pages/EventDetail"));
 const Partners = lazy(() => import("@/pages/Partners"));
 const Members = lazy(() => import("@/pages/Members"));
+const Directory = lazy(() => import("@/pages/Directory"));
 const Resources = lazy(() => import("@/pages/Resources"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -71,6 +72,8 @@ function Router() {
             <Route path="/events" component={Events} />
             <Route path="/partners" component={Partners} />
             <Route path="/members" component={() => <AuthenticatedRoute component={Members} />} />
+            <Route path="/directory/:id" component={Directory} />
+            <Route path="/directory" component={Directory} />
             <Route path="/resources" component={() => <AuthenticatedRoute component={Resources} />} />
             <Route path="/contact" component={Contact} />
             <Route path="/login" component={Login} />
