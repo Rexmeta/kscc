@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   memberServiceImportRows,
   memberServiceOrganizationLocalizations,
@@ -20,6 +20,7 @@ export const PUBLIC_VERIFICATION_STATUSES = [
 
 const MAX_PAGE_SIZE = 50;
 export const MAX_REVIEW_PAGE_SIZE = 50;
+export const REVIEW_QUEUE_LOOKAHEAD_DAYS = 30;
 
 type DirectoryFilters = {
   q?: string;
@@ -304,6 +305,7 @@ type ReviewQueueFilters = {
 type ReviewAuditHistoryFilters = ReviewQueueFilters;
 
 type ReviewDecision = "approve" | "limit" | "reject";
+type ReviewReason = "new_submission" | "verification_expired" | "verification_due_soon";
 
 export type MemberServiceReviewInput = {
   organizationId: string;
@@ -320,14 +322,26 @@ function clampReviewPageSize(limit: number) {
 }
 
 function reviewQueueWhere() {
+  const reviewCutoff = new Date(
+    Date.now() + REVIEW_QUEUE_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000,
+  );
   return and(
-    eq(memberServiceOrganizations.publicApproved, false),
-    sql`exists (
-      select 1
-      from ${memberServiceImportRows} staged_row
-      where staged_row.organization_id = ${memberServiceOrganizations.id}
-        and staged_row.status = 'needs_review'
-    )`,
+    or(
+      and(
+        eq(memberServiceOrganizations.publicApproved, false),
+        sql`exists (
+          select 1
+          from ${memberServiceImportRows} staged_row
+          where staged_row.organization_id = ${memberServiceOrganizations.id}
+            and staged_row.status = 'needs_review'
+        )`,
+      ),
+      and(
+        eq(memberServiceOrganizations.publicApproved, true),
+        inArray(memberServiceOrganizations.verificationStatus, [...PUBLIC_VERIFICATION_STATUSES]),
+        lte(memberServiceOrganizations.nextReviewAt, reviewCutoff),
+      ),
+    ),
   );
 }
 
@@ -363,6 +377,11 @@ function toReviewOrganization(
     nextReviewAt: organization.nextReviewAt?.toISOString() ?? null,
     isActive: organization.isActive,
     publicApproved: organization.publicApproved,
+    reviewReason: organization.publicApproved
+      ? (organization.nextReviewAt && organization.nextReviewAt <= new Date()
+        ? "verification_expired"
+        : "verification_due_soon") as ReviewReason
+      : "new_submission" as ReviewReason,
     reviewNote: organization.reviewNote,
     createdAt: organization.createdAt.toISOString(),
     updatedAt: organization.updatedAt.toISOString(),
@@ -425,7 +444,12 @@ export async function listMemberServiceReviewQueue(filters: ReviewQueueFilters) 
       .select()
       .from(memberServiceOrganizations)
       .where(where)
-      .orderBy(memberServiceOrganizations.createdAt, memberServiceOrganizations.id)
+      .orderBy(
+        sql`case when ${memberServiceOrganizations.publicApproved} = true then 0 else 1 end`,
+        memberServiceOrganizations.nextReviewAt,
+        memberServiceOrganizations.createdAt,
+        memberServiceOrganizations.id,
+      )
       .limit(limit)
       .offset(offset),
     db
@@ -552,18 +576,30 @@ function nextReviewDate(verificationDate: Date, verificationStatus: string) {
 
 export async function reviewMemberServiceOrganization(input: MemberServiceReviewInput) {
   return db.transaction(async (tx) => {
+    const reviewCutoff = new Date(
+      Date.now() + REVIEW_QUEUE_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000,
+    );
     const [organization] = await tx
       .select()
       .from(memberServiceOrganizations)
       .where(and(
         eq(memberServiceOrganizations.id, input.organizationId),
-        eq(memberServiceOrganizations.publicApproved, false),
-        sql`exists (
-          select 1
-          from ${memberServiceImportRows} staged_row
-          where staged_row.organization_id = ${memberServiceOrganizations.id}
-            and staged_row.status = 'needs_review'
-        )`,
+        or(
+          and(
+            eq(memberServiceOrganizations.publicApproved, false),
+            sql`exists (
+              select 1
+              from ${memberServiceImportRows} staged_row
+              where staged_row.organization_id = ${memberServiceOrganizations.id}
+                and staged_row.status = 'needs_review'
+            )`,
+          ),
+          and(
+            eq(memberServiceOrganizations.publicApproved, true),
+            inArray(memberServiceOrganizations.verificationStatus, [...PUBLIC_VERIFICATION_STATUSES]),
+            lte(memberServiceOrganizations.nextReviewAt, reviewCutoff),
+          ),
+        ),
       ))
       .limit(1);
     if (!organization) return null;
@@ -593,13 +629,15 @@ export async function reviewMemberServiceOrganization(input: MemberServiceReview
       .where(eq(memberServiceOrganizations.id, organization.id))
       .returning();
 
-    await tx
-      .update(memberServiceImportRows)
-      .set({ status: input.decision === "approve" ? "approved" : input.decision === "limit" ? "limited" : "rejected" })
-      .where(and(
-        eq(memberServiceImportRows.organizationId, organization.id),
-        eq(memberServiceImportRows.status, "needs_review"),
-      ));
+    if (!organization.publicApproved) {
+      await tx
+        .update(memberServiceImportRows)
+        .set({ status: input.decision === "approve" ? "approved" : input.decision === "limit" ? "limited" : "rejected" })
+        .where(and(
+          eq(memberServiceImportRows.organizationId, organization.id),
+          eq(memberServiceImportRows.status, "needs_review"),
+        ));
+    }
 
     await tx.insert(memberServiceReviewAudits).values({
       organizationId: organization.id,

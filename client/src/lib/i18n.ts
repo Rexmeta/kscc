@@ -66,6 +66,9 @@ export interface TranslationKeys {
   'memberService.operatorSubtitle': string;
   'memberService.operatorDisabled': string;
   'memberService.operatorQueue': string;
+  'memberService.operatorVerificationExpired': string;
+  'memberService.operatorVerificationDueSoon': string;
+  'memberService.operatorNewSubmission': string;
   'memberService.operatorEmpty': string;
   'memberService.operatorEvidence': string;
   'memberService.operatorVerificationDate': string;
@@ -395,6 +398,9 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorSubtitle': '기관이 공개되기 전에 운영자가 검수합니다.',
     'memberService.operatorDisabled': '회원 서비스 운영 도구가 활성화되지 않았습니다.',
     'memberService.operatorQueue': '검수 대기열',
+    'memberService.operatorVerificationExpired': '검증 기한이 지나 재검수가 필요합니다.',
+    'memberService.operatorVerificationDueSoon': '검증 기한이 가까워 재검수가 필요합니다.',
+    'memberService.operatorNewSubmission': '새로 가져온 기관의 첫 검수입니다.',
     'memberService.operatorEmpty': '검수를 기다리는 임시 저장 기관이 없습니다.',
     'memberService.operatorEvidence': '근거 URL',
     'memberService.operatorVerificationDate': '확인 날짜',
@@ -722,6 +728,9 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorSubtitle': 'Review staged organizations before they become public.',
     'memberService.operatorDisabled': 'The member service operator tools are not enabled.',
     'memberService.operatorQueue': 'Review queue',
+    'memberService.operatorVerificationExpired': 'Verification has expired and needs a fresh review.',
+    'memberService.operatorVerificationDueSoon': 'Verification expires soon and needs a fresh review.',
+    'memberService.operatorNewSubmission': 'This is a first review for a newly imported organization.',
     'memberService.operatorEmpty': 'There are no staged organizations waiting for review.',
     'memberService.operatorEvidence': 'Evidence URL',
     'memberService.operatorVerificationDate': 'Verification date',
@@ -1049,6 +1058,9 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorSubtitle': '在机构公开前审核暂存机构。',
     'memberService.operatorDisabled': '机构服务运营工具尚未启用。',
     'memberService.operatorQueue': '审核队列',
+    'memberService.operatorVerificationExpired': '验证已过期，需要重新审核。',
+    'memberService.operatorVerificationDueSoon': '验证即将到期，需要重新审核。',
+    'memberService.operatorNewSubmission': '这是新导入机构的首次审核。',
     'memberService.operatorEmpty': '目前没有等待审核的暂存机构。',
     'memberService.operatorEvidence': '证据网址',
     'memberService.operatorVerificationDate': '验证日期',

@@ -5492,6 +5492,18 @@ test(
         (await request(`/api/member-service/v1/directory/${expired.id}`)).status,
         404,
       );
+      const { listMemberServiceReviewQueue } = await import("./memberServiceDirectory");
+      const reviewQueue = await listMemberServiceReviewQueue({ page: 1, limit: 50 });
+      const expiredReview = reviewQueue.organizations.find(
+        (organization) => organization.id === expired.id,
+      );
+      assert.ok(expiredReview);
+      assert.equal(expiredReview?.reviewReason, "verification_expired");
+      const dueSoonReview = reviewQueue.organizations.find(
+        (organization) => organization.id === visibleOne.id,
+      );
+      assert.ok(dueSoonReview);
+      assert.equal(dueSoonReview?.reviewReason, "verification_due_soon");
       assert.equal(
         (await request(`/api/member-service/v1/directory/${randomUUID()}`)).status,
         404,

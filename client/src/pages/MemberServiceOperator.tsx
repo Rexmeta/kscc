@@ -21,6 +21,9 @@ type ReviewOrganization = {
   sourceUrl: string | null;
   verificationStatus: string;
   lastVerifiedAt: string | null;
+  nextReviewAt: string | null;
+  publicApproved: boolean;
+  reviewReason: 'new_submission' | 'verification_expired' | 'verification_due_soon';
   reviewNote: string | null;
   localizations: Array<{
     locale: string;
@@ -181,7 +184,16 @@ export default function MemberServiceOperatorPage() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {organization.organizationType} · {organization.baseCountry}
                       </p>
-                      <Badge variant="outline" className="mt-2 text-xs">{organization.verificationStatus}</Badge>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="text-xs">{organization.verificationStatus}</Badge>
+                        {organization.reviewReason !== 'new_submission' && (
+                          <Badge variant="destructive" className="text-xs">
+                            {organization.reviewReason === 'verification_expired'
+                              ? t('memberService.operatorVerificationExpired')
+                              : t('memberService.operatorVerificationDueSoon')}
+                          </Badge>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
@@ -207,6 +219,16 @@ export default function MemberServiceOperatorPage() {
                   </div>
                   <Badge variant="secondary"><ShieldCheck className="mr-1 h-3.5 w-3.5" />{selected.verificationStatus}</Badge>
                 </div>
+                <p className={`text-sm ${selected.reviewReason === 'verification_expired' ? 'text-destructive' : selected.reviewReason === 'verification_due_soon' ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                  {selected.reviewReason === 'verification_expired'
+                    ? t('memberService.operatorVerificationExpired')
+                    : selected.reviewReason === 'verification_due_soon'
+                      ? t('memberService.operatorVerificationDueSoon')
+                      : t('memberService.operatorNewSubmission')}
+                  {selected.nextReviewAt && (
+                    <> · {new Date(selected.nextReviewAt).toLocaleDateString()}</>
+                  )}
+                </p>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
