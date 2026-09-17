@@ -97,7 +97,9 @@ import {
 import { getMemberServiceFlags, isMemberServiceDirectoryEnabled } from "./memberServiceFlags";
 import {
   getMemberServiceOrganizationReview,
+  getAdminOrganization,
   getPublicOrganization,
+  listAdminOrganizations,
   listMemberServiceReviewAuditHistory,
   listMemberServiceReviewQueue,
   listPublicOrganizations,
@@ -148,6 +150,16 @@ const inquiryQuerySchema = z.object({
 const memberServiceReviewQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(25),
+}).strict();
+
+const memberServiceAdminDirectoryQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+  service: z.string().trim().max(80).optional(),
+  region: z.string().trim().max(80).optional(),
+  organizationType: z.string().trim().max(80).optional(),
+  language: z.enum(["ko", "en", "zh"]).default("ko"),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(12),
 }).strict();
 
 const memberServiceReviewBodySchema = z.object({
@@ -518,6 +530,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "Organization could not be loaded." });
     }
   });
+
+  app.get(
+    "/api/member-service/v1/admin/directory",
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      if (!isMemberServiceDirectoryEnabled()) {
+        return res.status(404).json({ message: "Member service directory is not available." });
+      }
+
+      try {
+        const query = memberServiceAdminDirectoryQuerySchema.parse(req.query);
+        return res.json(await listAdminOrganizations(query));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid directory filters." });
+        }
+        emitOperationalEvent("member_service.directory.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "admin_directory_list",
+          reason: "query_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Directory could not be loaded." });
+      }
+    },
+  );
+
+  app.get(
+    "/api/member-service/v1/admin/directory/:id",
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      if (!isMemberServiceDirectoryEnabled()) {
+        return res.status(404).json({ message: "Member service directory is not available." });
+      }
+
+      try {
+        const id = z.string().uuid().parse(req.params.id);
+        const organization = await getAdminOrganization(id);
+        if (!organization) {
+          return res.status(404).json({ message: "Organization not found." });
+        }
+        return res.json(organization);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid organization ID." });
+        }
+        emitOperationalEvent("member_service.directory.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "admin_directory_detail",
+          reason: "query_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Organization could not be loaded." });
+      }
+    },
+  );
 
   app.get(
     "/api/member-service/v1/operator/review-queue",

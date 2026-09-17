@@ -53,6 +53,111 @@ type DirectoryResponse = {
   totalPages: number;
 };
 
+type AdminOrganization = {
+  id: string;
+  sourceSystem: string;
+  sourceRecordKey: string;
+  organizationType: string;
+  legalForm: string | null;
+  supervisingAuthority: string | null;
+  scope: string | null;
+  baseCountry: string;
+  baseRegion: string | null;
+  chinaRegionFocus: string | null;
+  primaryDomain: string | null;
+  summaryKo: string | null;
+  websiteUrl: string | null;
+  contactUrl: string | null;
+  verificationStatus: string;
+  sourceType: string | null;
+  sourceUrl: string | null;
+  lastVerifiedAt: string | null;
+  nextReviewAt: string | null;
+  reviewNote: string | null;
+  isActive: boolean;
+  publicApproved: boolean;
+  createdAt: string;
+  updatedAt: string;
+  localizations: Array<{
+    id: string;
+    locale: string;
+    officialName: string;
+    displayName: string | null;
+    summary: string | null;
+    isOfficial: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  services: Array<Record<string, unknown> & {
+    code: string;
+    nameKo: string;
+    nameEn: string | null;
+    nameZh: string | null;
+    isApproved: boolean;
+    rawValue: string | null;
+  }>;
+  regions: Array<Record<string, unknown> & {
+    code: string;
+    countryCode: string;
+    nameKo: string;
+    nameEn: string | null;
+    nameZh: string | null;
+    relationScope: string;
+    isApproved: boolean;
+    rawValue: string | null;
+  }>;
+  contacts: Array<{
+    id: string;
+    contactType: string;
+    label: string | null;
+    value: string;
+    isPublic: boolean;
+    verifiedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  latestImport: {
+    id: string;
+    sourceRecordKey: string;
+    rawData: unknown;
+    status: string;
+    reasonCodes: unknown;
+    createdAt: string;
+    batch: {
+      id: string;
+      sourceSystem: string;
+      sourceFileName: string | null;
+      sourceFileHash: string | null;
+      status: string;
+      importedBy: string | null;
+      createdAt: string;
+      completedAt: string | null;
+    } | null;
+  } | null;
+  reviewAudits: Array<{
+    id: string;
+    reviewerId: string | null;
+    reviewerName: string | null;
+    decision: string;
+    evidenceUrl: string | null;
+    verificationDate: string | null;
+    publicApproved: boolean;
+    note: string | null;
+    beforeState: unknown;
+    afterState: unknown;
+    correlationId: string | null;
+    createdAt: string;
+  }>;
+};
+
+type AdminDirectoryResponse = {
+  organizations: AdminOrganization[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
 function localizedLabel(
   value: { nameKo: string; nameEn: string | null; nameZh: string | null },
   language: Language,
@@ -66,6 +171,321 @@ function verificationLabel(status: string) {
   return status === 'verified_register'
     ? t('memberService.verifiedRegister')
     : t('memberService.verifiedOfficial');
+}
+
+function adminVerificationLabel(status: string) {
+  if (status === 'verified_official' || status === 'verified_register') {
+    return verificationLabel(status);
+  }
+  if (status === 'limited') return t('memberService.adminStatusLimited');
+  if (status === 'rejected') return t('memberService.adminStatusRejected');
+  if (status === 'needs_review') return t('memberService.adminStatusPending');
+  return status || t('memberService.adminStatusUnknown');
+}
+
+function AdminStatusBadges({ organization }: { organization: AdminOrganization }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Badge variant={organization.publicApproved ? 'default' : 'secondary'}>
+        {organization.publicApproved
+          ? t('memberService.adminStatusApproved')
+          : organization.verificationStatus === 'limited'
+            ? t('memberService.adminStatusLimited')
+            : organization.verificationStatus === 'rejected'
+              ? t('memberService.adminStatusRejected')
+              : t('memberService.adminStatusPending')}
+      </Badge>
+      <Badge variant={organization.isActive ? 'outline' : 'destructive'}>
+        {organization.isActive ? t('memberService.adminActive') : t('memberService.adminInactive')}
+      </Badge>
+      <Badge variant="outline">{adminVerificationLabel(organization.verificationStatus)}</Badge>
+    </div>
+  );
+}
+
+function AdminOrganizationCard({
+  organization,
+}: {
+  organization: AdminOrganization;
+}) {
+  const name = organization.localizations.find((row) => row.locale === 'ko')?.displayName
+    || organization.localizations[0]?.displayName
+    || organization.localizations[0]?.officialName
+    || organization.sourceRecordKey;
+  return (
+    <Card className="flex h-full flex-col border-amber-500/30 bg-amber-500/5">
+      <CardContent className="flex flex-1 flex-col p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300">
+            <Building2 className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <AdminStatusBadges organization={organization} />
+        </div>
+        <h2 className="mt-5 text-xl font-semibold leading-tight">{name}</h2>
+        <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+          {organization.summaryKo || t('memberService.noSummary')}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span>{organization.organizationType}</span>
+          {organization.baseRegion && <span>· {organization.baseRegion}</span>}
+          <span>· {organization.sourceRecordKey}</span>
+        </div>
+        <div className="mt-auto pt-6">
+          <Button asChild variant="outline" className="w-full justify-between">
+            <Link href={`/directory/${organization.id}`}>
+              <span>{t('common.more')}</span>
+              <ArrowLeft className="h-4 w-4 rotate-180" aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AdminValue({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-background/60 p-3">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-sm">
+        {value === null || value === undefined || value === '' ? '—' : String(value)}
+      </dd>
+    </div>
+  );
+}
+
+function AdminJsonBlock({ value }: { value: unknown }) {
+  return (
+    <pre className="max-h-80 overflow-auto rounded-md bg-muted/60 p-3 text-xs leading-5">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
+}
+
+function AdminOrganizationDetail({
+  organization,
+}: {
+  organization: AdminOrganization;
+}) {
+  const date = (value: string | null) => value ? new Date(value).toLocaleString() : '—';
+  return (
+    <div className="min-h-screen bg-background">
+      <section className="border-b border-amber-500/30 bg-amber-500/5">
+        <div className="container py-10 md:py-14">
+          <Link href="/directory" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {t('memberService.backToDirectory')}
+          </Link>
+          <div className="mt-7 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div>
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                {t('memberService.adminBadge')}
+              </Badge>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-5xl">
+                {organization.localizations.find((row) => row.locale === 'ko')?.displayName
+                  || organization.localizations[0]?.displayName
+                  || organization.localizations[0]?.officialName
+                  || organization.sourceRecordKey}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">{organization.sourceRecordKey}</p>
+            </div>
+            <AdminStatusBadges organization={organization} />
+          </div>
+        </div>
+      </section>
+      <section className="container space-y-8 py-10 md:py-14">
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">{t('memberService.adminDetails')}</h2>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <AdminValue label="ID" value={organization.id} />
+              <AdminValue label="Source system" value={organization.sourceSystem} />
+              <AdminValue label="Source record key" value={organization.sourceRecordKey} />
+              <AdminValue label="Organization type" value={organization.organizationType} />
+              <AdminValue label="Legal form" value={organization.legalForm} />
+              <AdminValue label="Supervising authority" value={organization.supervisingAuthority} />
+              <AdminValue label="Scope" value={organization.scope} />
+              <AdminValue label="Base country" value={organization.baseCountry} />
+              <AdminValue label="Base region" value={organization.baseRegion} />
+              <AdminValue label="China region focus" value={organization.chinaRegionFocus} />
+              <AdminValue label="Primary domain" value={organization.primaryDomain} />
+              <AdminValue label="Website URL" value={organization.websiteUrl} />
+              <AdminValue label="Contact URL" value={organization.contactUrl} />
+              <AdminValue label="Source type" value={organization.sourceType} />
+              <AdminValue label="Source URL" value={organization.sourceUrl} />
+              <AdminValue label="Verification status" value={adminVerificationLabel(organization.verificationStatus)} />
+              <AdminValue label="Public approval" value={organization.publicApproved ? t('memberService.adminPublic') : t('memberService.adminPrivate')} />
+              <AdminValue label="Active status" value={organization.isActive ? t('memberService.adminActive') : t('memberService.adminInactive')} />
+              <AdminValue label="Last verified" value={date(organization.lastVerifiedAt)} />
+              <AdminValue label="Next review" value={date(organization.nextReviewAt)} />
+              <AdminValue label="Created" value={date(organization.createdAt)} />
+              <AdminValue label="Updated" value={date(organization.updatedAt)} />
+              <AdminValue label="Review note" value={organization.reviewNote} />
+            </dl>
+            {organization.summaryKo && (
+              <div className="mt-4">
+                <AdminValue label="Korean summary" value={organization.summaryKo} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">{t('memberService.adminLocalizations')}</h2>
+            <div className="mt-4 space-y-4">
+              {organization.localizations.map((localization) => (
+                <div key={localization.id} className="rounded-md border border-border/60 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{localization.locale}</Badge>
+                    {localization.isOfficial && <Badge variant="outline">Official</Badge>}
+                  </div>
+                  <p className="mt-3 font-medium">{localization.officialName}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{localization.displayName || '—'}</p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm">{localization.summary || '—'}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-8 lg:grid-cols-2">
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold">{t('memberService.services')}</h2>
+              <div className="mt-4 space-y-3">
+                {organization.services.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+                {organization.services.map((service) => (
+                  <div key={String(service.id)} className="rounded-md border border-border/60 p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{service.code}</Badge>
+                      <Badge variant={service.isApproved ? 'default' : 'outline'}>
+                        {service.isApproved ? t('memberService.adminPublic') : t('memberService.adminPrivate')}
+                      </Badge>
+                    </div>
+                    <p className="mt-2">{service.nameKo}</p>
+                    <p className="text-muted-foreground">{service.rawValue || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-6">
+              <h2 className="text-lg font-semibold">{t('memberService.regions')}</h2>
+              <div className="mt-4 space-y-3">
+                {organization.regions.length === 0 && <p className="text-sm text-muted-foreground">—</p>}
+                {organization.regions.map((region) => (
+                  <div key={String(region.id)} className="rounded-md border border-border/60 p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{region.code}</Badge>
+                      <Badge variant="outline">{region.relationScope}</Badge>
+                      {!region.isApproved && <Badge variant="destructive">{t('memberService.adminPrivate')}</Badge>}
+                    </div>
+                    <p className="mt-2">{region.nameKo}</p>
+                    <p className="text-muted-foreground">{region.rawValue || '—'}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">{t('memberService.adminContacts')}</h2>
+            {organization.contacts.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">{t('memberService.adminNoContacts')}</p>
+            ) : (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {organization.contacts.map((contact) => (
+                  <div key={contact.id} className="rounded-md border border-border/60 p-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary">{contact.contactType}</Badge>
+                      <Badge variant="outline">
+                        {contact.isPublic ? t('memberService.adminPublic') : t('memberService.adminPrivate')}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-medium">{contact.label || '—'}</p>
+                    <p className="break-all text-sm">{contact.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{date(contact.verifiedAt)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">{t('memberService.adminImport')}</h2>
+            {!organization.latestImport ? (
+              <p className="mt-4 text-sm text-muted-foreground">{t('memberService.adminNoImport')}</p>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <AdminValue label="Import status" value={organization.latestImport.status} />
+                  <AdminValue label="Source record key" value={organization.latestImport.sourceRecordKey} />
+                  <AdminValue label="Imported at" value={date(organization.latestImport.createdAt)} />
+                  <AdminValue label="Batch source" value={organization.latestImport.batch?.sourceSystem} />
+                  <AdminValue label="Source file" value={organization.latestImport.batch?.sourceFileName} />
+                  <AdminValue label="Batch status" value={organization.latestImport.batch?.status} />
+                </dl>
+                <div>
+                  <p className="mb-2 text-sm font-medium">{t('memberService.operatorRawData')}</p>
+                  <AdminJsonBlock value={organization.latestImport.rawData} />
+                </div>
+                <div>
+                  <p className="mb-2 text-sm font-medium">{t('memberService.operatorReasonCodes')}</p>
+                  <AdminJsonBlock value={organization.latestImport.reasonCodes} />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">{t('memberService.adminReviewHistory')}</h2>
+            {organization.reviewAudits.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">{t('memberService.adminNoHistory')}</p>
+            ) : (
+              <div className="mt-4 space-y-4">
+                {organization.reviewAudits.map((audit) => (
+                  <div key={audit.id} className="rounded-md border border-border/60 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{audit.decision}</Badge>
+                      <Badge variant="outline">
+                        {audit.publicApproved ? t('memberService.adminPublic') : t('memberService.adminPrivate')}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{date(audit.createdAt)}</span>
+                    </div>
+                    <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <AdminValue label="Reviewer" value={audit.reviewerName || audit.reviewerId} />
+                      <AdminValue label="Verification date" value={date(audit.verificationDate)} />
+                      <AdminValue label="Evidence URL" value={audit.evidenceUrl} />
+                      <AdminValue label="Correlation ID" value={audit.correlationId} />
+                    </dl>
+                    {audit.note && <p className="mt-3 whitespace-pre-wrap text-sm">{audit.note}</p>}
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">Before</p>
+                        <AdminJsonBlock value={audit.beforeState} />
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-muted-foreground">After</p>
+                        <AdminJsonBlock value={audit.afterState} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
 }
 
 function OrganizationCard({
@@ -317,8 +737,10 @@ function OrganizationDetail({
 
 export default function DirectoryPage() {
   const { language } = useLanguage();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
+  const [adminPage, setAdminPage] = useState(1);
   const [, params] = useRoute('/directory/:id');
   const detailId = params?.id;
 
@@ -337,7 +759,16 @@ export default function DirectoryPage() {
       `/api/member-service/v1/directory/${detailId}?lang=${language}`,
       { signal },
     ),
-    enabled: Boolean(detailId && bootstrap.data?.flags.directory),
+    enabled: Boolean(detailId && bootstrap.data?.flags.directory && !authLoading && !isAdmin),
+  });
+
+  const adminDetail = useQuery({
+    queryKey: queryKeys.memberService.adminOrganization(detailId || ''),
+    queryFn: ({ signal }) => fetchJson<AdminOrganization>(
+      `/api/member-service/v1/admin/directory/${detailId}`,
+      { signal },
+    ),
+    enabled: Boolean(detailId && bootstrap.data?.flags.directory && !authLoading && isAdmin),
   });
 
   const list = useQuery({
@@ -347,7 +778,29 @@ export default function DirectoryPage() {
       if (submittedSearch) params.set('q', submittedSearch);
       return fetchJson<DirectoryResponse>(`/api/member-service/v1/directory?${params}`, { signal });
     },
-    enabled: Boolean(!detailId && bootstrap.data?.flags.directory),
+    enabled: Boolean(!detailId && bootstrap.data?.flags.directory && !authLoading && !isAdmin),
+  });
+
+  const adminList = useQuery({
+    queryKey: queryKeys.memberService.adminDirectory({
+      q: submittedSearch,
+      language,
+      page: adminPage,
+      limit: 12,
+    }),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({
+        language,
+        page: String(adminPage),
+        limit: '12',
+      });
+      if (submittedSearch) params.set('q', submittedSearch);
+      return fetchJson<AdminDirectoryResponse>(
+        `/api/member-service/v1/admin/directory?${params}`,
+        { signal },
+      );
+    },
+    enabled: Boolean(!detailId && bootstrap.data?.flags.directory && !authLoading && isAdmin),
   });
 
   if (bootstrap.isLoading) {
@@ -374,10 +827,23 @@ export default function DirectoryPage() {
   }
 
   if (detailId) {
+    if (isAdmin) {
+      return (
+        <QueryState
+          isLoading={authLoading || adminDetail.isLoading}
+          isError={!authLoading && adminDetail.isError}
+          onRetry={() => adminDetail.refetch()}
+          empty={!adminDetail.data}
+          emptyMessage={t('memberService.empty')}
+        >
+          {adminDetail.data ? <AdminOrganizationDetail organization={adminDetail.data} /> : null}
+        </QueryState>
+      );
+    }
     return (
       <QueryState
-        isLoading={detail.isLoading}
-        isError={detail.isError}
+        isLoading={authLoading || detail.isLoading}
+        isError={!authLoading && detail.isError}
         onRetry={() => detail.refetch()}
         empty={!detail.data}
         emptyMessage={t('memberService.empty')}
@@ -390,6 +856,85 @@ export default function DirectoryPage() {
           />
         ) : null}
       </QueryState>
+    );
+  }
+
+  if (isAdmin) {
+    const organizations = adminList.data?.organizations ?? [];
+    const totalPages = adminList.data?.totalPages ?? 1;
+    return (
+      <div className="min-h-screen bg-background">
+        <section className="relative overflow-hidden border-b border-amber-500/30 bg-amber-500/5">
+          <div className="container relative py-12 md:py-20">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
+              {t('memberService.adminBadge')}
+            </p>
+            <h1 className="mt-3 text-4xl font-bold tracking-tight md:text-6xl">{t('memberService.title')}</h1>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+              {t('memberService.adminSubtitle')}
+            </p>
+            <form
+              className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setAdminPage(1);
+                setSubmittedSearch(search.trim());
+              }}
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={t('memberService.searchPlaceholder')}
+                  className="h-11 pl-10"
+                  aria-label={t('memberService.searchPlaceholder')}
+                />
+              </div>
+              <Button type="submit" className="h-11 px-6">{t('memberService.search')}</Button>
+            </form>
+          </div>
+        </section>
+        <section className="container py-10 md:py-16">
+          <p className="mb-6 text-sm text-muted-foreground">{t('memberService.adminSubtitle')}</p>
+          <QueryState
+            isLoading={authLoading || adminList.isLoading}
+            isError={!authLoading && adminList.isError}
+            onRetry={() => adminList.refetch()}
+            empty={organizations.length === 0}
+            emptyMessage={t('memberService.adminEmpty')}
+          >
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {organizations.map((organization) => (
+                <AdminOrganizationCard key={organization.id} organization={organization} />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-3" aria-label={t('common.pagination')}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={adminPage <= 1 || adminList.isFetching}
+                  onClick={() => setAdminPage((page) => Math.max(1, page - 1))}
+                >
+                  {t('memberService.adminPrevious')}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {t('memberService.adminPageOf')} {adminPage} / {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={adminPage >= totalPages || adminList.isFetching}
+                  onClick={() => setAdminPage((page) => Math.min(totalPages, page + 1))}
+                >
+                  {t('memberService.adminNext')}
+                </Button>
+              </div>
+            )}
+          </QueryState>
+        </section>
+      </div>
     );
   }
 

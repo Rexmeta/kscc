@@ -5,8 +5,10 @@ import {
   memberServiceOrganizations,
   memberServiceOrganizationServices,
   memberServiceOrganizationRegions,
+  memberServiceOrganizationContacts,
   memberServiceServices,
   memberServiceRegions,
+  memberServiceImportBatches,
   memberServiceReviewAudits,
   users,
   type MemberServicePublicOrganization,
@@ -295,6 +297,290 @@ export async function getPublicOrganization(id: string, language: "ko" | "en" | 
       .map(({ organizationId: _organizationId, ...row }) => row),
     language,
   );
+}
+
+type AdminDirectoryFilters = DirectoryFilters;
+
+function directorySearchFilter(q?: string) {
+  return q
+    ? or(
+      ilike(memberServiceOrganizations.primaryDomain, `%${q}%`),
+      ilike(memberServiceOrganizations.summaryKo, `%${q}%`),
+      ilike(memberServiceOrganizations.baseRegion, `%${q}%`),
+      ilike(memberServiceOrganizations.chinaRegionFocus, `%${q}%`),
+      sql`exists (
+        select 1
+        from ${memberServiceOrganizationLocalizations} search_localization
+        where search_localization.organization_id = ${memberServiceOrganizations.id}
+          and (
+            search_localization.official_name ilike ${`%${q}%`}
+            or search_localization.display_name ilike ${`%${q}%`}
+          )
+      )`,
+    )
+    : undefined;
+}
+
+async function getAdminLocalizations(organizationIds: string[]) {
+  if (organizationIds.length === 0) return [];
+  return db
+    .select()
+    .from(memberServiceOrganizationLocalizations)
+    .where(inArray(memberServiceOrganizationLocalizations.organizationId, organizationIds))
+    .orderBy(memberServiceOrganizationLocalizations.locale);
+}
+
+async function getAdminTaxonomyRows(organizationIds: string[]) {
+  if (organizationIds.length === 0) return { services: [], regions: [] };
+  const [services, regions] = await Promise.all([
+    db
+      .select({
+        id: memberServiceOrganizationServices.id,
+        organizationId: memberServiceOrganizationServices.organizationId,
+        serviceId: memberServiceOrganizationServices.serviceId,
+        rawValue: memberServiceOrganizationServices.rawValue,
+        isApproved: memberServiceOrganizationServices.isApproved,
+        createdAt: memberServiceOrganizationServices.createdAt,
+        code: memberServiceServices.code,
+        nameKo: memberServiceServices.nameKo,
+        nameEn: memberServiceServices.nameEn,
+        nameZh: memberServiceServices.nameZh,
+        catalogIsActive: memberServiceServices.isActive,
+      })
+      .from(memberServiceOrganizationServices)
+      .innerJoin(memberServiceServices, eq(
+        memberServiceOrganizationServices.serviceId,
+        memberServiceServices.id,
+      ))
+      .where(inArray(memberServiceOrganizationServices.organizationId, organizationIds)),
+    db
+      .select({
+        id: memberServiceOrganizationRegions.id,
+        organizationId: memberServiceOrganizationRegions.organizationId,
+        regionId: memberServiceOrganizationRegions.regionId,
+        rawValue: memberServiceOrganizationRegions.rawValue,
+        isApproved: memberServiceOrganizationRegions.isApproved,
+        relationScope: memberServiceOrganizationRegions.relationScope,
+        createdAt: memberServiceOrganizationRegions.createdAt,
+        code: memberServiceRegions.code,
+        countryCode: memberServiceRegions.countryCode,
+        nameKo: memberServiceRegions.nameKo,
+        nameEn: memberServiceRegions.nameEn,
+        nameZh: memberServiceRegions.nameZh,
+        catalogIsActive: memberServiceRegions.isActive,
+      })
+      .from(memberServiceOrganizationRegions)
+      .innerJoin(memberServiceRegions, eq(
+        memberServiceOrganizationRegions.regionId,
+        memberServiceRegions.id,
+      ))
+      .where(inArray(memberServiceOrganizationRegions.organizationId, organizationIds)),
+  ]);
+  return { services, regions };
+}
+
+async function getAdminContacts(organizationIds: string[]) {
+  if (organizationIds.length === 0) return [];
+  return db
+    .select()
+    .from(memberServiceOrganizationContacts)
+    .where(inArray(memberServiceOrganizationContacts.organizationId, organizationIds))
+    .orderBy(memberServiceOrganizationContacts.createdAt);
+}
+
+async function getLatestAdminImportRows(organizationIds: string[]) {
+  if (organizationIds.length === 0) return [];
+  const rows = await db
+    .select({
+      row: memberServiceImportRows,
+      batch: memberServiceImportBatches,
+    })
+    .from(memberServiceImportRows)
+    .leftJoin(
+      memberServiceImportBatches,
+      eq(memberServiceImportRows.batchId, memberServiceImportBatches.id),
+    )
+    .where(inArray(memberServiceImportRows.organizationId, organizationIds))
+    .orderBy(desc(memberServiceImportRows.createdAt));
+  const latestByOrganization = new Map<string, typeof rows[number]>();
+  for (const row of rows) {
+    const organizationId = row.row.organizationId;
+    if (organizationId && !latestByOrganization.has(organizationId)) {
+      latestByOrganization.set(organizationId, row);
+    }
+  }
+  return Array.from(latestByOrganization.values());
+}
+
+async function getAdminReviewAudits(organizationIds: string[]) {
+  if (organizationIds.length === 0) return [];
+  return db
+    .select({
+      audit: memberServiceReviewAudits,
+      reviewerName: users.name,
+    })
+    .from(memberServiceReviewAudits)
+    .leftJoin(users, eq(memberServiceReviewAudits.reviewerId, users.id))
+    .where(inArray(memberServiceReviewAudits.organizationId, organizationIds))
+    .orderBy(desc(memberServiceReviewAudits.createdAt));
+}
+
+function toAdminOrganization(
+  organization: typeof memberServiceOrganizations.$inferSelect,
+  localizations: Array<typeof memberServiceOrganizationLocalizations.$inferSelect>,
+  services: Array<Record<string, unknown>>,
+  regions: Array<Record<string, unknown>>,
+  contacts: Array<typeof memberServiceOrganizationContacts.$inferSelect>,
+  importRow: {
+    row: typeof memberServiceImportRows.$inferSelect;
+    batch: typeof memberServiceImportBatches.$inferSelect | null;
+  } | null,
+  audits: Array<{
+    audit: typeof memberServiceReviewAudits.$inferSelect;
+    reviewerName: string | null;
+  }>,
+) {
+  return {
+    ...organization,
+    createdAt: organization.createdAt.toISOString(),
+    updatedAt: organization.updatedAt.toISOString(),
+    lastVerifiedAt: organization.lastVerifiedAt?.toISOString() ?? null,
+    nextReviewAt: organization.nextReviewAt?.toISOString() ?? null,
+    localizations: localizations.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    })),
+    services: services.map((row) => ({
+      ...row,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    })),
+    regions: regions.map((row) => ({
+      ...row,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    })),
+    contacts: contacts.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      verifiedAt: row.verifiedAt?.toISOString() ?? null,
+    })),
+    latestImport: importRow
+      ? {
+        ...importRow.row,
+        createdAt: importRow.row.createdAt.toISOString(),
+        batch: importRow.batch
+          ? {
+            ...importRow.batch,
+            createdAt: importRow.batch.createdAt.toISOString(),
+            completedAt: importRow.batch.completedAt?.toISOString() ?? null,
+          }
+          : null,
+      }
+      : null,
+    reviewAudits: audits.map(({ audit, reviewerName }) => ({
+      ...audit,
+      reviewerName,
+      createdAt: audit.createdAt.toISOString(),
+      verificationDate: audit.verificationDate?.toISOString() ?? null,
+    })),
+  };
+}
+
+async function assembleAdminOrganizations(
+  organizations: Array<typeof memberServiceOrganizations.$inferSelect>,
+) {
+  const ids = organizations.map((organization) => organization.id);
+  const [localizations, taxonomy, contacts, importRows, audits] = await Promise.all([
+    getAdminLocalizations(ids),
+    getAdminTaxonomyRows(ids),
+    getAdminContacts(ids),
+    getLatestAdminImportRows(ids),
+    getAdminReviewAudits(ids),
+  ]);
+  const importByOrganization = new Map(
+    importRows.map((row) => [row.row.organizationId as string, row]),
+  );
+  return organizations.map((organization) => toAdminOrganization(
+    organization,
+    localizations.filter((row) => row.organizationId === organization.id),
+    taxonomy.services
+      .filter((row) => row.organizationId === organization.id)
+      .map(({ organizationId: _organizationId, ...row }) => row),
+    taxonomy.regions
+      .filter((row) => row.organizationId === organization.id)
+      .map(({ organizationId: _organizationId, ...row }) => row),
+    contacts.filter((row) => row.organizationId === organization.id),
+    importByOrganization.get(organization.id) ?? null,
+    audits
+      .filter((row) => row.audit.organizationId === organization.id),
+  ));
+}
+
+export async function listAdminOrganizations(filters: AdminDirectoryFilters) {
+  const page = Math.max(filters.page, 1);
+  const limit = clampPageSize(filters.limit);
+  const offset = (page - 1) * limit;
+  const q = filters.q?.trim();
+  const where = and(
+    filters.organizationType
+      ? eq(memberServiceOrganizations.organizationType, filters.organizationType)
+      : undefined,
+    directorySearchFilter(q),
+    filters.service
+      ? sql`exists (
+        select 1
+        from ${memberServiceOrganizationServices} filter_service
+        inner join ${memberServiceServices} filter_service_catalog
+          on filter_service_catalog.id = filter_service.service_id
+        where filter_service.organization_id = ${memberServiceOrganizations.id}
+          and filter_service_catalog.code = ${filters.service}
+      )`
+      : undefined,
+    filters.region
+      ? sql`exists (
+        select 1
+        from ${memberServiceOrganizationRegions} filter_region
+        inner join ${memberServiceRegions} filter_region_catalog
+          on filter_region_catalog.id = filter_region.region_id
+        where filter_region.organization_id = ${memberServiceOrganizations.id}
+          and filter_region_catalog.code = ${filters.region}
+      )`
+      : undefined,
+  );
+  const [organizations, countRows] = await Promise.all([
+    db
+      .select()
+      .from(memberServiceOrganizations)
+      .where(where)
+      .orderBy(desc(memberServiceOrganizations.updatedAt), desc(memberServiceOrganizations.id))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberServiceOrganizations)
+      .where(where),
+  ]);
+  const items = await assembleAdminOrganizations(organizations);
+  const total = countRows[0]?.count ?? 0;
+  return {
+    organizations: items,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
+}
+
+export async function getAdminOrganization(id: string) {
+  const [organization] = await db
+    .select()
+    .from(memberServiceOrganizations)
+    .where(eq(memberServiceOrganizations.id, id))
+    .limit(1);
+  if (!organization) return null;
+  const [item] = await assembleAdminOrganizations([organization]);
+  return item ?? null;
 }
 
 type ReviewQueueFilters = {

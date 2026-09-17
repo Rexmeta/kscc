@@ -99,6 +99,29 @@ export interface TranslationKeys {
   'memberService.operatorPrevious': string;
   'memberService.operatorNext': string;
   'memberService.operatorPageOf': string;
+  'memberService.adminBadge': string;
+  'memberService.adminSubtitle': string;
+  'memberService.adminStatusApproved': string;
+  'memberService.adminStatusPending': string;
+  'memberService.adminStatusLimited': string;
+  'memberService.adminStatusRejected': string;
+  'memberService.adminStatusUnknown': string;
+  'memberService.adminActive': string;
+  'memberService.adminInactive': string;
+  'memberService.adminPublic': string;
+  'memberService.adminPrivate': string;
+  'memberService.adminDetails': string;
+  'memberService.adminLocalizations': string;
+  'memberService.adminContacts': string;
+  'memberService.adminImport': string;
+  'memberService.adminReviewHistory': string;
+  'memberService.adminNoImport': string;
+  'memberService.adminNoHistory': string;
+  'memberService.adminNoContacts': string;
+  'memberService.adminPrevious': string;
+  'memberService.adminNext': string;
+  'memberService.adminPageOf': string;
+  'memberService.adminEmpty': string;
 
   // Hero Section
   'hero.title': string;
@@ -441,6 +464,29 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorPrevious': '이전',
     'memberService.operatorNext': '다음',
     'memberService.operatorPageOf': '페이지',
+    'memberService.adminBadge': '관리자 전체 조회',
+    'memberService.adminSubtitle': '모든 상태의 저장된 기관 정보를 관리자 전용으로 확인합니다.',
+    'memberService.adminStatusApproved': '공개 승인',
+    'memberService.adminStatusPending': '승인 전',
+    'memberService.adminStatusLimited': '제한',
+    'memberService.adminStatusRejected': '반려',
+    'memberService.adminStatusUnknown': '미분류',
+    'memberService.adminActive': '활성',
+    'memberService.adminInactive': '비활성',
+    'memberService.adminPublic': '공개',
+    'memberService.adminPrivate': '비공개',
+    'memberService.adminDetails': '저장된 기본 정보',
+    'memberService.adminLocalizations': '언어별 명칭·소개',
+    'memberService.adminContacts': '연락처',
+    'memberService.adminImport': '가져오기 원본',
+    'memberService.adminReviewHistory': '검토 이력',
+    'memberService.adminNoImport': '가져오기 원본이 없습니다.',
+    'memberService.adminNoHistory': '검토 이력이 없습니다.',
+    'memberService.adminNoContacts': '저장된 연락처가 없습니다.',
+    'memberService.adminPrevious': '이전',
+    'memberService.adminNext': '다음',
+    'memberService.adminPageOf': '페이지',
+    'memberService.adminEmpty': '검색 조건에 맞는 기관이 없습니다.',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -781,6 +827,29 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorPrevious': 'Previous',
     'memberService.operatorNext': 'Next',
     'memberService.operatorPageOf': 'Page',
+    'memberService.adminBadge': 'Admin full directory',
+    'memberService.adminSubtitle': 'Review every organization record and status available to administrators.',
+    'memberService.adminStatusApproved': 'Publicly approved',
+    'memberService.adminStatusPending': 'Pending approval',
+    'memberService.adminStatusLimited': 'Limited',
+    'memberService.adminStatusRejected': 'Rejected',
+    'memberService.adminStatusUnknown': 'Unclassified',
+    'memberService.adminActive': 'Active',
+    'memberService.adminInactive': 'Inactive',
+    'memberService.adminPublic': 'Public',
+    'memberService.adminPrivate': 'Private',
+    'memberService.adminDetails': 'Stored details',
+    'memberService.adminLocalizations': 'Localized names and summaries',
+    'memberService.adminContacts': 'Contacts',
+    'memberService.adminImport': 'Import source',
+    'memberService.adminReviewHistory': 'Review history',
+    'memberService.adminNoImport': 'No import source is stored.',
+    'memberService.adminNoHistory': 'No review history is stored.',
+    'memberService.adminNoContacts': 'No contacts are stored.',
+    'memberService.adminPrevious': 'Previous',
+    'memberService.adminNext': 'Next',
+    'memberService.adminPageOf': 'Page',
+    'memberService.adminEmpty': 'No organizations match this search.',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -1121,6 +1190,29 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorPrevious': '上一页',
     'memberService.operatorNext': '下一页',
     'memberService.operatorPageOf': '第',
+    'memberService.adminBadge': '管理员完整目录',
+    'memberService.adminSubtitle': '管理员可以查看所有机构记录及其状态。',
+    'memberService.adminStatusApproved': '已批准公开',
+    'memberService.adminStatusPending': '待批准',
+    'memberService.adminStatusLimited': '受限',
+    'memberService.adminStatusRejected': '已拒绝',
+    'memberService.adminStatusUnknown': '未分类',
+    'memberService.adminActive': '启用',
+    'memberService.adminInactive': '停用',
+    'memberService.adminPublic': '公开',
+    'memberService.adminPrivate': '非公开',
+    'memberService.adminDetails': '已保存的基本信息',
+    'memberService.adminLocalizations': '多语言名称与介绍',
+    'memberService.adminContacts': '联系方式',
+    'memberService.adminImport': '导入原始数据',
+    'memberService.adminReviewHistory': '审核记录',
+    'memberService.adminNoImport': '没有保存导入原始数据。',
+    'memberService.adminNoHistory': '没有审核记录。',
+    'memberService.adminNoContacts': '没有保存联系方式。',
+    'memberService.adminPrevious': '上一页',
+    'memberService.adminNext': '下一页',
+    'memberService.adminPageOf': '第',
+    'memberService.adminEmpty': '没有符合搜索条件的机构。',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',

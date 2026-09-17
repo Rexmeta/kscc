@@ -109,6 +109,10 @@ export const queryKeys = {
       ["/api/member-service/v1/directory", "list", params] as const,
     organization: (id: string, language?: string) =>
       ["/api/member-service/v1/directory", id, language ?? null] as const,
+    adminDirectory: (params: Record<string, unknown> = {}) =>
+      ["/api/member-service/v1/admin/directory", "list", params] as const,
+    adminOrganization: (id: string) =>
+      ["/api/member-service/v1/admin/directory", id] as const,
     reviewQueue: (page = 1, limit = 25) =>
       ["/api/member-service/v1/operator/review-queue", page, limit] as const,
     reviewAudits: (page = 1, limit = 25) =>

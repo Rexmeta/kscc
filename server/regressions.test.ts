@@ -5311,6 +5311,8 @@ test(
     const suffix = randomUUID();
     let importedBatchId: string | undefined;
     let importedSourceRecordKey: string | undefined;
+    let adminUserId: string | undefined;
+    let operatorUserId: string | undefined;
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -5446,6 +5448,20 @@ test(
     app.use(express.json());
     const { registerRoutes } = await import("./routes");
     const server = await registerRoutes(app);
+    const [adminUser] = await db.insert(users).values({
+      email: `directory-admin-${suffix}@example.test`,
+      name: "Directory Admin",
+      role: "admin",
+      userType: "admin",
+    }).returning();
+    const [operatorUser] = await db.insert(users).values({
+      email: `directory-operator-${suffix}@example.test`,
+      name: "Directory Operator",
+      role: "operator",
+      userType: "operator",
+    }).returning();
+    adminUserId = adminUser.id;
+    operatorUserId = operatorUser.id;
     let workbookPath: string | undefined;
     try {
       await new Promise<void>((resolve, reject) => {
@@ -5455,11 +5471,22 @@ test(
       const address = server.address();
       assert.ok(address && typeof address !== "string");
       const baseUrl = `http://127.0.0.1:${address.port}`;
-      const request = async (path: string) => {
-        const response = await fetch(`${baseUrl}${path}`);
-        return { status: response.status, body: await response.json() };
+      const request = async (path: string, token?: string) => {
+        const response = await fetch(`${baseUrl}${path}`, {
+          headers: token ? { Cookie: `auth_session=${token}` } : undefined,
+        });
+        const text = await response.text();
+        let body: unknown = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // Authentication middleware may return a plain-text 401 response.
+        }
+        return { status: response.status, body };
       };
       const query = encodeURIComponent(suffix);
+      const adminToken = issueAuthToken(adminUser, process.env.SESSION_SECRET!);
+      const operatorToken = issueAuthToken(operatorUser, process.env.SESSION_SECRET!);
 
       const bootstrap = await request("/api/member-service/v1/bootstrap?lang=en");
       assert.equal(bootstrap.status, 200);
@@ -5520,6 +5547,58 @@ test(
         (await request(`/api/member-service/v1/directory?q=${query}&page=0`)).status,
         400,
       );
+      const adminPage = await request(
+        `/api/member-service/v1/admin/directory?q=${query}&page=1&limit=50`,
+        adminToken,
+      );
+      assert.equal(adminPage.status, 200);
+      assert.equal(adminPage.body.total, 7);
+      assert.equal(adminPage.body.organizations.length, 7);
+      assert.equal(
+        adminPage.body.organizations.some(
+          (organization: { id: string }) => organization.id === organizations[3].id,
+        ),
+        true,
+      );
+      assert.equal(
+        adminPage.body.organizations.some(
+          (organization: { sourceUrl?: string }) =>
+            organization.sourceUrl === `https://private-source.example.test/${suffix}`,
+        ),
+        true,
+      );
+      const adminPageTwo = await request(
+        `/api/member-service/v1/admin/directory?q=${query}&page=2&limit=1`,
+        adminToken,
+      );
+      assert.equal(adminPageTwo.status, 200);
+      assert.equal(adminPageTwo.body.page, 2);
+      assert.equal(adminPageTwo.body.limit, 1);
+      assert.equal(adminPageTwo.body.totalPages, 7);
+      assert.equal(
+        (await request(`/api/member-service/v1/admin/directory?q=${query}`, operatorToken)).status,
+        403,
+      );
+      assert.equal(
+        (await request(`/api/member-service/v1/admin/directory?q=${query}`)).status,
+        401,
+      );
+      const adminDetail = await request(
+        `/api/member-service/v1/admin/directory/${visibleOne.id}`,
+        adminToken,
+      );
+      assert.equal(adminDetail.status, 200);
+      assert.equal(adminDetail.body.sourceRecordKey, visibleOne.sourceRecordKey);
+      assert.equal(adminDetail.body.reviewNote, `private-review-note-${suffix}`);
+      assert.equal(adminDetail.body.localizations.length, 1);
+      assert.equal(
+        (await request("/api/member-service/v1/admin/directory/not-a-uuid", adminToken)).status,
+        400,
+      );
+      assert.equal(
+        (await request(`/api/member-service/v1/admin/directory?q=${query}&limit=51`, adminToken)).status,
+        400,
+      );
 
       const workbookRows = [{
         organization_id: `${suffix}-import-one`,
@@ -5556,6 +5635,16 @@ test(
         .where(eq(memberServiceOrganizations.sourceRecordKey, workbookRows[0].organization_id));
       assert.equal(stagedOrganizations.length, 1);
       assert.equal(stagedOrganizations[0].publicApproved, false);
+      const importedAdminDetail = await request(
+        `/api/member-service/v1/admin/directory/${stagedOrganizations[0].id}`,
+        adminToken,
+      );
+      assert.equal(importedAdminDetail.status, 200);
+      assert.equal(importedAdminDetail.body.latestImport.status, "needs_review");
+      assert.equal(
+        importedAdminDetail.body.latestImport.rawData.source_url,
+        workbookRows[0].source_url,
+      );
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
@@ -5575,6 +5664,12 @@ test(
           eq(memberServiceOrganizations.sourceSystem, "kscc_initial_seed"),
           eq(memberServiceOrganizations.sourceRecordKey, importedSourceRecordKey),
         ));
+      }
+      if (adminUserId) {
+        await db.delete(users).where(eq(users.id, adminUserId));
+      }
+      if (operatorUserId) {
+        await db.delete(users).where(eq(users.id, operatorUserId));
       }
       if (workbookPath) {
         rmSync(workbookPath, { force: true });
