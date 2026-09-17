@@ -76,6 +76,16 @@ export interface TranslationKeys {
   'memberService.operatorRawData': string;
   'memberService.operatorReasonCodes': string;
   'memberService.operatorSaved': string;
+  'memberService.operatorHistory': string;
+  'memberService.operatorHistoryEmpty': string;
+  'memberService.operatorDecision': string;
+  'memberService.operatorReviewer': string;
+  'memberService.operatorTimestamp': string;
+  'memberService.operatorUnknownReviewer': string;
+  'memberService.operatorNotProvided': string;
+  'memberService.operatorPrevious': string;
+  'memberService.operatorNext': string;
+  'memberService.operatorPageOf': string;
 
   // Hero Section
   'hero.title': string;
@@ -395,6 +405,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorRawData': '가져온 원본 데이터',
     'memberService.operatorReasonCodes': '검수 사유',
     'memberService.operatorSaved': '검수 결정이 저장되었습니다.',
+    'memberService.operatorHistory': '검수 결정 이력',
+    'memberService.operatorHistoryEmpty': '아직 기록된 검수 결정이 없습니다.',
+    'memberService.operatorDecision': '결정',
+    'memberService.operatorReviewer': '검토자',
+    'memberService.operatorTimestamp': '기록 시각',
+    'memberService.operatorUnknownReviewer': '확인할 수 없는 검토자',
+    'memberService.operatorNotProvided': '입력되지 않음',
+    'memberService.operatorPrevious': '이전',
+    'memberService.operatorNext': '다음',
+    'memberService.operatorPageOf': '페이지',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -712,6 +732,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorRawData': 'Imported source data',
     'memberService.operatorReasonCodes': 'Review reasons',
     'memberService.operatorSaved': 'Review decision saved.',
+    'memberService.operatorHistory': 'Review decision history',
+    'memberService.operatorHistoryEmpty': 'No review decisions have been recorded yet.',
+    'memberService.operatorDecision': 'Decision',
+    'memberService.operatorReviewer': 'Reviewer',
+    'memberService.operatorTimestamp': 'Recorded at',
+    'memberService.operatorUnknownReviewer': 'Unknown reviewer',
+    'memberService.operatorNotProvided': 'Not provided',
+    'memberService.operatorPrevious': 'Previous',
+    'memberService.operatorNext': 'Next',
+    'memberService.operatorPageOf': 'Page',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -1029,6 +1059,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.operatorRawData': '导入源数据',
     'memberService.operatorReasonCodes': '审核原因',
     'memberService.operatorSaved': '审核决定已保存。',
+    'memberService.operatorHistory': '审核决定历史',
+    'memberService.operatorHistoryEmpty': '尚未记录审核决定。',
+    'memberService.operatorDecision': '决定',
+    'memberService.operatorReviewer': '审核人',
+    'memberService.operatorTimestamp': '记录时间',
+    'memberService.operatorUnknownReviewer': '未知审核人',
+    'memberService.operatorNotProvided': '未提供',
+    'memberService.operatorPrevious': '上一页',
+    'memberService.operatorNext': '下一页',
+    'memberService.operatorPageOf': '第',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',

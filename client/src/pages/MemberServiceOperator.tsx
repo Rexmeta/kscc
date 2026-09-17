@@ -27,10 +27,6 @@ type ReviewOrganization = {
     officialName: string;
     displayName: string | null;
   }>;
-  import: {
-    rawData: unknown;
-    reasonCodes: unknown;
-  } | null;
 };
 
 type ReviewQueueResponse = {
@@ -40,13 +36,22 @@ type ReviewQueueResponse = {
   totalPages: number;
 };
 
-type ReviewDetailResponse = {
-  organization: ReviewOrganization;
+type ReviewAuditsResponse = {
   audits: Array<{
+    id: string;
+    organizationId: string;
+    sourceRecordKey: string;
+    organizationName: string | null;
     decision: string;
+    reviewerId: string | null;
     reviewerName: string | null;
+    evidenceUrl: string | null;
+    verificationDate: string | null;
+    note: string | null;
     createdAt: string;
   }>;
+  page: number;
+  totalPages: number;
 };
 
 export default function MemberServiceOperatorPage() {
@@ -55,6 +60,7 @@ export default function MemberServiceOperatorPage() {
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [verificationDate, setVerificationDate] = useState('');
   const [note, setNote] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
 
   const bootstrap = useQuery({
     queryKey: queryKeys.memberService.bootstrap(),
@@ -74,13 +80,13 @@ export default function MemberServiceOperatorPage() {
   const selected = queue.data?.organizations.find((organization) => organization.id === selectedId)
     ?? queue.data?.organizations[0]
     ?? null;
-  const detail = useQuery({
-    queryKey: queryKeys.memberService.organizationReview(selected?.id || ''),
-    queryFn: ({ signal }) => fetchJson<ReviewDetailResponse>(
-      `/api/member-service/v1/operator/organizations/${selected!.id}/review`,
+  const audits = useQuery({
+    queryKey: queryKeys.memberService.reviewAudits(auditPage, 25),
+    queryFn: ({ signal }) => fetchJson<ReviewAuditsResponse>(
+      `/api/member-service/v1/operator/review-audits?page=${auditPage}&limit=25`,
       { signal },
     ),
-    enabled: Boolean(selected?.id && bootstrap.data?.flags.operator),
+    enabled: Boolean(bootstrap.data?.flags.operator),
   });
 
   useEffect(() => {
@@ -115,11 +121,9 @@ export default function MemberServiceOperatorPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.memberService.reviewQueue() });
-      if (selected) {
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.memberService.organizationReview(selected.id),
-        });
-      }
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.memberService.reviewAudits(auditPage, 25),
+      });
     },
   });
 
@@ -186,8 +190,8 @@ export default function MemberServiceOperatorPage() {
           </CardContent>
         </Card>
 
-        {selected && (
-          <div className="space-y-6">
+        <div className="space-y-6">
+          {selected && (
             <Card>
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -234,23 +238,106 @@ export default function MemberServiceOperatorPage() {
                 {review.isError && <p className="text-sm text-destructive">{t('common.error')}</p>}
               </CardContent>
             </Card>
+          )}
 
             <Card>
-              <CardHeader><CardTitle>{t('memberService.operatorRawData')}</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <pre className="max-h-72 overflow-auto rounded-md bg-muted p-4 text-xs leading-5">
-                  {JSON.stringify(detail.data?.organization.import?.rawData ?? selected.import?.rawData ?? {}, null, 2)}
-                </pre>
-                <div>
-                  <p className="text-sm font-medium">{t('memberService.operatorReasonCodes')}</p>
-                  <pre className="mt-2 overflow-auto rounded-md bg-muted p-4 text-xs">
-                    {JSON.stringify(detail.data?.organization.import?.reasonCodes ?? selected.import?.reasonCodes ?? [], null, 2)}
-                  </pre>
-                </div>
+              <CardHeader><CardTitle>{t('memberService.operatorHistory')}</CardTitle></CardHeader>
+              <CardContent>
+                <QueryState
+                  isLoading={audits.isLoading}
+                  isError={audits.isError}
+                  onRetry={() => audits.refetch()}
+                  empty={!audits.data?.audits.length}
+                  emptyMessage={t('memberService.operatorHistoryEmpty')}
+                >
+                  <div className="space-y-4">
+                    {audits.data?.audits.map((audit) => (
+                      <article key={audit.id} className="rounded-lg border p-4">
+                        <div className="mb-4">
+                          <p className="font-medium">
+                            {audit.organizationName || audit.sourceRecordKey}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {audit.sourceRecordKey}
+                          </p>
+                        </div>
+                        <div className="grid gap-4 text-sm md:grid-cols-2">
+                          <div>
+                            <p className="font-medium">{t('memberService.operatorDecision')}</p>
+                            <Badge variant="secondary" className="mt-1">{audit.decision}</Badge>
+                          </div>
+                          <div>
+                            <p className="font-medium">{t('memberService.operatorReviewer')}</p>
+                            <p className="mt-1 text-muted-foreground">
+                              {audit.reviewerName || audit.reviewerId || t('memberService.operatorUnknownReviewer')}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-medium">{t('memberService.operatorEvidence')}</p>
+                            {audit.evidenceUrl ? (
+                              <a
+                                className="mt-1 block break-all text-primary underline underline-offset-2"
+                                href={audit.evidenceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {audit.evidenceUrl}
+                              </a>
+                            ) : (
+                              <p className="mt-1 text-muted-foreground">{t('memberService.operatorNotProvided')}</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium">{t('memberService.operatorVerificationDate')}</p>
+                            <p className="mt-1 text-muted-foreground">
+                              {audit.verificationDate
+                                ? new Date(audit.verificationDate).toLocaleDateString()
+                                : t('memberService.operatorNotProvided')}
+                            </p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="font-medium">{t('memberService.operatorNote')}</p>
+                            <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                              {audit.note || t('memberService.operatorNotProvided')}
+                            </p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="font-medium">{t('memberService.operatorTimestamp')}</p>
+                            <time className="mt-1 block text-muted-foreground" dateTime={audit.createdAt}>
+                              {new Date(audit.createdAt).toLocaleString()}
+                            </time>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {audits.data && audits.data.totalPages > 1 && (
+                    <div className="mt-6 flex items-center justify-between gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                        disabled={auditPage <= 1}
+                      >
+                        {t('memberService.operatorPrevious')}
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {t('memberService.operatorPageOf')} {audits.data.page} {t('common.of')} {audits.data.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAuditPage((page) => Math.min(audits.data?.totalPages ?? page, page + 1))}
+                        disabled={auditPage >= audits.data.totalPages}
+                      >
+                        {t('memberService.operatorNext')}
+                      </Button>
+                    </div>
+                  )}
+                </QueryState>
               </CardContent>
             </Card>
-          </div>
-        )}
+        </div>
       </section>
     </div>
   );

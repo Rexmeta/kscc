@@ -98,6 +98,7 @@ import { getMemberServiceFlags, isMemberServiceDirectoryEnabled } from "./member
 import {
   getMemberServiceOrganizationReview,
   getPublicOrganization,
+  listMemberServiceReviewAuditHistory,
   listMemberServiceReviewQueue,
   listPublicOrganizations,
   reviewMemberServiceOrganization,
@@ -554,6 +555,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errorType: error instanceof Error ? error.name : "UnknownError",
         });
         return res.status(500).json({ message: "Organization review could not be loaded." });
+      }
+    },
+  );
+
+  app.get(
+    "/api/member-service/v1/operator/review-audits",
+    authenticateToken,
+    requireAdminOrOperatorPermission("member_service.audit.read"),
+    async (req, res) => {
+      if (!getMemberServiceFlags().operator) {
+        return res.status(404).json({ message: "Member service operator tools are not available." });
+      }
+
+      try {
+        const query = memberServiceReviewQuerySchema.parse(req.query);
+        return res.json(await listMemberServiceReviewAuditHistory(query));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid review audit filters." });
+        }
+        emitOperationalEvent("member_service.operator.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "review_audit_list",
+          reason: "query_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Review history could not be loaded." });
       }
     },
   );

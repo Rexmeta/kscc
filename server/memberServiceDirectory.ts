@@ -301,6 +301,8 @@ type ReviewQueueFilters = {
   limit: number;
 };
 
+type ReviewAuditHistoryFilters = ReviewQueueFilters;
+
 type ReviewDecision = "approve" | "limit" | "reject";
 
 export type MemberServiceReviewInput = {
@@ -468,26 +470,9 @@ export async function getMemberServiceOrganizationReview(id: string) {
     .limit(1);
   if (!organization) return null;
 
-  const [localizations, importRows, audits] = await Promise.all([
+  const [localizations, importRows] = await Promise.all([
     getReviewLocalizations([id]),
     getLatestImportRows([id]),
-    db
-      .select({
-        id: memberServiceReviewAudits.id,
-        decision: memberServiceReviewAudits.decision,
-        evidenceUrl: memberServiceReviewAudits.evidenceUrl,
-        verificationDate: memberServiceReviewAudits.verificationDate,
-        publicApproved: memberServiceReviewAudits.publicApproved,
-        note: memberServiceReviewAudits.note,
-        correlationId: memberServiceReviewAudits.correlationId,
-        createdAt: memberServiceReviewAudits.createdAt,
-        reviewerId: memberServiceReviewAudits.reviewerId,
-        reviewerName: users.name,
-      })
-      .from(memberServiceReviewAudits)
-      .leftJoin(users, eq(memberServiceReviewAudits.reviewerId, users.id))
-      .where(eq(memberServiceReviewAudits.organizationId, id))
-      .orderBy(desc(memberServiceReviewAudits.createdAt)),
   ]);
 
   return {
@@ -498,11 +483,65 @@ export async function getMemberServiceOrganizationReview(id: string) {
         .filter((row) => row.organizationId === organization.id)
         .map(({ organizationId: _organizationId, ...row }) => row),
     ),
+  };
+}
+
+export async function listMemberServiceReviewAuditHistory(
+  filters: ReviewAuditHistoryFilters,
+) {
+  const page = Math.max(filters.page, 1);
+  const limit = clampReviewPageSize(filters.limit);
+  const offset = (page - 1) * limit;
+  const [audits, countRows] = await Promise.all([
+    db
+      .select({
+        id: memberServiceReviewAudits.id,
+        organizationId: memberServiceReviewAudits.organizationId,
+        sourceRecordKey: memberServiceOrganizations.sourceRecordKey,
+        organizationName: memberServiceOrganizationLocalizations.displayName,
+        organizationOfficialName: memberServiceOrganizationLocalizations.officialName,
+        decision: memberServiceReviewAudits.decision,
+        reviewerId: memberServiceReviewAudits.reviewerId,
+        reviewerName: users.name,
+        evidenceUrl: memberServiceReviewAudits.evidenceUrl,
+        verificationDate: memberServiceReviewAudits.verificationDate,
+        publicApproved: memberServiceReviewAudits.publicApproved,
+        note: memberServiceReviewAudits.note,
+        correlationId: memberServiceReviewAudits.correlationId,
+        createdAt: memberServiceReviewAudits.createdAt,
+      })
+      .from(memberServiceReviewAudits)
+      .innerJoin(
+        memberServiceOrganizations,
+        eq(memberServiceReviewAudits.organizationId, memberServiceOrganizations.id),
+      )
+      .leftJoin(
+        memberServiceOrganizationLocalizations,
+        and(
+          eq(memberServiceOrganizationLocalizations.organizationId, memberServiceOrganizations.id),
+          eq(memberServiceOrganizationLocalizations.locale, "ko"),
+        ),
+      )
+      .leftJoin(users, eq(memberServiceReviewAudits.reviewerId, users.id))
+      .orderBy(desc(memberServiceReviewAudits.createdAt), desc(memberServiceReviewAudits.id))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(memberServiceReviewAudits),
+  ]);
+
+  return {
     audits: audits.map((audit) => ({
       ...audit,
+      organizationName: audit.organizationName ?? audit.organizationOfficialName,
       verificationDate: audit.verificationDate?.toISOString() ?? null,
       createdAt: audit.createdAt.toISOString(),
     })),
+    total: countRows[0]?.count ?? 0,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil((countRows[0]?.count ?? 0) / limit)),
   };
 }
 
