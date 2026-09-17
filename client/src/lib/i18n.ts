@@ -10,6 +10,7 @@ export interface TranslationKeys {
   'nav.events': string;
   'nav.members': string;
   'nav.directory': string;
+  'nav.koreaChinaOrganizations': string;
   'nav.resources': string;
   'nav.contact': string;
   'nav.organization': string;
@@ -122,6 +123,21 @@ export interface TranslationKeys {
   'memberService.adminNext': string;
   'memberService.adminPageOf': string;
   'memberService.adminEmpty': string;
+  'koreaChina.title': string;
+  'koreaChina.subtitle': string;
+  'koreaChina.intro': string;
+  'koreaChina.categories': string;
+  'koreaChina.allCategories': string;
+  'koreaChina.resultCount': string;
+  'koreaChina.viewWebsite': string;
+  'koreaChina.noWebsite': string;
+  'koreaChina.empty': string;
+  'koreaChina.adminTitle': string;
+  'koreaChina.adminSubtitle': string;
+  'koreaChina.visibility': string;
+  'koreaChina.public': string;
+  'koreaChina.private': string;
+  'koreaChina.verificationRequired': string;
 
   // Hero Section
   'hero.title': string;
@@ -377,6 +393,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.events': '행사',
     'nav.members': '회원사',
     'nav.directory': '기관 찾기',
+    'nav.koreaChinaOrganizations': '한중기관',
     'nav.resources': '자료센터',
     'nav.contact': '문의하기',
     'nav.organization': '조직',
@@ -487,6 +504,21 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.adminNext': '다음',
     'memberService.adminPageOf': '페이지',
     'memberService.adminEmpty': '검색 조건에 맞는 기관이 없습니다.',
+    'koreaChina.title': '한중기관',
+    'koreaChina.subtitle': '한국과 중국을 연결하는 상회, 경제·문화·교육·연구 기관을 분야별로 확인하세요.',
+    'koreaChina.intro': '공개 검증을 마친 기관을 카테고리별로 정리했습니다.',
+    'koreaChina.categories': '기관 카테고리',
+    'koreaChina.allCategories': '전체 카테고리',
+    'koreaChina.resultCount': '등록 기관',
+    'koreaChina.viewWebsite': '공식 링크',
+    'koreaChina.noWebsite': '링크 확인 중',
+    'koreaChina.empty': '검색 조건에 맞는 공개 기관이 없습니다.',
+    'koreaChina.adminTitle': '한중기관 관리',
+    'koreaChina.adminSubtitle': '기관을 검색하고 카테고리별로 확인하며 사용자 페이지 노출 여부를 바로 변경합니다.',
+    'koreaChina.visibility': '사용자 페이지 노출',
+    'koreaChina.public': '공개',
+    'koreaChina.private': '비공개',
+    'koreaChina.verificationRequired': '공개하려면 현재 유효한 기관 검증이 필요합니다.',
 
     // Hero Section
     'hero.title': '한·사천·충칭 경제문화 교류의 중심',
@@ -740,6 +772,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.events': 'Events',
     'nav.members': 'Members',
     'nav.directory': 'Directory',
+    'nav.koreaChinaOrganizations': 'Korea–China',
     'nav.resources': 'Resources',
     'nav.contact': 'Contact Us',
     'nav.organization': 'Organization',
@@ -850,6 +883,21 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.adminNext': 'Next',
     'memberService.adminPageOf': 'Page',
     'memberService.adminEmpty': 'No organizations match this search.',
+    'koreaChina.title': 'Korea–China Organizations',
+    'koreaChina.subtitle': 'Explore chambers and economic, cultural, education, and research organizations connecting Korea and China.',
+    'koreaChina.intro': 'Publicly reviewed organizations are grouped by category.',
+    'koreaChina.categories': 'Organization categories',
+    'koreaChina.allCategories': 'All categories',
+    'koreaChina.resultCount': 'Organizations',
+    'koreaChina.viewWebsite': 'Official link',
+    'koreaChina.noWebsite': 'Link pending',
+    'koreaChina.empty': 'No public organizations match these filters.',
+    'koreaChina.adminTitle': 'Korea–China organization management',
+    'koreaChina.adminSubtitle': 'Search and filter organizations and immediately control whether they appear on the public page.',
+    'koreaChina.visibility': 'Show on public page',
+    'koreaChina.public': 'Public',
+    'koreaChina.private': 'Private',
+    'koreaChina.verificationRequired': 'Current organization verification is required before publication.',
 
     // Hero Section
     'hero.title': 'Korea-Sichuan-Chongqing Economic & Cultural Exchange Hub',
@@ -1103,6 +1151,7 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.events': '活动',
     'nav.members': '会员',
     'nav.directory': '机构目录',
+    'nav.koreaChinaOrganizations': '韩中机构',
     'nav.resources': '资料中心',
     'nav.contact': '联系我们',
     'nav.organization': '组织',
@@ -1213,6 +1262,21 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.adminNext': '下一页',
     'memberService.adminPageOf': '第',
     'memberService.adminEmpty': '没有符合搜索条件的机构。',
+    'koreaChina.title': '韩中机构',
+    'koreaChina.subtitle': '按领域查看连接韩国与中国的商会及经济、文化、教育和研究机构。',
+    'koreaChina.intro': '已完成公开审核的机构按类别整理。',
+    'koreaChina.categories': '机构类别',
+    'koreaChina.allCategories': '全部类别',
+    'koreaChina.resultCount': '登记机构',
+    'koreaChina.viewWebsite': '官方链接',
+    'koreaChina.noWebsite': '链接确认中',
+    'koreaChina.empty': '没有符合筛选条件的公开机构。',
+    'koreaChina.adminTitle': '韩中机构管理',
+    'koreaChina.adminSubtitle': '搜索和筛选机构，并直接控制是否显示在用户页面。',
+    'koreaChina.visibility': '显示在用户页面',
+    'koreaChina.public': '公开',
+    'koreaChina.private': '非公开',
+    'koreaChina.verificationRequired': '公开前需要当前有效的机构验证。',
 
     // Hero Section
     'hero.title': '韩国·四川·重庆经济文化交流中心',

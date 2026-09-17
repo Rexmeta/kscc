@@ -10,6 +10,7 @@ import {
   memberServiceRegions,
   memberServiceImportBatches,
   memberServiceReviewAudits,
+  memberServiceAuditLogs,
   users,
   type MemberServicePublicOrganization,
 } from "@shared/schema";
@@ -188,7 +189,7 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
     )
     : undefined;
 
-  const filtersWhere = and(
+  const publicVisibilityWhere = and(
     eq(memberServiceOrganizations.isActive, true),
     eq(memberServiceOrganizations.publicApproved, true),
     inArray(memberServiceOrganizations.verificationStatus, [...PUBLIC_VERIFICATION_STATUSES]),
@@ -196,6 +197,9 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
       isNull(memberServiceOrganizations.nextReviewAt),
       gt(memberServiceOrganizations.nextReviewAt, new Date()),
     ),
+  );
+  const filtersWhere = and(
+    publicVisibilityWhere,
     filters.organizationType
       ? eq(memberServiceOrganizations.organizationType, filters.organizationType)
       : undefined,
@@ -224,7 +228,7 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
       : undefined,
   );
 
-  const [organizations, countRows] = await Promise.all([
+  const [organizations, countRows, categoryRows] = await Promise.all([
     db
       .select()
       .from(memberServiceOrganizations)
@@ -236,6 +240,12 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
       .select({ count: sql<number>`count(*)::int` })
       .from(memberServiceOrganizations)
       .where(filtersWhere),
+    db
+      .select({ category: memberServiceOrganizations.organizationType })
+      .from(memberServiceOrganizations)
+      .where(publicVisibilityWhere)
+      .groupBy(memberServiceOrganizations.organizationType)
+      .orderBy(memberServiceOrganizations.organizationType),
   ]);
 
   const ids = organizations.map((organization) => organization.id);
@@ -258,6 +268,7 @@ export async function listPublicOrganizations(filters: DirectoryFilters) {
     page,
     limit,
     totalPages: Math.max(1, Math.ceil(total / limit)),
+    categories: categoryRows.map((row) => row.category),
   };
 }
 
@@ -300,6 +311,13 @@ export async function getPublicOrganization(id: string, language: "ko" | "en" | 
 }
 
 type AdminDirectoryFilters = DirectoryFilters;
+
+export class MemberServiceVisibilityError extends Error {
+  constructor(public readonly reason: "verification_required") {
+    super("Organization must have current verification before it can be public.");
+    this.name = "MemberServiceVisibilityError";
+  }
+}
 
 function directorySearchFilter(q?: string) {
   return q
@@ -548,7 +566,7 @@ export async function listAdminOrganizations(filters: AdminDirectoryFilters) {
       )`
       : undefined,
   );
-  const [organizations, countRows] = await Promise.all([
+  const [organizations, countRows, categoryRows] = await Promise.all([
     db
       .select()
       .from(memberServiceOrganizations)
@@ -560,6 +578,11 @@ export async function listAdminOrganizations(filters: AdminDirectoryFilters) {
       .select({ count: sql<number>`count(*)::int` })
       .from(memberServiceOrganizations)
       .where(where),
+    db
+      .select({ category: memberServiceOrganizations.organizationType })
+      .from(memberServiceOrganizations)
+      .groupBy(memberServiceOrganizations.organizationType)
+      .orderBy(memberServiceOrganizations.organizationType),
   ]);
   const items = await assembleAdminOrganizations(organizations);
   const total = countRows[0]?.count ?? 0;
@@ -569,6 +592,7 @@ export async function listAdminOrganizations(filters: AdminDirectoryFilters) {
     page,
     limit,
     totalPages: Math.max(1, Math.ceil(total / limit)),
+    categories: categoryRows.map((row) => row.category),
   };
 }
 
@@ -581,6 +605,59 @@ export async function getAdminOrganization(id: string) {
   if (!organization) return null;
   const [item] = await assembleAdminOrganizations([organization]);
   return item ?? null;
+}
+
+export async function setMemberServiceOrganizationVisibility(input: {
+  organizationId: string;
+  actorId: string;
+  visible: boolean;
+  correlationId?: string;
+}) {
+  return db.transaction(async (tx) => {
+    const [organization] = await tx
+      .select()
+      .from(memberServiceOrganizations)
+      .where(eq(memberServiceOrganizations.id, input.organizationId))
+      .limit(1);
+    if (!organization) return null;
+
+    const verificationIsCurrent = PUBLIC_VERIFICATION_STATUSES.includes(
+      organization.verificationStatus as typeof PUBLIC_VERIFICATION_STATUSES[number],
+    ) && (
+      organization.nextReviewAt === null
+      || organization.nextReviewAt.getTime() > Date.now()
+    );
+    if (input.visible && !verificationIsCurrent) {
+      throw new MemberServiceVisibilityError("verification_required");
+    }
+
+    const [updated] = await tx
+      .update(memberServiceOrganizations)
+      .set({
+        publicApproved: input.visible,
+        isActive: input.visible ? true : organization.isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(memberServiceOrganizations.id, organization.id))
+      .returning();
+
+    await tx.insert(memberServiceAuditLogs).values({
+      actorId: input.actorId,
+      action: "member_service.organization.visibility_updated",
+      entityType: "member_service_organization",
+      entityId: organization.id,
+      before: {
+        publicApproved: organization.publicApproved,
+        isActive: organization.isActive,
+      },
+      after: {
+        publicApproved: updated.publicApproved,
+        isActive: updated.isActive,
+      },
+      correlationId: input.correlationId,
+    });
+    return updated;
+  });
 }
 
 type ReviewQueueFilters = {

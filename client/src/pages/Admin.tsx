@@ -17,6 +17,7 @@ const InquiriesTab = lazy(() => import('@/components/admin/tabs/InquiriesTab').t
 const ConsentEvidenceAccessLogTab = lazy(() => import('@/components/admin/tabs/ConsentEvidenceAccessLogTab').then((module) => ({ default: module.ConsentEvidenceAccessLogTab })));
 const ManualTab = lazy(() => import('@/components/admin/tabs/ManualTab').then((module) => ({ default: module.ManualTab })));
 const SurveyTab = lazy(() => import('@/components/admin/tabs/SurveyTab').then((module) => ({ default: module.SurveyTab })));
+const KoreaChinaOrganizationsTab = lazy(() => import('@/components/admin/tabs/KoreaChinaOrganizationsTab').then((module) => ({ default: module.KoreaChinaOrganizationsTab })));
 
 const boardTabConfig = [
   { tab: 'articles', permission: 'news.read' },
@@ -49,7 +50,7 @@ export default function AdminPage() {
     || (user?.role === 'operator' && hasPermission('organization.executives.read'));
   const hasManual = isAdmin || user?.role === 'operator';
   const allowedTabs = isAdmin
-    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'inquiries', 'consent-evidence-access-log', 'organization', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
+    ? ['dashboard', 'users', 'members', 'articles', 'events', 'resources', 'pages', 'korea-china-organizations', 'inquiries', 'consent-evidence-access-log', 'organization', 'partners', 'survey', ...(hasManual ? ['manual'] : [])]
     : [...boardTabs, ...(canReadMembers ? ['members'] : []), ...(canReadPages ? ['pages'] : []), ...(canReadInquiries ? ['inquiries'] : []), ...(canReadOrganization ? ['organization'] : []), ...(canManagePartners ? ['partners'] : []), ...(canManageSurvey ? ['survey'] : []), ...(hasManual ? ['manual'] : [])];
   const allowedTabsKey = allowedTabs.join(',');
   const defaultTab = isAdmin
@@ -121,6 +122,7 @@ export default function AdminPage() {
                 {allowedTabs.includes('events') && <SelectItem value="events" data-testid="option-tab-events">행사</SelectItem>}
                 {allowedTabs.includes('resources') && <SelectItem value="resources" data-testid="option-tab-resources">자료</SelectItem>}
                 {allowedTabs.includes('pages') && <SelectItem value="pages" data-testid="option-tab-pages">페이지</SelectItem>}
+                {isAdmin && <SelectItem value="korea-china-organizations" data-testid="option-tab-korea-china-organizations">한중기관</SelectItem>}
                  {allowedTabs.includes('inquiries') && <SelectItem value="inquiries" data-testid="option-tab-inquiries">문의</SelectItem>}
                 {isAdmin && <SelectItem value="consent-evidence-access-log" data-testid="option-tab-consent-evidence-access-log">동의 기록 내역</SelectItem>}
                 {allowedTabs.includes('organization') && <SelectItem value="organization" data-testid="option-tab-organization">조직</SelectItem>}
@@ -142,6 +144,7 @@ export default function AdminPage() {
               {allowedTabs.includes('events') && <TabsTrigger value="events" data-testid="tab-events" className="text-sm whitespace-nowrap">행사</TabsTrigger>}
               {allowedTabs.includes('resources') && <TabsTrigger value="resources" data-testid="tab-resources" className="text-sm whitespace-nowrap">자료</TabsTrigger>}
                {allowedTabs.includes('pages') && <TabsTrigger value="pages" data-testid="tab-pages" className="text-sm whitespace-nowrap">페이지</TabsTrigger>}
+               {isAdmin && <TabsTrigger value="korea-china-organizations" data-testid="tab-korea-china-organizations" className="text-sm whitespace-nowrap">한중기관</TabsTrigger>}
                {allowedTabs.includes('inquiries') && <TabsTrigger value="inquiries" data-testid="tab-inquiries" className="text-sm whitespace-nowrap">문의</TabsTrigger>}
               {isAdmin && <TabsTrigger value="consent-evidence-access-log" data-testid="tab-consent-evidence-access-log" className="text-sm whitespace-nowrap">동의 기록 내역</TabsTrigger>}
                {allowedTabs.includes('organization') && <TabsTrigger value="organization" data-testid="tab-organization" className="text-sm whitespace-nowrap">조직</TabsTrigger>}
@@ -180,6 +183,9 @@ export default function AdminPage() {
             )}
              {allowedTabs.includes('pages') && activeTab === 'pages' && (
                <PagesTab activeTab={activeTab} canEdit={canUpdatePages} />
+             )}
+             {isAdmin && activeTab === 'korea-china-organizations' && (
+               <KoreaChinaOrganizationsTab activeTab={activeTab} />
              )}
              {allowedTabs.includes('partners') && activeTab === 'partners' && <PartnersTab activeTab={activeTab} />}
              {allowedTabs.includes('survey') && activeTab === 'survey' && <SurveyTab activeTab={activeTab} />}

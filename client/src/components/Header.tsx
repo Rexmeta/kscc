@@ -47,7 +47,7 @@ export default function Header() {
     { name: t('nav.events'), href: '/events' },
     { name: t('nav.members'), href: '/members', requiresAuth: true },
     ...(memberServiceBootstrap?.flags.directory
-      ? [{ name: t('nav.directory'), href: '/directory' }]
+      ? [{ name: t('nav.koreaChinaOrganizations'), href: '/korea-china-organizations' }]
       : []),
     { name: t('nav.resources'), href: '/resources', requiresAuth: true },
     { name: t('nav.contact'), href: '/contact' },

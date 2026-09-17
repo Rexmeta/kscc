@@ -103,7 +103,9 @@ import {
   listMemberServiceReviewAuditHistory,
   listMemberServiceReviewQueue,
   listPublicOrganizations,
+  MemberServiceVisibilityError,
   reviewMemberServiceOrganization,
+  setMemberServiceOrganizationVisibility,
 } from "./memberServiceDirectory";
 import {
   CONNECTION_OPERATOR_MANAGE_PERMISSION,
@@ -174,6 +176,10 @@ const memberServiceReviewBodySchema = z.object({
     .optional(),
   verificationDate: z.coerce.date().optional(),
   note: z.string().trim().max(2000).optional(),
+}).strict();
+
+const memberServiceVisibilityBodySchema = z.object({
+  visible: z.boolean(),
 }).strict();
 
 const paginatedCollectionQuerySchema = z.object({
@@ -585,6 +591,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errorType: error instanceof Error ? error.name : "UnknownError",
         });
         return res.status(500).json({ message: "Organization could not be loaded." });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/member-service/v1/admin/directory/:id/visibility",
+    authenticateToken,
+    requireAdmin,
+    async (req, res) => {
+      if (!isMemberServiceDirectoryEnabled()) {
+        return res.status(404).json({ message: "Member service directory is not available." });
+      }
+      try {
+        const id = z.string().uuid().parse(req.params.id);
+        const body = memberServiceVisibilityBodySchema.parse(req.body);
+        const organization = await setMemberServiceOrganizationVisibility({
+          organizationId: id,
+          actorId: req.user!.id,
+          visible: body.visible,
+          correlationId: getCorrelationId(req),
+        });
+        if (!organization) {
+          return res.status(404).json({ message: "Organization not found." });
+        }
+        return res.json({
+          organizationId: organization.id,
+          publicApproved: organization.publicApproved,
+          isActive: organization.isActive,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid visibility input." });
+        }
+        if (error instanceof MemberServiceVisibilityError) {
+          return res.status(409).json({
+            message: "Current verification is required before public exposure.",
+            reason: error.reason,
+          });
+        }
+        emitOperationalEvent("member_service.directory.failure", "error", {
+          correlationId: getCorrelationId(req),
+          operation: "admin_directory_visibility",
+          reason: "mutation_failed",
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
+        return res.status(500).json({ message: "Visibility could not be updated." });
       }
     },
   );

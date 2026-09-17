@@ -71,6 +71,13 @@
       "when": 1789640993359,
       "tag": "0008_brainy_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789660800002,
+      "tag": "0009_korea_china_organization_directory",
+      "breakpoints": true
     }
   ]
 }
