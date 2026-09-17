@@ -78,6 +78,13 @@
       "when": 1789660800002,
       "tag": "0009_korea_china_organization_directory",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789660800003,
+      "tag": "0010_korea_china_organization_translations",
+      "breakpoints": true
     }
   ]
 }
