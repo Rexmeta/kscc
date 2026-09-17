@@ -62,6 +62,16 @@ export interface TranslationKeys {
   'memberService.noSummary': string;
   'memberService.services': string;
   'memberService.regions': string;
+  'memberService.requestConnection': string;
+  'memberService.loginToConnect': string;
+  'memberService.connectionTitle': string;
+  'memberService.connectionDescription': string;
+  'memberService.connectionPurpose': string;
+  'memberService.connectionConsent': string;
+  'memberService.connectionSubmit': string;
+  'memberService.connectionSubmitting': string;
+  'memberService.connectionSuccess': string;
+  'memberService.connectionError': string;
   'memberService.operatorTitle': string;
   'memberService.operatorSubtitle': string;
   'memberService.operatorDisabled': string;
@@ -394,6 +404,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': '공개된 소개가 없습니다.',
     'memberService.services': '서비스',
     'memberService.regions': '대응 지역',
+    'memberService.requestConnection': '연결 요청하기',
+    'memberService.loginToConnect': '로그인 후 연결 요청',
+    'memberService.connectionTitle': '기관 연결 요청',
+    'memberService.connectionDescription': 'KSCC 운영자가 요청을 검토한 뒤 선택한 기관에 전달합니다.',
+    'memberService.connectionPurpose': '어떤 협력이나 연결을 원하시나요?',
+    'memberService.connectionConsent': '입력한 목적과 연락처 공개 범위를 확인하고 연결 요청 처리에 동의합니다.',
+    'memberService.connectionSubmit': '연결 요청 제출',
+    'memberService.connectionSubmitting': '제출 중...',
+    'memberService.connectionSuccess': '연결 요청이 제출되었습니다.',
+    'memberService.connectionError': '연결 요청을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     'memberService.operatorTitle': '기관 검수',
     'memberService.operatorSubtitle': '기관이 공개되기 전에 운영자가 검수합니다.',
     'memberService.operatorDisabled': '회원 서비스 운영 도구가 활성화되지 않았습니다.',
@@ -724,6 +744,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': 'No public summary is available.',
     'memberService.services': 'Services',
     'memberService.regions': 'Regions',
+    'memberService.requestConnection': 'Request a connection',
+    'memberService.loginToConnect': 'Log in to request',
+    'memberService.connectionTitle': 'Request a connection',
+    'memberService.connectionDescription': 'KSCC staff will review the request before sharing it with the selected organization.',
+    'memberService.connectionPurpose': 'What kind of collaboration or introduction do you need?',
+    'memberService.connectionConsent': 'I confirm the purpose and disclosure scope and consent to processing this request.',
+    'memberService.connectionSubmit': 'Submit request',
+    'memberService.connectionSubmitting': 'Submitting...',
+    'memberService.connectionSuccess': 'Your connection request was submitted.',
+    'memberService.connectionError': 'The connection request could not be submitted. Please try again.',
     'memberService.operatorTitle': 'Organization review',
     'memberService.operatorSubtitle': 'Review staged organizations before they become public.',
     'memberService.operatorDisabled': 'The member service operator tools are not enabled.',
@@ -1054,6 +1084,16 @@ const translations: Record<Language, TranslationKeys> = {
     'memberService.noSummary': '暂无公开介绍。',
     'memberService.services': '服务',
     'memberService.regions': '对应地区',
+    'memberService.requestConnection': '发起联系请求',
+    'memberService.loginToConnect': '登录后发起请求',
+    'memberService.connectionTitle': '机构联系请求',
+    'memberService.connectionDescription': 'KSCC 工作人员审核后，会将请求转交给所选机构。',
+    'memberService.connectionPurpose': '您希望进行什么合作或联系？',
+    'memberService.connectionConsent': '我确认目的和披露范围，并同意处理此联系请求。',
+    'memberService.connectionSubmit': '提交联系请求',
+    'memberService.connectionSubmitting': '提交中...',
+    'memberService.connectionSuccess': '联系请求已提交。',
+    'memberService.connectionError': '无法提交联系请求，请稍后重试。',
     'memberService.operatorTitle': '机构审核',
     'memberService.operatorSubtitle': '在机构公开前审核暂存机构。',
     'memberService.operatorDisabled': '机构服务运营工具尚未启用。',

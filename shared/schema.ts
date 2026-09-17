@@ -1087,6 +1087,53 @@ export const memberServiceImportRows = pgTable("member_service_import_rows", {
     .on(table.status, table.createdAt),
 }));
 
+export const memberServiceConnectionRequests = pgTable("member_service_connection_requests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  requesterId: uuid("requester_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  organizationId: uuid("organization_id")
+    .notNull()
+    .references(() => memberServiceOrganizations.id, { onDelete: "restrict" }),
+  requestType: text("request_type").notNull(),
+  purpose: text("purpose"),
+  background: text("background"),
+  industry: text("industry"),
+  item: text("item"),
+  regions: jsonb("regions").notNull().default(sql`'[]'::jsonb`),
+  desiredDate: timestamp("desired_date", { withTimezone: true }),
+  language: localeEnum("language").notNull().default("ko"),
+  disclosureScope: jsonb("disclosure_scope").notNull(),
+  consentPolicyVersion: text("consent_policy_version"),
+  consentedAt: timestamp("consented_at", { withTimezone: true }),
+  status: text("status").notNull().default("draft"),
+  idempotencyKey: text("idempotency_key"),
+  assignedOperatorId: uuid("assigned_operator_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  assignedOrganizationUserId: uuid("assigned_organization_user_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  requesterStatusIdx: index("member_service_connection_requests_requester_status_idx")
+    .on(table.requesterId, table.status, table.updatedAt),
+  organizationStatusIdx: index("member_service_connection_requests_organization_status_idx")
+    .on(table.organizationId, table.status, table.updatedAt),
+  assignedOperatorIdx: index("member_service_connection_requests_assigned_operator_idx")
+    .on(table.assignedOperatorId, table.status, table.updatedAt),
+  requesterIdempotencyUnique: uniqueIndex("member_service_connection_requests_requester_idempotency_unique")
+    .on(table.requesterId, table.idempotencyKey),
+  statusCheck: check(
+    "member_service_connection_requests_status_check",
+    sql`"status" IN ('draft', 'submitted', 'reviewing', 'assigned', 'in_progress', 'completed', 'closed', 'cancelled', 'rejected')`,
+  ),
+  disclosureScopeObjectCheck: check(
+    "member_service_connection_requests_disclosure_scope_object_check",
+    sql`jsonb_typeof("disclosure_scope") = 'object'`,
+  ),
+}));
+
 export const memberServiceReviewAudits = pgTable("member_service_review_audits", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: uuid("organization_id")
@@ -1134,4 +1181,112 @@ export type MemberServicePublicOrganization = {
   };
 };
 
+export type MemberServiceConnectionRequest = typeof memberServiceConnectionRequests.$inferSelect;
 export type AuthHandoff = typeof authHandoffs.$inferSelect;
+
+export const memberServiceAuditLogs = pgTable("member_service_audit_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  actorId: uuid("actor_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  before: jsonb("before"),
+  after: jsonb("after"),
+  correlationId: text("correlation_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  entityCreatedIdx: index("member_service_audit_logs_entity_created_idx")
+    .on(table.entityType, table.entityId, table.createdAt),
+  actorCreatedIdx: index("member_service_audit_logs_actor_created_idx")
+    .on(table.actorId, table.createdAt),
+}));
+
+export const memberServiceDisclosureScopeSchema = z.object({
+  kscc: z.literal(true),
+  targetOrganization: z.boolean(),
+  contactDetails: z.boolean().default(false),
+}).strict();
+
+export const memberServiceConsentSchema = z.object({
+  accepted: z.literal(true),
+  policyVersion: z.string().trim().min(1).max(80),
+}).strict();
+
+export const memberServiceConnectionDraftSchema = z.object({
+  organizationId: z.string().uuid(),
+  requestType: z.string().trim().min(1).max(80),
+  purpose: z.string().trim().max(2_000).optional(),
+  background: z.string().trim().max(10_000).optional(),
+  industry: z.string().trim().max(160).optional(),
+  item: z.string().trim().max(160).optional(),
+  regions: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  desiredDate: z.coerce.date().optional(),
+  language: z.enum(["ko", "en", "zh"]).default("ko"),
+  disclosureScope: memberServiceDisclosureScopeSchema.optional(),
+  consent: memberServiceConsentSchema.optional(),
+}).strict();
+
+export type MemberServiceAuditLog = typeof memberServiceAuditLogs.$inferSelect;
+
+export type MemberServiceConnectionDraftInput = z.infer<typeof memberServiceConnectionDraftSchema>;
+
+export type MemberServiceConnectionMessage = typeof memberServiceConnectionMessages.$inferSelect;
+
+export const memberServiceAttachments = pgTable("member_service_attachments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: uuid("request_id")
+    .notNull()
+    .references(() => memberServiceConnectionRequests.id, { onDelete: "cascade" }),
+  messageId: uuid("message_id")
+    .references(() => memberServiceConnectionMessages.id, { onDelete: "set null" }),
+  uploaderId: uuid("uploader_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  objectKey: text("object_key").notNull(),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  disclosureScope: jsonb("disclosure_scope").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  requestCreatedIdx: index("member_service_attachments_request_created_idx")
+    .on(table.requestId, table.createdAt),
+  disclosureScopeObjectCheck: check(
+    "member_service_attachments_disclosure_scope_object_check",
+    sql`jsonb_typeof("disclosure_scope") = 'object'`,
+  ),
+}));
+
+export type MemberServiceConnectionMessageInput = z.infer<typeof memberServiceConnectionMessageSchema>;
+
+export type MemberServiceAttachment = typeof memberServiceAttachments.$inferSelect;
+
+export const memberServiceConnectionMessageSchema = z.object({
+  body: z.string().trim().min(1).max(10_000),
+  disclosureScope: memberServiceDisclosureScopeSchema.optional(),
+}).strict();
+
+export const memberServiceConnectionMessages = pgTable("member_service_connection_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: uuid("request_id")
+    .notNull()
+    .references(() => memberServiceConnectionRequests.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id")
+    .references(() => users.id, { onDelete: "set null" }),
+  body: text("body").notNull(),
+  disclosureScope: jsonb("disclosure_scope").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  requestCreatedIdx: index("member_service_connection_messages_request_created_idx")
+    .on(table.requestId, table.createdAt),
+  disclosureScopeObjectCheck: check(
+    "member_service_connection_messages_disclosure_scope_object_check",
+    sql`jsonb_typeof("disclosure_scope") = 'object'`,
+  ),
+}));
+
+export type MemberServiceDisclosureScope = {
+  kscc: true;
+  targetOrganization: boolean;
+  contactDetails: boolean;
+};

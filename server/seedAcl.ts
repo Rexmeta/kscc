@@ -119,6 +119,8 @@ const PERMS = [
   ['member_service.verification.write', 'member_service.verification', 'write', '기관 검수 결과 저장'],
   ['member_service.audit.read', 'member_service.audit', 'read', '기관 검수 감사 기록 열람'],
   ['member_service.operator.manage', 'member_service.operator', 'manage', '회원 서비스 운영 콘솔 접근'],
+  ['member_service.connection.read', 'member_service.connection', 'read', '회원 서비스 연결 요청 열람'],
+  ['member_service.connection.manage', 'member_service.connection', 'manage', '회원 서비스 연결 요청 관리'],
 ] as const;
 
 // Role-Permission mapping (wildcard support: '*' for all, 'resource.*' for all actions on resource)
@@ -181,6 +183,8 @@ const ROLE_PERMS: Record<string, string[]> = {
     'member_service.verification.write',
     'member_service.audit.read',
     'member_service.operator.manage',
+    'member_service.connection.read',
+    'member_service.connection.manage',
   ],
   admin: ['*'], // All permissions
 };

@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useRoute } from 'wouter';
 import { ArrowLeft, Building2, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { QueryState } from '@/components/QueryState';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/hooks/useAuth';
 import { fetchJson, queryKeys } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
 import type { Language } from '@/lib/i18n';
@@ -115,10 +117,63 @@ function OrganizationCard({
 function OrganizationDetail({
   organization,
   language,
+  connectionsEnabled,
 }: {
   organization: DirectoryOrganization;
   language: Language;
+  connectionsEnabled: boolean;
 }) {
+  const { isAuthenticated } = useAuth();
+  const [showConnectionForm, setShowConnectionForm] = useState(false);
+  const [purpose, setPurpose] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const connectionMutation = useMutation({
+    mutationFn: async () => {
+      const draft = await fetchJson<{ connection: { id: string } }>(
+        '/api/member-service/v1/connections',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            organizationId: organization.id,
+            requestType: 'directory_connection',
+            purpose,
+            language,
+            disclosureScope: {
+              kscc: true,
+              targetOrganization: true,
+              contactDetails: false,
+            },
+          }),
+        },
+      );
+      return fetchJson(
+        `/api/member-service/v1/connections/${draft.connection.id}/submit`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idempotencyKey: `directory-${draft.connection.id}`,
+            disclosureScope: {
+              kscc: true,
+              targetOrganization: true,
+              contactDetails: false,
+            },
+            consent: {
+              accepted: true,
+              policyVersion: 'member-service-connection-v1',
+            },
+          }),
+        },
+      );
+    },
+    onSuccess: () => {
+      setShowConnectionForm(false);
+      setPurpose('');
+      setConsentAccepted(false);
+    },
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <section className="border-b border-border/70 bg-muted/40">
@@ -145,6 +200,67 @@ function OrganizationDetail({
                   {t('memberService.website')}
                 </a>
               </Button>
+            )}
+          </div>
+          <div className="mt-8 max-w-xl">
+            {connectionsEnabled && isAuthenticated && (
+              <Button
+                type="button"
+                onClick={() => setShowConnectionForm((visible) => !visible)}
+                variant={showConnectionForm ? 'outline' : 'default'}
+                disabled={!isAuthenticated}
+              >
+                {t('memberService.requestConnection')}
+              </Button>
+            )}
+            {connectionsEnabled && !isAuthenticated && (
+              <Button asChild variant="outline">
+                <Link href="/login">{t('memberService.loginToConnect')}</Link>
+              </Button>
+            )}
+            {showConnectionForm && (
+              <Card className="mt-4 border-primary/20 bg-card">
+                <CardContent className="space-y-4 p-5">
+                  <div>
+                    <h2 className="font-semibold">{t('memberService.connectionTitle')}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t('memberService.connectionDescription')}
+                    </p>
+                  </div>
+                  <Textarea
+                    value={purpose}
+                    onChange={(event) => setPurpose(event.target.value)}
+                    placeholder={t('memberService.connectionPurpose')}
+                    aria-label={t('memberService.connectionPurpose')}
+                    maxLength={2000}
+                    rows={4}
+                  />
+                  <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={consentAccepted}
+                      onChange={(event) => setConsentAccepted(event.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>{t('memberService.connectionConsent')}</span>
+                  </label>
+                  {connectionMutation.isError && (
+                    <p className="text-sm text-destructive">{t('memberService.connectionError')}</p>
+                  )}
+                  {connectionMutation.isSuccess && (
+                    <p className="text-sm text-primary">{t('memberService.connectionSuccess')}</p>
+                  )}
+                  <Button
+                    type="button"
+                    onClick={() => connectionMutation.mutate()}
+                    disabled={!purpose.trim() || !consentAccepted || connectionMutation.isPending}
+                  >
+                    {connectionMutation.isPending
+                      ? t('memberService.connectionSubmitting')
+                      : t('memberService.connectionSubmit')}
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>
@@ -208,7 +324,7 @@ export default function DirectoryPage() {
 
   const bootstrap = useQuery({
     queryKey: queryKeys.memberService.bootstrap(),
-    queryFn: ({ signal }) => fetchJson<{ flags: { directory: boolean } }>(
+    queryFn: ({ signal }) => fetchJson<{ flags: { directory: boolean; connections: boolean } }>(
       '/api/member-service/v1/bootstrap',
       { signal },
     ),
@@ -266,7 +382,13 @@ export default function DirectoryPage() {
         empty={!detail.data}
         emptyMessage={t('memberService.empty')}
       >
-        {detail.data ? <OrganizationDetail organization={detail.data} language={language} /> : null}
+        {detail.data ? (
+          <OrganizationDetail
+            organization={detail.data}
+            language={language}
+            connectionsEnabled={Boolean(bootstrap.data?.flags.connections)}
+          />
+        ) : null}
       </QueryState>
     );
   }

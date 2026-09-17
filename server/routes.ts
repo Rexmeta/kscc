@@ -103,6 +103,24 @@ import {
   listPublicOrganizations,
   reviewMemberServiceOrganization,
 } from "./memberServiceDirectory";
+import {
+  CONNECTION_OPERATOR_MANAGE_PERMISSION,
+  CONNECTION_OPERATOR_READ_PERMISSION,
+  ConnectionConflictError,
+  ConnectionNotFoundError,
+  canReadConnection,
+  createConnectionDraft,
+  createConnectionMessage,
+  getConnectionRequest,
+  listConnectionRequests,
+  recordConnectionView,
+  submitConnectionRequest,
+  toConnectionDto,
+  toConnectionSummary,
+  transitionConnectionRequest,
+  updateConnectionDraft,
+  type ConnectionStatus,
+} from "./memberServiceConnections";
 const JWT_SECRET = process.env.SESSION_SECRET;
 if (!JWT_SECRET) {
   throw new Error('SECURITY ERROR: SESSION_SECRET environment variable must be set');
@@ -638,6 +656,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
+
+  const connectionFeatureEnabled = () => getMemberServiceFlags().connections;
+  const connectionOperatorAllowed = async (req: Request, permission: string) => {
+    if (req.user?.role === "admin") return true;
+    if (req.user?.role !== "operator" || !req.user.id) return false;
+    return hasPermission(req.user.id, permission);
+  };
+  const parseConnectionId = (req: Request) => z.string().uuid().parse(req.params.id);
+
+  app.get("/api/member-service/v1/connections", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const query = z.object({
+        page: z.coerce.number().int().min(1).max(10_000).default(1),
+        limit: z.coerce.number().int().min(1).max(50).default(50),
+      }).strict().parse(req.query);
+      const requests = await listConnectionRequests(req.user!.id, {
+        limit: query.limit,
+        offset: (query.page - 1) * query.limit,
+      });
+      return res.json({
+        connections: requests.map(toConnectionSummary),
+        page: query.page,
+        limit: query.limit,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid connection list pagination." });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "list",
+        reason: "query_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connections could not be loaded." });
+    }
+  });
+
+  app.post("/api/member-service/v1/connections", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const request = await createConnectionDraft(
+        req.user!.id,
+        req.body,
+        getCorrelationId(req),
+      );
+      return res.status(201).json({ connection: toConnectionSummary(request) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid connection request." });
+      }
+      if (error instanceof ConnectionNotFoundError) {
+        return res.status(404).json({ message: "Organization not found." });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "create",
+        reason: "create_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connection request could not be created." });
+    }
+  });
+
+  app.get("/api/member-service/v1/connections/:id", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const id = parseConnectionId(req);
+      const value = await getConnectionRequest(id);
+      const operatorAllowed = await connectionOperatorAllowed(req, CONNECTION_OPERATOR_READ_PERMISSION);
+      if (!value || !canReadConnection(value.request, req.user!.id, operatorAllowed)) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      await recordConnectionView(id, req.user!.id, getCorrelationId(req));
+      return res.json({
+        connection: toConnectionDto(value, {
+          requesterId: value.request.requesterId,
+          assignedOperatorId: value.request.assignedOperatorId,
+          assignedOrganizationUserId: value.request.assignedOrganizationUserId,
+          userId: req.user!.id,
+          isAuthorizedOperator: operatorAllowed,
+        }),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid connection ID." });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "read",
+        reason: "query_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connection request could not be loaded." });
+    }
+  });
+
+  app.patch("/api/member-service/v1/connections/:id", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const id = parseConnectionId(req);
+      const existing = await getConnectionRequest(id);
+      if (!existing) return res.status(404).json({ message: "Connection request not found." });
+
+      if (typeof req.body?.status === "string") {
+        const operatorAllowed = await connectionOperatorAllowed(req, CONNECTION_OPERATOR_MANAGE_PERMISSION);
+        if (!operatorAllowed) return res.status(403).json({ message: "Connection management permission required." });
+        const status = z.enum([
+          "draft", "submitted", "reviewing", "assigned", "in_progress",
+          "completed", "closed", "cancelled", "rejected",
+        ]).parse(req.body.status) as ConnectionStatus;
+        const updated = await transitionConnectionRequest(
+          id,
+          req.user!.id,
+          status,
+          getCorrelationId(req),
+        );
+        return res.json({ connection: toConnectionSummary(updated) });
+      }
+
+      if (existing.request.requesterId !== req.user!.id) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      const updated = await updateConnectionDraft(
+        id,
+        req.user!.id,
+        req.body,
+        getCorrelationId(req),
+      );
+      return res.json({ connection: toConnectionSummary(updated) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid connection update." });
+      }
+      if (error instanceof ConnectionNotFoundError) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      if (error instanceof ConnectionConflictError) {
+        return res.status(409).json({ message: error.message });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "update",
+        reason: "update_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connection request could not be updated." });
+    }
+  });
+
+  app.post("/api/member-service/v1/connections/:id/submit", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const id = parseConnectionId(req);
+      const updated = await submitConnectionRequest(
+        id,
+        req.user!.id,
+        req.body,
+        getCorrelationId(req),
+      );
+      return res.json({ connection: toConnectionSummary(updated) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid submission." });
+      }
+      if (error instanceof ConnectionNotFoundError) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      if (error instanceof ConnectionConflictError) {
+        return res.status(409).json({ message: error.message });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "submit",
+        reason: "submit_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connection request could not be submitted." });
+    }
+  });
+
+  app.post("/api/member-service/v1/connections/:id/messages", authenticateToken, async (req, res) => {
+    if (!connectionFeatureEnabled()) {
+      return res.status(404).json({ message: "Member service connections are not available." });
+    }
+    try {
+      const id = parseConnectionId(req);
+      const existing = await getConnectionRequest(id);
+      const operatorAllowed = await connectionOperatorAllowed(req, CONNECTION_OPERATOR_READ_PERMISSION);
+      if (!existing || !canReadConnection(existing.request, req.user!.id, operatorAllowed)) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      const message = await createConnectionMessage(
+        id,
+        req.user!.id,
+        req.body,
+        getCorrelationId(req),
+      );
+      return res.status(201).json({ message });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid message." });
+      }
+      if (error instanceof ConnectionNotFoundError) {
+        return res.status(404).json({ message: "Connection request not found." });
+      }
+      if (error instanceof ConnectionConflictError) {
+        return res.status(409).json({ message: error.message });
+      }
+      emitOperationalEvent("member_service.connection.failure", "error", {
+        correlationId: getCorrelationId(req),
+        actorId: req.user!.id,
+        actorRole: req.user!.role,
+        operation: "message",
+        reason: "message_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+      return res.status(500).json({ message: "Connection message could not be created." });
+    }
+  });
   
   // Auth routes
   app.get("/api/auth/wechat/start", (req, res) => {
