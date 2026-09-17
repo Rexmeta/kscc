@@ -1,0 +1,37 @@
+| 분류       | 기관/단체                   | 성격·주요 역할                                                         | 링크                                                                                                                    |
+| -------- | ----------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 중국계 상회   | **한국중화총상회 (KCCCI)**     | 한국 내 화교·화상 및 중국계 기업 네트워크, 경제·무역·문화 교류. 최근에도 중국대사관 및 서울시 등과 활동 확인 | [공식 홈페이지](https://www.kccci.kr/kr/?utm_source=chatgpt.com) ([한국중화총상회][1])                                             |
+| 지역 특화 상회 | **한국 사천-충칭 총상회 (KSCC)** | 한국과 중국 쓰촨성·충칭시 간 경제·무역·문화 교류, 기업 매칭 및 시장진출 지원                    | [KSCC 공식 홈페이지](https://kscc.kr/?utm_source=chatgpt.com) ([한국 사천-충칭 총상회 (KSCC)][2])                                    |
+| 경제       | **사단법인 한중경제협회**         | 한중 경제·무역 협력 및 민간 경제교류. 2026년 주한중국대사 참석 행사 등 활동 확인                | 공식 홈페이지 추가 확인 필요 ([중국 대사관][3])                                                                                        |
+| 기업       | **사단법인 한중기업가협회 (KCEA)** | 양국 기업 네트워크, 비즈니스 매칭, 한국 기업의 중국 진출 지원                             | [공식 홈페이지](https://korchnea.com/?utm_source=chatgpt.com) ([한국중기업가협회][4])                                               |
+| 경제/민관    | **사단법인 한국아태경제협회**       | 한중민간경제협력포럼을 기반으로 한 경제협력 플랫폼. 중국 지방정부·기업과 경제협력포럼 운영               | [공식 홈페이지](https://kapea.kr/?utm_source=chatgpt.com) ([Kapea][5])                                                      |
+| 종합교류     | **사단법인 한중교류협회**         | 외교부 승인 비영리 외교단체. 경제·문화 등 한중 민간교류 및 협력                            | [공식 홈페이지](https://korchi.org/?utm_source=chatgpt.com) ([Korchi][6])                                                   |
+| 종합교류     | **사단법인 한중글로벌협회**        | 경제·사회·문화 교류, 기업 진출, 지방정부 연결, 포럼 운영                               | [공식 홈페이지](https://kcglobal.or.kr/?utm_source=chatgpt.com) ([한중글로벌협회][7])                                              |
+| 연합 네트워크  | **한중우호연합총회**            | 한중글로벌협회 산하 여러 한중 우호 사회단체의 연합 네트워크                                | [공식 소개](https://kcglobal.or.kr/page/federation.php?utm_source=chatgpt.com) ([한중글로벌협회][8])                             |
+| 우호/외교    | **사단법인 한중우호협회**         | 외교부 소관 비영리법인으로 한중 우호·민간외교 및 청년교류 등                               | [공식 홈페이지](http://www.korea-china.or.kr/?utm_source=chatgpt.com) ([비즈노(사업자등록번호조회)][9])                                 |
+| 지역정부     | **사단법인 한중도시우호협회**       | 한국·중국 도시 및 지방정부 간 교류·협력                                          | 공식 홈페이지 추가 확인 필요. 법인 존재 확인 ([NiceBizInfo][10])                                                                        |
+| 교육       | **사단법인 한중교육교류협회**       | 한국·중국 대학 및 교육기관 교류, 유학·교육 네트워크                                   | [공식 홈페이지](https://www.kochina.or.kr/?utm_source=chatgpt.com) ([코치나][11])                                              |
+| 문화       | **사단법인 한중문화우호협회**       | 한중 문화·예술·청소년·학술 교류. 문체부 등록 비영리법인                                 | [문체부 법인정보](https://www.mcst.go.kr/site/s_data/corpNaru/corpView.jsp?pSeq=1221&utm_source=chatgpt.com) ([문화체육관광부][12]) |
+| 경제·문화·교육 | **사단법인 한중경제문화교육협회**     | 한중 민간협력, 교육·문화교류 및 중국어 관련 사업                                     | [공식 홈페이지](http://kccea.com?utm_source=chatgpt.com) ([사람인][13])                                                        |
+| 산업       | **사단법인 한중뷰티산업협회**       | 한중 뷰티산업 교류, 회원사 경제교류, 중국 진출 및 투자유치 지원                            | [공식 홈페이지](https://k-beauty.or.kr/?utm_source=chatgpt.com) ([K-Beauty][14])                                            |
+| 법률/학술    | **한중법학회**               | 중국법 연구, 법률 전문가 교류, 중국법제포럼 및 학술활동                                 | [공식 홈페이지](https://www.kochilaw.or.kr/?utm_source=chatgpt.com) ([한중법학회][15])                                           |
+| 연구·문화    | **사단법인 한국현대중국연구회**      | 중국 관련 학술·문화 연구 및 한중 문화교류. 문체부 등록 법인                              | [문체부 법인정보](https://www.mcst.go.kr/kor/s_data/corpNaru/corpView.jsp?pSeq=1188&utm_source=chatgpt.com) ([문화체육관광부][16])  |
+| 화교·화인    | **한국화교화인연합총회**          | 한국 거주 화교·화인 관련 민간 네트워크                                           | 독립 공식 홈페이지 미확인. 국내 등록단체 존재 확인 ([비즈노(사업자등록번호조회)][17])                                                                  |
+
+[1]: https://www.kccci.kr/kr/activity/?utm_source=chatgpt.com "상회 활동_한국중화총상회 공식 홈페이지"
+[2]: https://kscc.kr/?utm_source=chatgpt.com "Korea-Sichuan-Chongqing Chamber | Korea-China Exchange"
+[3]: https://kr.china-embassy.gov.cn/kor/sgxx/202603/t20260303_11867901.htm?utm_source=chatgpt.com "다이빙 대사, 한중경제협회 신년회 참석_中华人民共和国驻大韩民国大使馆"
+[4]: https://korchnea.com/?utm_source=chatgpt.com "한중기업가협회"
+[5]: https://kapea.kr/?utm_source=chatgpt.com "(사)한국아태경제협회"
+[6]: https://korchi.org/?act=info.page&pcode=sub1_2&utm_source=chatgpt.com "사단법인한중교류협회"
+[7]: https://kcglobal.or.kr/page/about-us.php?utm_source=chatgpt.com "협회 소개 | 한중글로벌협회"
+[8]: https://kcglobal.or.kr/page/federation.php?utm_source=chatgpt.com "한중우호연합총회 | 한중글로벌협회"
+[9]: https://bizno.net/article/1048204717?utm_source=chatgpt.com "(사）한중우호협회"
+[10]: https://www.nicebizinfo.com/ep/EP0100M002GE.nice?kiscode=HR3680&utm_source=chatgpt.com "(사)한중도시우호협회 - 2026년 기업정보 - 매출액, 재무제표, 신용등급보고서"
+[11]: https://www.kochina.or.kr/?utm_source=chatgpt.com "사단법인 한중교육교류협회"
+[12]: https://www.mcst.go.kr/site/s_data/corpNaru/corpView.jsp?pSeq=1221&utm_source=chatgpt.com "현황자료 - 비영리법인현황 - 한중문화우호협회 | 문화체육관광부"
+[13]: https://www.saramin.co.kr/zf_user/company-info/view/csn/SkhmUkcvYStiR0VuMjJ4emUraWdsQT09/company_nm/%28%EC%82%AC%29%ED%95%9C%EC%A4%91%EA%B2%BD%EC%A0%9C%EB%AC%B8%ED%99%94%EA%B5%90%EC%9C%A1%ED%98%91%ED%9A%8C?utm_source=chatgpt.com "(사)한중경제문화교육협회 2026년 기업정보 | 직원수, 근무환경, 복리후생 등 - 사람인"
+[14]: https://k-beauty.or.kr/aboutus?utm_source=chatgpt.com "(사)한중뷰티산업협회에 오신것을 환영합니다."
+[15]: https://www.kochilaw.or.kr/?utm_source=chatgpt.com "한중법학회"
+[16]: https://www.mcst.go.kr/kor/s_data/corpNaru/corpView.jsp?pSeq=1188&utm_source=chatgpt.com "현황자료 - 비영리법인현황 - 한국현대중국연구회 | 문화체육관광부"
+[17]: https://www.bizno.net/article/2998001182?utm_source=chatgpt.com "한국화교화인연합총회"
