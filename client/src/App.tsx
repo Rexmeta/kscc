@@ -59,6 +59,24 @@ function AuthenticatedRoute({ component: Component }: { component: ComponentType
   return <Component />;
 }
 
+function AdminRoute({ component: Component }: { component: ComponentType }) {
+  const { isAuthenticated, isAdmin, loading } = useAuth();
+
+  if (loading) {
+    return <PageLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  if (!isAdmin) {
+    return <Redirect to="/korea-china-organizations" />;
+  }
+
+  return <Component />;
+}
+
 function Router() {
   return (
     <div className="min-h-screen flex flex-col">
@@ -74,8 +92,7 @@ function Router() {
             <Route path="/events" component={Events} />
             <Route path="/partners" component={Partners} />
             <Route path="/members" component={() => <AuthenticatedRoute component={Members} />} />
-            <Route path="/directory/:id" component={Directory} />
-            <Route path="/directory" component={Directory} />
+            <Route path="/korea-china-organizations/:id" component={() => <AdminRoute component={Directory} />} />
             <Route path="/korea-china-organizations" component={KoreaChinaOrganizations} />
             <Route path="/member-service/operator" component={() => <AuthenticatedRoute component={MemberServiceOperator} />} />
             <Route path="/resources" component={() => <AuthenticatedRoute component={Resources} />} />

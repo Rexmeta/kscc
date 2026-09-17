@@ -9,7 +9,6 @@ export interface TranslationKeys {
   'nav.news': string;
   'nav.events': string;
   'nav.members': string;
-  'nav.directory': string;
   'nav.koreaChinaOrganizations': string;
   'nav.resources': string;
   'nav.contact': string;
@@ -142,7 +141,6 @@ export interface TranslationKeys {
   'koreaChina.tableOrganization': string;
   'koreaChina.tableRole': string;
   'koreaChina.tableLink': string;
-  'koreaChina.viewReference': string;
   'koreaChina.tableScrollHint': string;
 
   // Hero Section
@@ -398,7 +396,6 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': '상회 활동',
     'nav.events': '행사',
     'nav.members': '회원사',
-    'nav.directory': '기관 찾기',
     'nav.koreaChinaOrganizations': '한중기관',
     'nav.resources': '자료센터',
     'nav.contact': '문의하기',
@@ -529,7 +526,6 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.tableOrganization': '기관/단체',
     'koreaChina.tableRole': '성격·주요 역할',
     'koreaChina.tableLink': '링크',
-    'koreaChina.viewReference': '관련 근거 보기',
     'koreaChina.tableScrollHint': '표를 좌우로 밀어 전체 내용을 확인할 수 있습니다.',
 
     // Hero Section
@@ -783,7 +779,6 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': 'Chamber Activities',
     'nav.events': 'Events',
     'nav.members': 'Members',
-    'nav.directory': 'Directory',
     'nav.koreaChinaOrganizations': 'Korea–China',
     'nav.resources': 'Resources',
     'nav.contact': 'Contact Us',
@@ -914,7 +909,6 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.tableOrganization': 'Organization',
     'koreaChina.tableRole': 'Purpose and primary role',
     'koreaChina.tableLink': 'Link',
-    'koreaChina.viewReference': 'View reference',
     'koreaChina.tableScrollHint': 'Swipe horizontally to view the full table.',
 
     // Hero Section
@@ -1168,7 +1162,6 @@ const translations: Record<Language, TranslationKeys> = {
     'nav.news': '商会活动',
     'nav.events': '活动',
     'nav.members': '会员',
-    'nav.directory': '机构目录',
     'nav.koreaChinaOrganizations': '韩中机构',
     'nav.resources': '资料中心',
     'nav.contact': '联系我们',
@@ -1299,7 +1292,6 @@ const translations: Record<Language, TranslationKeys> = {
     'koreaChina.tableOrganization': '机构/团体',
     'koreaChina.tableRole': '性质与主要职能',
     'koreaChina.tableLink': '链接',
-    'koreaChina.viewReference': '查看相关依据',
     'koreaChina.tableScrollHint': '左右滑动可查看完整表格。',
 
     // Hero Section

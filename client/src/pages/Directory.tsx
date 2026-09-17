@@ -232,7 +232,7 @@ function AdminOrganizationCard({
         </div>
         <div className="mt-auto pt-6">
           <Button asChild variant="outline" className="w-full justify-between">
-            <Link href={`/directory/${organization.id}`}>
+             <Link href={`/korea-china-organizations/${organization.id}`}>
               <span>{t('common.more')}</span>
               <ArrowLeft className="h-4 w-4 rotate-180" aria-hidden="true" />
             </Link>
@@ -272,7 +272,7 @@ function AdminOrganizationDetail({
     <div className="min-h-screen bg-background">
       <section className="border-b border-amber-500/30 bg-amber-500/5">
         <div className="container py-10 md:py-14">
-          <Link href="/directory" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+           <Link href="/admin" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t('memberService.backToDirectory')}
           </Link>
@@ -523,7 +523,7 @@ function OrganizationCard({
         </div>
         <div className="mt-auto pt-6">
           <Button asChild variant="outline" className="w-full justify-between">
-            <Link href={`/directory/${organization.id}`}>
+            <Link href={`/korea-china-organizations/${organization.id}`}>
               <span>{t('common.more')}</span>
               <ArrowLeft className="h-4 w-4 rotate-180" aria-hidden="true" />
             </Link>
@@ -598,7 +598,7 @@ function OrganizationDetail({
     <div className="min-h-screen bg-background">
       <section className="border-b border-border/70 bg-muted/40">
         <div className="container py-10 md:py-16">
-          <Link href="/directory" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+          <Link href="/admin" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t('memberService.backToDirectory')}
           </Link>
@@ -741,7 +741,7 @@ export default function DirectoryPage() {
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [adminPage, setAdminPage] = useState(1);
-  const [, params] = useRoute('/directory/:id');
+  const [, params] = useRoute('/korea-china-organizations/:id');
   const detailId = params?.id;
 
   const bootstrap = useQuery({
@@ -751,15 +751,6 @@ export default function DirectoryPage() {
       { signal },
     ),
     staleTime: 5 * 60 * 1000,
-  });
-
-  const detail = useQuery({
-    queryKey: queryKeys.memberService.organization(detailId || '', language),
-    queryFn: ({ signal }) => fetchJson<DirectoryOrganization>(
-      `/api/member-service/v1/directory/${detailId}?lang=${language}`,
-      { signal },
-    ),
-    enabled: Boolean(detailId && bootstrap.data?.flags.directory && !authLoading && !isAdmin),
   });
 
   const adminDetail = useQuery({
@@ -827,34 +818,15 @@ export default function DirectoryPage() {
   }
 
   if (detailId) {
-    if (isAdmin) {
-      return (
-        <QueryState
-          isLoading={authLoading || adminDetail.isLoading}
-          isError={!authLoading && adminDetail.isError}
-          onRetry={() => adminDetail.refetch()}
-          empty={!adminDetail.data}
-          emptyMessage={t('memberService.empty')}
-        >
-          {adminDetail.data ? <AdminOrganizationDetail organization={adminDetail.data} /> : null}
-        </QueryState>
-      );
-    }
     return (
       <QueryState
-        isLoading={authLoading || detail.isLoading}
-        isError={!authLoading && detail.isError}
-        onRetry={() => detail.refetch()}
-        empty={!detail.data}
+        isLoading={authLoading || adminDetail.isLoading}
+        isError={!authLoading && adminDetail.isError}
+        onRetry={() => adminDetail.refetch()}
+        empty={!adminDetail.data}
         emptyMessage={t('memberService.empty')}
       >
-        {detail.data ? (
-          <OrganizationDetail
-            organization={detail.data}
-            language={language}
-            connectionsEnabled={Boolean(bootstrap.data?.flags.connections)}
-          />
-        ) : null}
+        {adminDetail.data ? <AdminOrganizationDetail organization={adminDetail.data} /> : null}
       </QueryState>
     );
   }

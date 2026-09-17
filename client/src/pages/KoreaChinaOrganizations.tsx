@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
-import { ArrowRight, ExternalLink, Search, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +18,6 @@ type PublicOrganization = {
   organizationType: string;
   websiteUrl: string | null;
   contactUrl: string | null;
-  referenceUrl: string | null;
   verification: {
     status: string;
   };
@@ -46,7 +44,6 @@ function OrganizationTable({ organizations }: { organizations: PublicOrganizatio
           </thead>
           <tbody>
             {organizations.map((organization, index) => {
-              const link = organization.websiteUrl || organization.referenceUrl;
               return (
                 <tr
                   key={organization.id}
@@ -60,13 +57,7 @@ function OrganizationTable({ organizations }: { organizations: PublicOrganizatio
                     </Badge>
                   </td>
                   <td className="px-5 py-5">
-                    <Link
-                      href={`/directory/${organization.id}`}
-                      className="group inline-flex items-start font-semibold leading-6 text-foreground hover:text-primary"
-                    >
-                      {organization.name}
-                      <ArrowRight className="ml-1.5 mt-1 h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                    </Link>
+                    <span className="font-semibold leading-6 text-foreground">{organization.name}</span>
                     <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                       {organization.verification.status === 'verified_register'
@@ -89,20 +80,12 @@ function OrganizationTable({ organizations }: { organizations: PublicOrganizatio
                         <ExternalLink className="ml-1.5 h-4 w-4" aria-hidden="true" />
                       </a>
                     ) : (
-                      <div>
-                        <p className="text-muted-foreground">{t('koreaChina.noWebsite')}</p>
-                        {link && (
-                          <a
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-flex items-center font-medium text-primary hover:underline"
-                          >
-                            {t('koreaChina.viewReference')}
-                            <ExternalLink className="ml-1.5 h-4 w-4" aria-hidden="true" />
-                          </a>
-                        )}
-                      </div>
+                      <span
+                        className="inline-flex cursor-not-allowed items-center rounded-md bg-muted px-3 py-2 text-muted-foreground"
+                        aria-disabled="true"
+                      >
+                        {t('koreaChina.noWebsite')}
+                      </span>
                     )}
                   </td>
                 </tr>

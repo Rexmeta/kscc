@@ -1174,7 +1174,6 @@ export type MemberServicePublicOrganization = {
   chinaRegionFocus: string | null;
   websiteUrl: string | null;
   contactUrl: string | null;
-  referenceUrl: string | null;
   verification: {
     status: string;
     lastVerifiedAt: string | null;

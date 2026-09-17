@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, ExternalLink, ShieldAlert } from 'lucide-react';
+import { Link } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -153,7 +154,14 @@ export function KoreaChinaOrganizationsTab({ activeTab }: { activeTab: string })
                       {organization.publicApproved ? t('koreaChina.public') : t('koreaChina.private')}
                     </Badge>
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold">{name}</h3>
+                  <h3 className="mt-4 text-lg font-semibold">
+                    <Link
+                      href={`/korea-china-organizations/${organization.id}`}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {name}
+                    </Link>
+                  </h3>
                   <p className="mt-1 text-xs text-muted-foreground">{organization.organizationType}</p>
                   <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">
                     {organization.summaryKo || t('memberService.noSummary')}

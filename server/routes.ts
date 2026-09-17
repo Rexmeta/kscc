@@ -98,7 +98,6 @@ import { getMemberServiceFlags, isMemberServiceDirectoryEnabled } from "./member
 import {
   getMemberServiceOrganizationReview,
   getAdminOrganization,
-  getPublicOrganization,
   listAdminOrganizations,
   listMemberServiceReviewAuditHistory,
   listMemberServiceReviewQueue,
@@ -510,31 +509,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/member-service/v1/directory/:id", optionalAuthenticateToken, async (req, res) => {
-    if (!isMemberServiceDirectoryEnabled()) {
-      return res.status(404).json({ message: "Member service directory is not available." });
-    }
-
-    try {
-      const id = z.string().uuid().parse(req.params.id);
-      const language = z.enum(["ko", "en", "zh"]).catch("ko").parse(req.query.lang);
-      const organization = await getPublicOrganization(id, language);
-      if (!organization) {
-        return res.status(404).json({ message: "Organization not found." });
-      }
-      return res.json(organization);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid organization ID." });
-      }
-      emitOperationalEvent("member_service.directory.failure", "error", {
-        correlationId: getCorrelationId(req),
-        operation: "public_directory_detail",
-        reason: "query_failed",
-        errorType: error instanceof Error ? error.name : "UnknownError",
-      });
-      return res.status(500).json({ message: "Organization could not be loaded." });
-    }
+  app.get("/api/member-service/v1/directory/:id", (_req, res) => {
+    return res.status(404).json({ message: "Public organization details are not available." });
   });
 
   app.get(
