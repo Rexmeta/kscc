@@ -1174,11 +1174,6 @@ export type MemberServicePublicOrganization = {
   chinaRegionFocus: string | null;
   websiteUrl: string | null;
   contactUrl: string | null;
-  verification: {
-    status: string;
-    lastVerifiedAt: string | null;
-    nextReviewAt: string | null;
-  };
 };
 
 export type MemberServiceConnectionRequest = typeof memberServiceConnectionRequests.$inferSelect;

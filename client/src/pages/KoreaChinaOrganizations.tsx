@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Search, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,9 +42,6 @@ type PublicOrganization = {
   organizationType: string;
   websiteUrl: string | null;
   contactUrl: string | null;
-  verification: {
-    status: string;
-  };
 };
 
 type DirectoryResponse = {
@@ -88,12 +85,6 @@ function OrganizationTable({
                   </td>
                   <td className="px-5 py-5">
                     <span className="font-semibold leading-6 text-foreground">{organization.name}</span>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                      {organization.verification.status === 'verified_register'
-                        ? t('memberService.verifiedRegister')
-                        : t('memberService.verifiedOfficial')}
-                    </div>
                   </td>
                   <td className="px-5 py-5 text-sm leading-6 text-muted-foreground">
                     {organization.summary || t('memberService.noSummary')}
