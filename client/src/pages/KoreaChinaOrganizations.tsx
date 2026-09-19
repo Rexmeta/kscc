@@ -9,30 +9,8 @@ import { QueryState } from '@/components/QueryState';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { fetchJson, queryKeys } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
+import { memberServiceCategoryLabel } from '@/lib/memberServiceCategories';
 import type { Language } from '@/lib/i18n';
-
-const CATEGORY_LABELS: Record<string, Record<Language, string>> = {
-  '경제': { ko: '경제', en: 'Economy', zh: '经济' },
-  '경제/민관': { ko: '경제/민관', en: 'Economy / Public-Private', zh: '经济／政企合作' },
-  '경제·문화·교육': { ko: '경제·문화·교육', en: 'Economy, Culture & Education', zh: '经济、文化与教育' },
-  '교육': { ko: '교육', en: 'Education', zh: '教育' },
-  '기업': { ko: '기업', en: 'Business', zh: '企业' },
-  '문화': { ko: '문화', en: 'Culture', zh: '文化' },
-  '법률/학술': { ko: '법률/학술', en: 'Law / Academia', zh: '法律／学术' },
-  '산업': { ko: '산업', en: 'Industry', zh: '产业' },
-  '연구·문화': { ko: '연구·문화', en: 'Research & Culture', zh: '研究与文化' },
-  '연합 네트워크': { ko: '연합 네트워크', en: 'Federation Network', zh: '联合网络' },
-  '우호/외교': { ko: '우호/외교', en: 'Friendship / Diplomacy', zh: '友好／外交' },
-  '종합교류': { ko: '종합교류', en: 'Comprehensive Exchange', zh: '综合交流' },
-  '중국계 상회': { ko: '중국계 상회', en: 'Chinese Chamber', zh: '在韩中华商会' },
-  '지역 특화 상회': { ko: '지역 특화 상회', en: 'Regional Chamber', zh: '地区专业商会' },
-  '지역정부': { ko: '지역정부', en: 'Local Government', zh: '地方政府' },
-  '화교·화인': { ko: '화교·화인', en: 'Overseas Chinese', zh: '华侨华人' },
-};
-
-function categoryLabel(category: string, language: Language) {
-  return CATEGORY_LABELS[category]?.[language] ?? category;
-}
 
 type PublicOrganization = {
   id: string;
@@ -80,7 +58,7 @@ function OrganizationTable({
                 >
                   <td className="px-5 py-5">
                     <Badge variant="secondary" className="whitespace-nowrap">
-                      {categoryLabel(organization.organizationType, language)}
+                      {memberServiceCategoryLabel(organization.organizationType, language)}
                     </Badge>
                   </td>
                   <td className="px-5 py-5">
@@ -176,7 +154,7 @@ export default function KoreaChinaOrganizationsPage() {
               <SelectContent>
                 <SelectItem value="all">{t('koreaChina.allCategories')}</SelectItem>
                 {query.data?.categories.map((item) => (
-                  <SelectItem key={item} value={item}>{categoryLabel(item, language)}</SelectItem>
+                  <SelectItem key={item} value={item}>{memberServiceCategoryLabel(item, language)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

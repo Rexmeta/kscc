@@ -12,6 +12,8 @@ import { AdminFilterBar } from '../AdminFilterBar';
 import { AdminListPagination } from '../AdminListPagination';
 import { fetchJson, queryKeys } from '@/lib/queryClient';
 import { t } from '@/lib/i18n';
+import { memberServiceCategoryLabel } from '@/lib/memberServiceCategories';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type AdminOrganization = {
   id: string;
@@ -45,6 +47,7 @@ function canPublish(organization: AdminOrganization) {
 }
 
 export function KoreaChinaOrganizationsTab({ activeTab }: { activeTab: string }) {
+  const { language } = useLanguage();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
@@ -119,7 +122,10 @@ export function KoreaChinaOrganizationsTab({ activeTab }: { activeTab: string })
           testId: 'select-korea-china-category',
           options: [
             { value: 'all', label: t('koreaChina.allCategories') },
-            ...(directory.data?.categories ?? []).map((category) => ({ value: category, label: category })),
+            ...(directory.data?.categories ?? []).map((category) => ({
+              value: category,
+              label: memberServiceCategoryLabel(category, language),
+            })),
           ],
         }]}
       />
@@ -162,7 +168,9 @@ export function KoreaChinaOrganizationsTab({ activeTab }: { activeTab: string })
                       {name}
                     </Link>
                   </h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{organization.organizationType}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {memberServiceCategoryLabel(organization.organizationType, language)}
+                  </p>
                   <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">
                     {organization.summaryKo || t('memberService.noSummary')}
                   </p>
